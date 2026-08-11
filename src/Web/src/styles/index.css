@@ -16,6 +16,7 @@
 
   /* Semantic */
   --color-surface: color-mix(in srgb, #0c2972 10%, white);
+  --color-row-alt: color-mix(in srgb, #0c2972 4%, white);
   --color-border: color-mix(in srgb, #0c2972 20%, white);
   --color-holiday: color-mix(in srgb, #e8a317 20%, white);
   --color-error: #c0392b;

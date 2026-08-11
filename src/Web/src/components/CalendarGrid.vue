@@ -1,7 +1,7 @@
 <template>
   <div
     ref="containerRef"
-    class="overflow-auto max-h-[calc(100vh-260px)] border border-border rounded-12 shadow-card"
+    class="overflow-auto flex-1 min-h-0 border border-border rounded-12 shadow-card"
     @mouseover="handleGridHover"
     @mouseleave="clearHoverColumn"
   >
@@ -14,7 +14,7 @@
         <col v-for="day in days" :key="day.iso" />
       </colgroup>
 
-      <thead class="sticky top-0 z-20">
+      <thead ref="theadRef" class="sticky top-0 z-20">
         <tr>
           <th
             scope="col"
@@ -78,7 +78,8 @@
         <tr v-for="(row, rowIndex) in rows" :key="row.person.id">
           <th
             scope="row"
-            class="sticky left-0 bg-white z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
+            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
+            :class="row.background"
             draggable="true"
             title="Drag to reorder"
             @dragstart="handleDragStart(row.person.id)"
@@ -102,9 +103,12 @@
             :key="`${row.person.id}-${cell.day.iso}`"
             class="h-9 p-0 align-middle"
             :class="[
-              dayHeaderClass(cell.day),
+              dayHeaderClass(cell.day, row.background),
               columnSideBorderClass(cell.day),
-              columnBottomBorderClass(cell.day.isToday, rowIndex === rows.length - 1),
+              columnBottomBorderClass(
+                cell.day.isToday,
+                rowIndex === rows.length - 1 && fillerRowCount === 0,
+              ),
               !cell.absence && isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
             ]"
             :title="cell.absence ? undefined : emptyCellTitle(row.person, cell.day)"
@@ -127,13 +131,34 @@
             </div>
           </td>
         </tr>
+
+        <!-- Padding rows so a small team's grid still fills the container instead of
+        leaving bare space below the last person, keeping the day columns' borders and
+        shading running the full height. -->
+        <tr v-for="filler in fillerRows" :key="`filler-${filler.rowIndex}`" aria-hidden="true">
+          <th
+            scope="row"
+            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+            :class="filler.background"
+          />
+          <td
+            v-for="day in days"
+            :key="day.iso"
+            class="h-9 p-0 align-middle"
+            :class="[
+              dayHeaderClass(day, filler.background),
+              columnSideBorderClass(day),
+              columnBottomBorderClass(day.isToday, filler.isLast),
+            ]"
+          />
+        </tr>
       </tbody>
     </table>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
 import { useContrastText } from "@/composables/useContrastText";
@@ -166,6 +191,7 @@ const { textColorFor } = useContrastText();
 const configStore = useConfigStore();
 const personStore = usePersonStore();
 const containerRef = ref<HTMLDivElement | null>(null);
+const theadRef = ref<HTMLTableSectionElement | null>(null);
 
 function isMine(absence: AbsenceDto): boolean {
   return absence.personId === personStore.person?.id;
@@ -236,6 +262,16 @@ onMounted(() => {
     console.error("ERROR => Failed to load region catalog:", error);
   });
   scrollToToday();
+
+  updateFillerRowCount();
+  if (containerRef.value) {
+    resizeObserver = new ResizeObserver(scheduleFillerRowUpdate);
+    resizeObserver.observe(containerRef.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
 });
 
 /** Scrolls the grid so today's column is centered in view. No-op if today isn't in the displayed year. */
@@ -345,7 +381,7 @@ function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
 // identity (rather than by id) means it also resets correctly across two different,
 // back-to-back absences of the same type.
 const rows = computed(() =>
-  props.people.map((person) => {
+  props.people.map((person, rowIndex) => {
     const byDate = absenceMap.value.get(person.id);
     let previousPaintedAbsence: AbsenceDto | undefined;
 
@@ -357,18 +393,75 @@ const rows = computed(() =>
       return { day, absence, painted, isLabelCell };
     });
 
-    return { person, cells };
+    // Resolved once per row rather than once per cell, same reasoning as `cells` above.
+    return { person, cells, background: rowBackgroundClass(rowIndex) };
   }),
 );
+
+// Keeps the grid's body filled to the bottom of the container even when a team has
+// too few people to reach it, rather than leaving bare space below the last row.
+// Recomputed from actual measured pixels (not a fixed guess) since the container's
+// height now comes from flex layout and varies with viewport and header content.
+const FALLBACK_ROW_HEIGHT_PX = 36; // h-9, used only before any row has rendered to measure
+const fillerRowCount = ref(0);
+let resizeObserver: ResizeObserver | null = null;
+let measureScheduled = false;
+
+function updateFillerRowCount() {
+  const container = containerRef.value;
+  if (!container) return;
+  const headerHeight = theadRef.value?.getBoundingClientRect().height ?? 0;
+  const rowHeight =
+    container.querySelector("tbody tr")?.getBoundingClientRect().height || FALLBACK_ROW_HEIGHT_PX;
+  const availableRows = Math.floor((container.clientHeight - headerHeight) / rowHeight);
+  fillerRowCount.value = Math.max(0, availableRows - rows.value.length);
+}
+
+// Coalesces bursts of ResizeObserver callbacks (e.g. a window drag-resize fires many
+// times per second) down to once per animation frame, so the measurement work below
+// doesn't run more often than the browser can actually paint.
+function scheduleFillerRowUpdate() {
+  if (measureScheduled) return;
+  measureScheduled = true;
+  requestAnimationFrame(() => {
+    measureScheduled = false;
+    updateFillerRowCount();
+  });
+}
+
+watch([rows, () => props.loading], () => nextTick(updateFillerRowCount));
+
+// Precomputed once per filler row (not re-derived per cell) for the same reason as
+// `rows.background` above: index math and the "is this the closing row" check only
+// need to happen once, not once per day cell in that row.
+const fillerRows = computed(() => {
+  const bodyRowCount = rows.value.length;
+  return Array.from({ length: fillerRowCount.value }, (_, i) => ({
+    rowIndex: bodyRowCount + i,
+    background: rowBackgroundClass(bodyRowCount + i),
+    isLast: i === fillerRowCount.value - 1,
+  }));
+});
 
 // Always resolves to exactly one background, including the "none of the above" case
 // (plain bg-white), so the sticky header fully occludes rows scrolling underneath it.
 // Today is marked separately with a ring, not a background, so it never has to compete
 // with a holiday's own tint.
-function dayHeaderClass(day: { iso: string; isWeekend: boolean }) {
+//
+// plainBackground is left at its default for the day header row (always plain white).
+// Body rows pass their precomputed zebra-stripe background instead, to make rows
+// easier to tell apart. Weekends and holidays keep their own tint regardless of row,
+// since those already mark the column and shouldn't be muddied by the row stripe.
+function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackground = "bg-white") {
   if (holidayMap.value.has(day.iso)) return "bg-holiday";
   if (day.isWeekend) return "bg-surface";
-  return "bg-white";
+  return plainBackground;
+}
+
+// Same stripe used on the sticky name column, so the alternating background reads as
+// one continuous row rather than stopping at the day columns.
+function rowBackgroundClass(rowIndex: number): string {
+  return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-white";
 }
 
 // Today's column gets a continuous outline down its full height, so it takes priority

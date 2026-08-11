@@ -1,5 +1,7 @@
 <template>
-  <div class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] px-6 flex flex-col gap-4">
+  <div
+    class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] px-6 h-full flex flex-col gap-4 min-h-0"
+  >
     <header class="flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-2">
         <button

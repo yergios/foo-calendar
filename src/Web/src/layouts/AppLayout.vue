@@ -1,8 +1,8 @@
 <template>
-  <div class="flex flex-col min-h-screen bg-white">
+  <div class="flex flex-col h-screen overflow-hidden bg-white">
     <AppHeader />
-    <main class="flex-1">
-      <div class="max-w-[1920px] mx-auto px-4 py-8 flex flex-col gap-6">
+    <main class="flex-1 min-h-0">
+      <div class="max-w-[1920px] mx-auto px-4 py-8 h-full flex flex-col gap-6">
         <RouterView />
       </div>
     </main>
