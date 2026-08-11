@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Pipelines/">
+    <File Path="pipelines/ci-premerge.yml" />
+    <File Path="pipelines/cicd-release.yml" />
+    <File Path="pipelines/cicd-test.yml" />
+    <File Path="pipelines/templates/cd-template.yml" />
+    <File Path="pipelines/templates/ci-template.yml" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Api/Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UnitTests/UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,452 @@
+<template>
+  <div
+    ref="containerRef"
+    class="overflow-auto max-h-[calc(100vh-260px)] border border-border rounded-12 shadow-card"
+    @mouseover="handleGridHover"
+    @mouseleave="clearHoverColumn"
+  >
+    <table
+      class="w-full table-fixed border-separate border-spacing-0"
+      :style="{ minWidth: tableMinWidth }"
+    >
+      <colgroup>
+        <col style="width: 120px" />
+        <col v-for="day in days" :key="day.iso" />
+      </colgroup>
+
+      <thead class="sticky top-0 z-20">
+        <tr>
+          <th
+            scope="col"
+            rowspan="2"
+            class="sticky left-0 bg-white z-30 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1 text-xs font-semibold text-secondary text-center align-middle"
+          >
+            Team
+          </th>
+
+          <th
+            v-for="group in monthGroups"
+            :key="group.month"
+            scope="colgroup"
+            :colspan="group.span"
+            class="border-b border-l-2 border-border px-1 py-1 text-center text-xs font-semibold text-primary-dark bg-surface"
+          >
+            {{ group.label }}
+          </th>
+        </tr>
+
+        <tr>
+          <th
+            v-for="day in days"
+            :key="day.iso"
+            scope="col"
+            class="border-b border-border px-1 py-1 text-center text-xs font-normal align-middle"
+            :class="[
+              dayHeaderClass(day),
+              columnSideBorderClass(day),
+              columnTopBorderClass(day.isToday),
+              editableHoliday(day.iso) || canAddHoliday(day.iso)
+                ? 'cursor-pointer hover:opacity-70'
+                : '',
+            ]"
+            :title="headerTitle(day)"
+            :data-today="day.isToday || undefined"
+            :data-iso="day.iso"
+            @click="handleHeaderClick(day)"
+          >
+            <div class="font-semibold text-primary-dark">{{ day.dayNum }}</div>
+            <div class="text-[10px] text-secondary">{{ day.weekdayLabel }}</div>
+          </th>
+        </tr>
+      </thead>
+
+      <tbody v-if="loading">
+        <tr v-for="n in 5" :key="`skeleton-${n}`">
+          <th
+            scope="row"
+            class="sticky left-0 bg-white z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+          >
+            <AppSkeleton class="h-4 w-20" />
+          </th>
+          <td :colspan="days.length" class="border-b border-border h-9 p-1.5 align-middle">
+            <AppSkeleton class="h-full w-full" />
+          </td>
+        </tr>
+      </tbody>
+
+      <tbody v-else>
+        <tr v-for="(row, rowIndex) in rows" :key="row.person.id">
+          <th
+            scope="row"
+            class="sticky left-0 bg-white z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
+            draggable="true"
+            title="Drag to reorder"
+            @dragstart="handleDragStart(row.person.id)"
+            @dragover.prevent
+            @drop="handleDrop(row.person.id)"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-secondary/40 select-none text-xs leading-none">⠿</span>
+              <span
+                class="inline-block w-2.5 h-2.5 rounded-pill shrink-0"
+                :style="{ backgroundColor: row.person.color }"
+              />
+              <span class="truncate text-primary-dark">{{
+                row.person.displayName ?? row.person.username
+              }}</span>
+            </div>
+          </th>
+
+          <td
+            v-for="cell in row.cells"
+            :key="`${row.person.id}-${cell.day.iso}`"
+            class="h-9 p-0 align-middle"
+            :class="[
+              dayHeaderClass(cell.day),
+              columnSideBorderClass(cell.day),
+              columnBottomBorderClass(cell.day.isToday, rowIndex === rows.length - 1),
+              !cell.absence && isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
+            ]"
+            :title="cell.absence ? undefined : emptyCellTitle(row.person, cell.day)"
+            :data-iso="cell.day.iso"
+            @click="handleCellClick(row.person, cell)"
+          >
+            <div
+              v-if="cell.absence"
+              class="w-full h-full flex items-center justify-center text-[10px] font-bold"
+              :class="{ 'cursor-pointer hover:opacity-70': isMine(cell.absence) }"
+              :style="
+                cell.painted
+                  ? { backgroundColor: row.person.color, color: textColorFor(row.person.color) }
+                  : undefined
+              "
+              :title="cellTitle(row.person, cell.absence)"
+              @click="handleAbsenceClick(cell.absence)"
+            >
+              {{ cell.isLabelCell ? typeLabel(cell.absence.type) : "" }}
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, onMounted, ref } from "vue";
+
+import AppSkeleton from "@/components/AppSkeleton.vue";
+import { useContrastText } from "@/composables/useContrastText";
+import { useDateFormat } from "@/composables/useDateFormat";
+import { useConfigStore } from "@/stores/config";
+import { usePersonStore } from "@/stores/person";
+import type { AbsenceDto, AbsenceType } from "@/types/absence";
+import type { BankHolidayDto } from "@/types/bankHoliday";
+import type { PersonDto } from "@/types/person";
+
+const props = defineProps<{
+  people: PersonDto[];
+  absences: AbsenceDto[];
+  holidays: BankHolidayDto[];
+  year: number;
+  loading: boolean;
+}>();
+
+const emit = defineEmits<{
+  "add-absence": [date: string];
+  "edit-absence": [absence: AbsenceDto];
+  "edit-holiday": [holiday: BankHolidayDto];
+  "add-holiday": [date: string];
+  reorder: [personId: number, targetPersonId: number];
+}>();
+
+const { toIso, parse } = useDateFormat();
+const { textColorFor } = useContrastText();
+
+const configStore = useConfigStore();
+const personStore = usePersonStore();
+const containerRef = ref<HTMLDivElement | null>(null);
+
+function isMine(absence: AbsenceDto): boolean {
+  return absence.personId === personStore.person?.id;
+}
+
+function isMyRow(person: PersonDto): boolean {
+  return person.id === personStore.person?.id;
+}
+
+function handleAbsenceClick(absence: AbsenceDto) {
+  if (!isMine(absence)) return;
+  emit("edit-absence", absence);
+}
+
+function handleCellClick(person: PersonDto, cell: { day: { iso: string }; absence?: AbsenceDto }) {
+  if (cell.absence || !isMyRow(person)) return;
+  emit("add-absence", cell.day.iso);
+}
+
+// Native HTML5 drag-and-drop rather than a library: reordering a handful of rows
+// doesn't need anything fancier, and it keeps this already-heavy component lean.
+let draggedPersonId: number | null = null;
+
+function handleDragStart(personId: number) {
+  draggedPersonId = personId;
+}
+
+function handleDrop(targetPersonId: number) {
+  if (draggedPersonId !== null && draggedPersonId !== targetPersonId) {
+    emit("reorder", draggedPersonId, targetPersonId);
+  }
+  draggedPersonId = null;
+}
+
+// This listener sits on the container, not on each cell: a full year is thousands of
+// cells, and one listener here covers any team size or date range. The highlight itself
+// is applied imperatively, not through a reactive ref, so hovering only touches the DOM
+// nodes for the column you're entering or leaving. With a year's worth of cells, routing
+// this through Vue's reactivity would force a re-render of every cell on every crossing.
+let hoveredIso: string | null = null;
+
+function handleGridHover(event: MouseEvent) {
+  const iso = (event.target as HTMLElement).closest<HTMLElement>("[data-iso]")?.dataset.iso ?? null;
+  if (iso !== hoveredIso) setHoverColumn(iso);
+}
+
+function clearHoverColumn() {
+  setHoverColumn(null);
+}
+
+function setHoverColumn(iso: string | null) {
+  const container = containerRef.value;
+  if (container && hoveredIso) {
+    for (const el of container.querySelectorAll<HTMLElement>(`[data-iso="${hoveredIso}"]`)) {
+      el.style.boxShadow = "";
+    }
+  }
+  if (container && iso) {
+    for (const el of container.querySelectorAll<HTMLElement>(`[data-iso="${iso}"]`)) {
+      el.style.boxShadow = "inset 0 0 0 9999px rgba(17, 119, 224, 0.08)";
+    }
+  }
+  hoveredIso = iso;
+}
+
+onMounted(() => {
+  configStore.loadOnce().catch((error: unknown) => {
+    console.error("ERROR => Failed to load region catalog:", error);
+  });
+  scrollToToday();
+});
+
+/** Scrolls the grid so today's column is centered in view. No-op if today isn't in the displayed year. */
+async function scrollToToday() {
+  await nextTick();
+  containerRef.value?.querySelector<HTMLElement>("[data-today]")?.scrollIntoView({
+    inline: "center",
+    block: "nearest",
+  });
+}
+
+defineExpose({ scrollToToday });
+
+// region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland"
+const regionLabels = computed(() => {
+  const map = new Map<string, string>();
+  for (const country of configStore.config?.regions ?? []) {
+    map.set(country.code, country.name);
+    for (const region of country.regions) {
+      map.set(region.code, region.label);
+    }
+  }
+  return map;
+});
+
+const days = computed(() => {
+  const weekdayFmt = new Intl.DateTimeFormat(navigator.language, { weekday: "short" });
+  const start = new Date(props.year, 0, 1);
+  const end = new Date(props.year, 11, 31);
+  const today = toIso(new Date());
+
+  const result = [];
+  for (let d = start; d <= end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const iso = toIso(d);
+    result.push({
+      iso,
+      month: d.getMonth(),
+      dayNum: d.getDate(),
+      isWeekend: d.getDay() === 0 || d.getDay() === 6,
+      isToday: iso === today,
+      weekdayLabel: weekdayFmt.format(d),
+    });
+  }
+  return result;
+});
+
+const monthGroups = computed(() => {
+  const fmt = new Intl.DateTimeFormat(navigator.language, { month: "long" });
+  const groups: { month: number; label: string; span: number }[] = [];
+
+  for (const day of days.value) {
+    const current = groups[groups.length - 1];
+    if (current?.month === day.month) {
+      current.span++;
+    } else {
+      groups.push({
+        month: day.month,
+        label: fmt.format(new Date(props.year, day.month, 1)),
+        span: 1,
+      });
+    }
+  }
+
+  return groups;
+});
+
+const holidayMap = computed(() => {
+  const map = new Map<string, BankHolidayDto[]>();
+  for (const h of props.holidays) {
+    const entries = map.get(h.date) ?? [];
+    entries.push(h);
+    map.set(h.date, entries);
+  }
+  return map;
+});
+
+// personId -> iso date -> absence covering that day
+const absenceMap = computed(() => {
+  const map = new Map<number, Map<string, AbsenceDto>>();
+  for (const a of props.absences) {
+    let byDate = map.get(a.personId);
+    if (!byDate) {
+      byDate = new Map();
+      map.set(a.personId, byDate);
+    }
+    for (let d = parse(a.startDate); toIso(d) <= a.endDate; d.setDate(d.getDate() + 1)) {
+      byDate.set(toIso(d), a);
+    }
+  }
+  return map;
+});
+
+// Weekends and bank holidays aren't work days, so an absence stretch doesn't paint over
+// them: the day keeps its own weekend/holiday background instead of the person's color.
+function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
+  return !day.isWeekend && !holidayMap.value.has(day.iso);
+}
+
+// This precomputes each row's per-day absence once. Otherwise the template would look
+// it up up to four times per cell (v-if, opacity, title, label). Now it's resolved a
+// single time per cell, and only recalculated when people, absences, or days change.
+//
+// isLabelCell marks only the first day of each contiguous run of *painted* days for the
+// same absence, so a 5-day vacation shows its "V" once instead of once per day. Since a
+// weekend or holiday in the middle isn't painted, it breaks the run, so a 2-week vacation
+// spanning one weekend shows two "V"s, one per painted stretch. Comparing by object
+// identity (rather than by id) means it also resets correctly across two different,
+// back-to-back absences of the same type.
+const rows = computed(() =>
+  props.people.map((person) => {
+    const byDate = absenceMap.value.get(person.id);
+    let previousPaintedAbsence: AbsenceDto | undefined;
+
+    const cells = days.value.map((day) => {
+      const absence = byDate?.get(day.iso);
+      const painted = absence !== undefined && isPaintDay(day);
+      const isLabelCell = painted && absence !== previousPaintedAbsence;
+      previousPaintedAbsence = painted ? absence : undefined;
+      return { day, absence, painted, isLabelCell };
+    });
+
+    return { person, cells };
+  }),
+);
+
+// Always resolves to exactly one background, including the "none of the above" case
+// (plain bg-white), so the sticky header fully occludes rows scrolling underneath it.
+// Today is marked separately with a ring, not a background, so it never has to compete
+// with a holiday's own tint.
+function dayHeaderClass(day: { iso: string; isWeekend: boolean }) {
+  if (holidayMap.value.has(day.iso)) return "bg-holiday";
+  if (day.isWeekend) return "bg-surface";
+  return "bg-white";
+}
+
+// Today's column gets a continuous outline down its full height, so it takes priority
+// over the plain month-boundary divider that would otherwise land on its left edge.
+function columnSideBorderClass(day: { isToday: boolean; dayNum: number }): string {
+  if (day.isToday) return "border-l-2 border-r-2 border-today";
+  return day.dayNum === 1 ? "border-l-2 border-l-border" : "";
+}
+
+// The header row is always the top of the outline, so today's top edge doesn't need a
+// "which row" check the way the bottom edge does.
+function columnTopBorderClass(isToday: boolean): string {
+  return isToday ? "border-t-2 border-today" : "";
+}
+
+// Every row needs a bottom divider, but only the last row's today cell should close
+// off the outline instead of drawing the usual thin divider underneath it.
+function columnBottomBorderClass(isToday: boolean, isLastRow: boolean): string {
+  return isToday && isLastRow ? "border-b-2 border-today" : "border-b border-border";
+}
+
+function holidayName(iso: string): string {
+  const entries = holidayMap.value.get(iso);
+  if (!entries) return "";
+  return entries
+    .map((e) => `${e.name} (${regionLabels.value.get(e.region) ?? e.region})`)
+    .join(", ");
+}
+
+// Only offered when there's exactly one manually-added holiday on that day, so a click
+// never has to guess which of several overlapping holidays you meant to edit.
+function editableHoliday(iso: string): BankHolidayDto | undefined {
+  const entries = holidayMap.value.get(iso);
+  if (!entries || entries.length !== 1) return undefined;
+  return entries[0].source === "Manual" ? entries[0] : undefined;
+}
+
+// A day with no holiday at all can be clicked to add one. A day already carrying a
+// Nager-sourced or multiple holidays is left alone, same as editableHoliday above.
+function canAddHoliday(iso: string): boolean {
+  return !holidayMap.value.has(iso);
+}
+
+function headerTitle(day: { iso: string }): string {
+  const holiday = holidayName(day.iso);
+  if (editableHoliday(day.iso)) return `${holiday} (click to edit)`;
+  if (canAddHoliday(day.iso)) return "Click to add bank holiday";
+  return holiday;
+}
+
+function handleHeaderClick(day: { iso: string }) {
+  const holiday = editableHoliday(day.iso);
+  if (holiday) {
+    emit("edit-holiday", holiday);
+    return;
+  }
+  if (canAddHoliday(day.iso)) {
+    emit("add-holiday", day.iso);
+  }
+}
+
+function typeLabel(type: AbsenceType): string {
+  return { Vacation: "V", Sick: "S", Other: "O" }[type];
+}
+
+function cellTitle(person: PersonDto, absence: AbsenceDto): string {
+  const name = person.displayName ?? person.username;
+  const base = absence.note
+    ? `${name} — ${absence.type}: ${absence.note}`
+    : `${name} — ${absence.type}`;
+  return isMine(absence) ? `${base} (click to edit)` : base;
+}
+
+function emptyCellTitle(person: PersonDto, day: { iso: string }): string {
+  const holiday = holidayName(day.iso);
+  if (!isMyRow(person)) return holiday;
+  return holiday ? `${holiday} (click to add absence)` : "Click to add absence";
+}
+
+const tableMinWidth = computed(() => `${120 + days.value.length * 28}px`);
+</script>

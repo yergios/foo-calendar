@@ -1,0 +1,24 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Node / Vue
+node_modules/
+dist/
+.pnpm-store/
+*.local
+
+# Environment
+.env
+!.env.example
+
+# Vite build output
+src/Api/wwwroot
