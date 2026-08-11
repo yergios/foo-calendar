@@ -117,7 +117,7 @@
             <label class="text-xs font-semibold text-secondary">Home city</label>
             <select
               v-model="form.homeCity"
-              class="border border-border rounded-8 px-3 py-2 bg-white"
+              class="border border-border rounded-8 px-3 py-2 bg-background"
             >
               <option :value="null">Not set</option>
               <optgroup
@@ -153,7 +153,7 @@
         <div class="flex gap-3 mt-4">
           <button
             type="button"
-            class="bg-accent text-white rounded-8 px-4 py-2 text-sm transition-all duration-150 ease-out hover:bg-primary disabled:opacity-40"
+            class="bg-primary text-white border border-transparent rounded-8 px-4 py-2 text-sm transition-all duration-150 ease-out hover:bg-primary-hover disabled:opacity-40"
             :disabled="!canSubmitForm || submittingForm"
             @click="submitForm"
           >
@@ -185,7 +185,7 @@
         />
         <button
           type="button"
-          class="bg-accent text-white rounded-8 px-4 py-2 text-sm transition-all duration-150 ease-out hover:bg-primary disabled:opacity-40"
+          class="bg-primary text-white border border-transparent rounded-8 px-4 py-2 text-sm transition-all duration-150 ease-out hover:bg-primary-hover disabled:opacity-40"
           :disabled="syncing"
           @click="handleSync"
         >

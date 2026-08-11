@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-screen overflow-hidden bg-white">
+  <div class="flex flex-col h-screen overflow-hidden bg-background">
     <AppHeader />
     <main class="flex-1 min-h-0">
       <div class="max-w-[1920px] mx-auto px-4 py-8 h-full flex flex-col gap-6">

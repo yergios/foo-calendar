@@ -14,7 +14,7 @@ const rendered = computed(() => marked.parse(props.content) as string);
 
 <style scoped>
 .prose {
-  color: var(--color-text-primary);
+  color: var(--color-primary-dark);
   line-height: 1.7;
 }
 .prose :deep(h1) {
@@ -64,7 +64,7 @@ const rendered = computed(() => marked.parse(props.content) as string);
   font-size: 0.8rem;
   background: var(--color-surface);
   padding: 0.1rem 0.3rem;
-  border-radius: 4px;
+  border-radius: var(--radius-4);
 }
 .prose :deep(hr) {
   border: none;

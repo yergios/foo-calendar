@@ -6,7 +6,7 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="w-44 text-center bg-accent text-white rounded-8 px-3 py-1.5 text-sm font-semibold hover:bg-primary transition-colors disabled:opacity-40 disabled:hover:bg-accent disabled:hover:shadow-none"
+          class="w-42 text-center bg-primary text-white border border-transparent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
           :disabled="!personStore.person"
           :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddAbsence()"
@@ -15,7 +15,7 @@
         </button>
         <button
           type="button"
-          class="w-44 text-center border border-accent text-accent rounded-8 px-3 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-accent"
+          class="w-42 text-center border border-accent text-accent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="!personStore.person"
           :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddBankHoliday()"
@@ -30,7 +30,7 @@
           <select
             id="sortMode"
             v-model="sortMode"
-            class="border border-border rounded-8 px-2 py-1 text-sm bg-white"
+            class="border border-border rounded-8 px-2 py-1 text-sm bg-background"
           >
             <option value="name">Name</option>
             <option value="absentToday">Absent today, then name</option>
@@ -43,7 +43,7 @@
           <select
             id="regionFilter"
             v-model="regionFilter"
-            class="border border-border rounded-8 px-2 py-1 text-sm bg-white"
+            class="border border-border rounded-8 px-2 py-1 text-sm bg-background"
           >
             <option value="">All regions</option>
             <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
@@ -79,7 +79,7 @@
       <div class="flex items-center gap-4 text-xs text-secondary flex-wrap">
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-white ring-2 ring-inset ring-today"
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-background ring-2 ring-inset ring-today"
           />
           <span>Today</span>
         </div>
@@ -114,7 +114,7 @@
 
       <button
         type="button"
-        class="text-xs font-semibold text-accent border border-accent rounded-pill px-2.5 py-1 hover:bg-accent hover:text-white transition-colors"
+        class="text-sm font-semibold text-accent border border-accent rounded-pill px-3.5 py-1.5 hover:bg-accent/10 transition-colors"
         @click="goToToday"
       >
         Go to today

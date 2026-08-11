@@ -8,14 +8,19 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Returns the text color (white or brand dark) with the better contrast against the given background. */
+// Person colors are fixed business data (see PersonColorPalette), independent of the app's
+// brand/light-dark theme, so the contrasting text color must stay fixed too — it can't reference
+// --color-primary-dark, which now flips with light/dark mode.
+const DARK_TEXT = "#0f172a";
+
+/** Returns the text color (white or dark) with the better contrast against the given background. */
 export function useContrastText() {
-  function textColorFor(bgHex: string): "#FFFFFF" | "#020035" {
+  function textColorFor(bgHex: string): "#FFFFFF" | typeof DARK_TEXT {
     const bgLum = relativeLuminance(bgHex);
     const contrastWithWhite = 1.05 / (bgLum + 0.05);
-    const contrastWithDark = (bgLum + 0.05) / 0.05; // approx, dark-primary luminance ~= 0
+    const contrastWithDark = (bgLum + 0.05) / 0.05; // approx, dark-text luminance ~= 0
 
-    return contrastWithWhite >= contrastWithDark ? "#FFFFFF" : "#020035";
+    return contrastWithWhite >= contrastWithDark ? "#FFFFFF" : DARK_TEXT;
   }
 
   return { textColorFor };

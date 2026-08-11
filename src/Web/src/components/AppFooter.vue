@@ -1,5 +1,5 @@
 <template>
-  <footer class="sticky bottom-0 border-t border-border px-6 py-4 bg-white">
+  <footer class="sticky bottom-0 border-t border-border px-6 py-4 bg-background">
     <div class="max-w-[1920px] mx-auto flex items-center justify-between h-4">
       <span class="text-xs text-secondary">© {{ year }} {{ appName }}. All rights reserved.</span>
       <div class="flex items-center gap-4">

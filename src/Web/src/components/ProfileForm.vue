@@ -21,7 +21,7 @@
         v-else
         id="homeCity"
         v-model="homeCity"
-        class="border border-border rounded-8 px-3 py-2 bg-white"
+        class="border border-border rounded-8 px-3 py-2 bg-background"
       >
         <option :value="null">Not set</option>
         <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
@@ -30,9 +30,6 @@
           </option>
         </optgroup>
       </select>
-      <p class="text-[11px] text-secondary">
-        Used to show your region's public holidays on the calendar.
-      </p>
     </div>
 
     <div class="flex flex-col gap-1.5">
@@ -52,7 +49,7 @@
 
     <button
       type="button"
-      class="bg-accent text-white rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary hover:shadow-card active:scale-98 disabled:opacity-40 disabled:hover:bg-accent disabled:hover:shadow-none"
+      class="bg-primary text-white border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card active:scale-98 disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
       :title="canSubmit ? undefined : 'Set display name and color first.'"
       :disabled="!canSubmit || submitting"
       @click="submit"

@@ -87,7 +87,7 @@
       <p class="text-sm text-secondary">You don't have a profile yet.</p>
       <button
         type="button"
-        class="border border-accent text-accent rounded-pill px-3 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors"
+        class="border border-accent text-accent rounded-pill px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors"
         @click="personStore.ensurePerson()"
       >
         Set up profile

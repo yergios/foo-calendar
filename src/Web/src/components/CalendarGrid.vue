@@ -19,7 +19,7 @@
           <th
             scope="col"
             rowspan="2"
-            class="sticky left-0 bg-white z-30 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1 text-xs font-semibold text-secondary text-center align-middle"
+            class="sticky left-0 bg-background z-30 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1 text-xs font-semibold text-secondary text-center align-middle"
           >
             Team
           </th>
@@ -64,7 +64,7 @@
         <tr v-for="n in 5" :key="`skeleton-${n}`">
           <th
             scope="row"
-            class="sticky left-0 bg-white z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+            class="sticky left-0 bg-background z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
           >
             <AppSkeleton class="h-4 w-20" />
           </th>
@@ -444,15 +444,15 @@ const fillerRows = computed(() => {
 });
 
 // Always resolves to exactly one background, including the "none of the above" case
-// (plain bg-white), so the sticky header fully occludes rows scrolling underneath it.
+// (plain bg-background), so the sticky header fully occludes rows scrolling underneath it.
 // Today is marked separately with a ring, not a background, so it never has to compete
 // with a holiday's own tint.
 //
-// plainBackground is left at its default for the day header row (always plain white).
+// plainBackground is left at its default for the day header row (the page background).
 // Body rows pass their precomputed zebra-stripe background instead, to make rows
 // easier to tell apart. Weekends and holidays keep their own tint regardless of row,
 // since those already mark the column and shouldn't be muddied by the row stripe.
-function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackground = "bg-white") {
+function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackground = "bg-background") {
   if (holidayMap.value.has(day.iso)) return "bg-holiday";
   if (day.isWeekend) return "bg-surface";
   return plainBackground;
@@ -461,7 +461,7 @@ function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackgroun
 // Same stripe used on the sticky name column, so the alternating background reads as
 // one continuous row rather than stopping at the day columns.
 function rowBackgroundClass(rowIndex: number): string {
-  return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-white";
+  return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-background";
 }
 
 // Today's column gets a continuous outline down its full height, so it takes priority

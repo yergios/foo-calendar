@@ -1,5 +1,5 @@
 <template>
-  <header class="bg-white border-b border-border px-6 py-3">
+  <header class="bg-background border-b border-border px-6 py-3">
     <div class="max-w-[1920px] mx-auto flex items-center justify-between gap-6">
       <RouterLink
         to="/"
@@ -13,7 +13,7 @@
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          class="font-display text-sm px-3 py-1.5 rounded-pill transition-colors"
+          class="font-display text-sm w-24 text-center py-1.5 rounded-pill transition-colors"
           :class="
             isActive(item.to)
               ? 'bg-surface text-primary-dark font-semibold'
@@ -27,7 +27,7 @@
       <button
         v-else
         type="button"
-        class="border border-accent text-accent rounded-pill px-3 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors shrink-0"
+        class="border border-accent text-accent rounded-pill px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors shrink-0"
         @click="personStore.ensurePerson()"
       >
         Set up profile

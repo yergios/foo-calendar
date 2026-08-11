@@ -1,11 +1,11 @@
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-primary-dark/40 p-6"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
       @click.self="$emit('close')"
     >
       <div
-        class="bg-white rounded-xl shadow-card flex flex-col w-full max-h-[80vh]"
+        class="bg-background rounded-12 shadow-card flex flex-col w-full max-h-[80vh]"
         :class="size === 'md' ? 'max-w-md' : 'max-w-3xl'"
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
