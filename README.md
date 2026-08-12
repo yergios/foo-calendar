@@ -43,7 +43,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 **Key technologies**
 
 - .NET 10 Minimal API with EF Core + SQLite
-- [Nager.Date](https://date.nager.at/) public holiday API, synced automatically on a weekly background job (and on demand from the admin page)
+- Public holidays from a configurable source — the [Nager.Date](https://date.nager.at/) API by default, or a JSON file, or nothing at all — synced on a background job and on demand from the admin page, see [Where holidays come from](#where-holidays-come-from)
 - Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication and permission-based admin access — or a zero-setup dev-only bypass, see below
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
 - OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
@@ -65,7 +65,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 Out of the box, `src/Api/appsettings.Development.json` sets `Auth:Provider` to `None`, which fully bypasses SSO in local development, so you can run the app with no OIDC/IdP tenant at all. Everything below is only needed once you point at a real provider (staging/production, or if you want to exercise the real auth path locally):
 
 1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `AdminPermission`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
-2. `Nager:BaseUrl` defaults to the public Nager.Date API (`https://date.nager.at/api/v3/`) and normally doesn't need changing.
+2. Holidays are pulled from the public Nager.Date API by default, which needs no setup. See [Where holidays come from](#where-holidays-come-from) to point that elsewhere.
 
 The frontend needs no setup of its own: it reads branding and OIDC settings from the API at startup — see [Configuring a deployment](#configuring-a-deployment).
 
@@ -204,7 +204,7 @@ Leaving both empty accepts forwarded headers from any peer, which is the normal 
 The app is designed to run as a single instance, and two things assume it:
 
 - **Migrations run on startup.** Several replicas starting at once would race each other applying the same migration.
-- **The bank-holiday sync is in-process.** Every replica would run its own weekly sync against Nager.
+- **The bank-holiday sync is in-process.** Every replica would run its own sync against the holiday source.
 
 SQLite is not the blocker here; both would need addressing before a second replica, whatever the database. For the size of team this tool is for, one instance is the intended shape.
 
@@ -228,7 +228,53 @@ Edit the `RegionCatalog` array in `src/Api/appsettings.json`:
 ```
 
 - `Code` follows ISO 3166-2 (the country code alone for a nationwide entry, `COUNTRY-SUBDIVISION` for a specific region).
-- This one list drives three things: the home-city dropdown on a person's profile, the region filter on the calendar, and which regions get synced from Nager (both on the weekly background job and via `POST /api/admin/bank-holidays/sync`).
+- This one list drives three things: the home-city dropdown on a person's profile, the region filter on the calendar, and which countries get synced from the holiday source (both on the background job and via `POST /api/admin/bank-holidays/sync`).
+
+### Where holidays come from
+
+Public holidays are filled in by a configurable source. Whichever one is in use, the app owns the result: rows are stored locally, admins can override any of them by hand, and **a manual entry is never overwritten by a later sync**.
+
+```json
+"Holidays": {
+  "Source": "Nager",
+  "SyncInterval": "7.00:00:00",
+  "Nager": { "BaseUrl": "https://date.nager.at/api/v3/" },
+  "File": { "Path": "" }
+}
+```
+
+| `Source` | Behaviour |
+| -------- | ------------------------------------------------------------------------------------- |
+| `Nager` | Default. Pulls from the [Nager.Date](https://date.nager.at/) API. Needs outbound internet. |
+| `File` | Reads a JSON file. No egress, and it can express closures no public API knows about. |
+| `None` | No automatic holidays at all. Whatever admins add by hand is all there is. |
+
+Each country in `RegionCatalog` is synced on startup, then every `SyncInterval` (a `d.hh:mm:ss` span), for the current year and the next. An admin can also trigger it from `/admin`, which with `Source=None` refuses with a `409` rather than pretending to have synced.
+
+**Behind a proxy?** No configuration here: `HttpClient` reads the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables by itself.
+
+#### The file source
+
+Point it at a JSON file, typically mounted in:
+
+```bash
+Holidays__Source=File
+Holidays__File__Path=/etc/foo-calendar/holidays.json
+```
+
+```json
+[
+  { "region": "CH", "date": "2026-08-01", "name": "Swiss National Day" },
+  { "region": "CH-ZH", "date": "2026-04-13", "name": "Sechselauten" },
+  { "region": "CH", "date": "2020-12-24", "name": "Office closed", "recurringAnnually": true }
+]
+```
+
+- `region` is an ISO 3166-2 code, matching `RegionCatalog`. A country code applies nationwide; a subdivision code applies to that region only.
+- `recurringAnnually` ignores the year in `date` and applies its month/day to every year synced, which is what company closures usually are. (Feb 29 only lands on leap years.)
+- The file is re-read on every sync, so edits take effect on the next one without a restart. A missing or malformed file is reported as a failed country on the admin page and logged — it never silently syncs nothing.
+
+Rows created this way are labelled `File` in the API and the UI, and stamped `file-sync` in the audit columns, so it stays visible which system put a holiday there.
 
 ### Adding an assignable color
 

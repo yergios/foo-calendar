@@ -9,28 +9,20 @@ namespace Api.Services;
 
 public sealed class BankHolidayService(
     AppDbContext db,
-    HttpClient http,
+    IHolidaySource source,
     ILogger<BankHolidayService> logger) : IBankHolidayService
 {
-    private sealed record NagerHoliday(
-        DateOnly Date,
-        string LocalName,
-        string Name,
-        string CountryCode,
-        bool Global,
-        string[] Counties,
-        string[] Types);
-
-    // This is the one place that defines how a subdivision code maps to its country.
-    // Keep both derivations below pointed at it, so they can't quietly drift apart.
-    private const string CountrySeparator = "-";
-
-    // Marks rows the Nager sync itself created or refreshed, since there's no real
-    // username behind those.
-    private const string SyncActor = "nager-sync";
-
-    private static string CountryOf(string region) =>
-        region.Contains(CountrySeparator, StringComparison.Ordinal) ? region.Split(CountrySeparator)[0] : region;
+    // Marks rows the sync itself created or refreshed, since there's no real username
+    // behind those. Named after the source so it stays obvious which system put a row
+    // there after a deployment switches sources. Spelled out rather than derived from the
+    // enum: these strings are persisted in audit columns, so they shouldn't change shape
+    // just because an enum member gets renamed.
+    private readonly string syncActor = source.Kind switch
+    {
+        HolidaySource.Nager => "nager-sync",
+        HolidaySource.File => "file-sync",
+        _ => "sync",
+    };
 
     public async Task<BankHolidaysResponse> GetForRegionsAsync(
         IReadOnlyCollection<string> regions,
@@ -40,7 +32,7 @@ public sealed class BankHolidayService(
     {
         // Expand each region to itself + its country code, so "ES-MD" also pulls in nationwide "ES" rows.
         var expanded = regions
-            .SelectMany(r => new[] { r, CountryOf(r) })
+            .SelectMany(r => new[] { r, RegionCode.CountryOf(r) })
             .Distinct()
             .ToList();
 
@@ -63,7 +55,7 @@ public sealed class BankHolidayService(
         var recurring = recurringEntities
             .SelectMany(
                 h => Enumerable.Range(from.Year, to.Year - from.Year + 1),
-                (h, year) => (Holiday: h, Date: RecurringOccurrenceIn(h, year)))
+                (h, year) => (Holiday: h, Date: BankHoliday.OccurrenceIn(h.Date, year)))
             .Where(x => x.Date is DateOnly d && d >= from && d <= to)
             .Select(x => BankHolidayDto.FromEntity(x.Holiday) with { Date = x.Date!.Value });
 
@@ -71,12 +63,6 @@ public sealed class BankHolidayService(
 
         return new(holidays);
     }
-
-    // Feb 29 only recurs on leap years; every other stored month/day recurs every year.
-    private static DateOnly? RecurringOccurrenceIn(BankHoliday holiday, int year) =>
-        holiday.Date.Month == 2 && holiday.Date.Day == 29 && !DateTime.IsLeapYear(year)
-            ? null
-            : new DateOnly(year, holiday.Date.Month, holiday.Date.Day);
 
     // Two holidays in the same region collide if they'd ever land on the same calendar day.
     // A recurring one recurs by month/day regardless of the year it happens to be stored
@@ -88,16 +74,16 @@ public sealed class BankHolidayService(
 
     private async Task SyncCountryAsync(string countryCode, int year, CancellationToken ct = default)
     {
-        var holidays = await http.GetFromJsonAsync<List<NagerHoliday>>(
-            $"PublicHolidays/{year}/{countryCode}", ct);
+        var holidays = await source.GetAsync(countryCode, year, ct);
 
-        if (holidays is null) return;
+        if (holidays.Count == 0) return;
 
         // Load everything already in the DB for this country. Tracked, so updates are cheap.
-        // This stays an inline predicate instead of calling CountryOf(), so it still runs as
-        // one SQL WHERE clause instead of pulling every row to the client.
+        // This stays an inline predicate instead of calling RegionCode.BelongsTo(), which EF
+        // can't translate, so it still runs as one SQL WHERE clause instead of pulling every
+        // row to the client.
         var existing = await db.BankHolidays
-            .Where(b => b.Region == countryCode || b.Region.StartsWith(countryCode + CountrySeparator))
+            .Where(b => b.Region == countryCode || b.Region.StartsWith(countryCode + RegionCode.Separator))
             .ToListAsync(ct);
 
         // The overwhelming majority of rows are exact-date, non-recurring, so they get an O(1)
@@ -120,38 +106,34 @@ public sealed class BankHolidayService(
 
         foreach (var h in holidays)
         {
-            // Global (nationwide): one row under the country code.
-            // Not global: one row per county it applies to.
-            var regions = h.Global ? [countryCode] : h.Counties ?? [];
+            var current = FindExisting(h.Region, h.Date);
 
-            foreach (var r in regions)
+            if (current is not null)
             {
-                var current = FindExisting(r, h.Date);
+                if (current.Source == HolidaySource.Manual)
+                    continue; // never clobber a manual override, recurring or not
 
-                if (current is not null)
-                {
-                    if (current.Source == HolidaySource.Manual)
-                        continue; // never clobber a manual override, recurring or not
-
-                    current.Name = h.Name; // refresh name on re-sync
-                    current.UpdatedAt = DateTime.UtcNow;
-                    current.UpdatedBy = SyncActor;
-                    continue;
-                }
-
-                if (!seen.Add((r, h.Date)))
-                    continue; // duplicate within this same Nager response, first one wins
-
-                db.BankHolidays.Add(new BankHoliday
-                {
-                    Region = r,
-                    Date = h.Date,
-                    Name = h.Name,
-                    Source = HolidaySource.Nager,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedBy = SyncActor,
-                });
+                current.Name = h.Name; // refresh name on re-sync
+                // A deployment can switch sources; whichever one maintains the row now is
+                // the one it should be labelled with.
+                current.Source = source.Kind;
+                current.UpdatedAt = DateTime.UtcNow;
+                current.UpdatedBy = syncActor;
+                continue;
             }
+
+            if (!seen.Add((h.Region, h.Date)))
+                continue; // duplicate within this same response, first one wins
+
+            db.BankHolidays.Add(new BankHoliday
+            {
+                Region = h.Region,
+                Date = h.Date,
+                Name = h.Name,
+                Source = source.Kind,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = syncActor,
+            });
         }
 
         await db.SaveChangesAsync(ct);

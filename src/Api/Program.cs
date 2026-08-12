@@ -44,9 +44,20 @@ services.AddOptions<PersonColorPaletteOptions>()
         "PersonColorPalette entries must be valid 6-digit hex colors.")
     .ValidateOnStart();
 
-services.AddOptions<NagerOptions>()
-    .Bind(config.GetSection(NagerOptions.SectionName))
-    .Validate(o => !string.IsNullOrWhiteSpace(o.BaseUrl), "Nager:BaseUrl must be configured.")
+services.AddOptions<HolidayOptions>()
+    .Bind(config.GetSection(HolidayOptions.SectionName))
+    .Validate(
+        o => o.Source is HolidayOptions.SourceNager
+            or HolidayOptions.SourceFile
+            or HolidayOptions.SourceNone,
+        "Holidays:Source must be one of Nager, File, None.")
+    .Validate(
+        o => o.Source != HolidayOptions.SourceNager || !string.IsNullOrWhiteSpace(o.Nager.BaseUrl),
+        "Holidays:Nager:BaseUrl must be configured.")
+    .Validate(
+        o => o.Source != HolidayOptions.SourceFile || !string.IsNullOrWhiteSpace(o.File.Path),
+        "Holidays:File:Path must be configured when Holidays:Source=File.")
+    .Validate(o => o.SyncInterval > TimeSpan.Zero, "Holidays:SyncInterval must be positive.")
     .ValidateOnStart();
 
 services.AddOptions<BrandingOptions>()
@@ -75,11 +86,36 @@ services.AddDbContext<AppDbContext>(o =>
 services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-services.AddHostedService<BankHolidaySyncBackgroundService>();
-
 services.AddHttpContextAccessor();
-services.AddHttpClient<IBankHolidayService, BankHolidayService>((sp, client) =>
-    client.BaseAddress = new Uri(sp.GetRequiredService<IOptions<NagerOptions>>().Value.BaseUrl));
+
+// ---- Holidays -------------------------------------------------------------
+
+var holidayConfig = config.GetSection(HolidayOptions.SectionName).Get<HolidayOptions>()
+    ?? new HolidayOptions();
+
+switch (holidayConfig.Source)
+{
+    case HolidayOptions.SourceFile:
+        services.AddSingleton<IHolidaySource, FileHolidaySource>();
+        break;
+
+    case HolidayOptions.SourceNone:
+        services.AddSingleton<IHolidaySource, DisabledHolidaySource>();
+        break;
+
+    // Anything else is rejected by the options validation above before the app serves.
+    default:
+        services.AddHttpClient<IHolidaySource, NagerHolidaySource>((sp, client) =>
+            client.BaseAddress = new Uri(
+                sp.GetRequiredService<IOptions<HolidayOptions>>().Value.Nager.BaseUrl));
+        break;
+}
+
+// Nothing to poll for when there is no source; admins can still add holidays by hand.
+if (holidayConfig.Source != HolidayOptions.SourceNone)
+    services.AddHostedService<BankHolidaySyncBackgroundService>();
+
+services.AddScoped<IBankHolidayService, BankHolidayService>();
 
 services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();

@@ -70,9 +70,15 @@ public static class AdminEndpoints
     private static async Task<IResult> SyncBankHolidays(
         int year,
         IOptions<RegionCatalogOptions> regionCatalog,
+        IOptions<HolidayOptions> holidayOptions,
         IBankHolidayService bankHolidays,
         CancellationToken ct)
     {
+        // Nothing to sync from, so say so rather than reporting every country as synced.
+        if (holidayOptions.Value.Source == HolidayOptions.SourceNone)
+            throw new InvalidOperationException(
+                "Holiday syncing is disabled (Holidays:Source=None).");
+
         var countries = regionCatalog.Value.Select(c => c.Code).ToList();
         var failed = await bankHolidays.SyncCountriesAsync(countries, year, ct);
 

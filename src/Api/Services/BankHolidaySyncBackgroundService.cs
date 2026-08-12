@@ -7,16 +7,16 @@ namespace Api.Services;
 
 public sealed class BankHolidaySyncBackgroundService(
     IServiceScopeFactory scopeFactory,
-    IOptions<RegionCatalogOptions> regionCatalog) : BackgroundService
+    IOptions<RegionCatalogOptions> regionCatalog,
+    IOptions<HolidayOptions> holidayOptions) : BackgroundService
 {
-    // Public holiday data barely changes once published, so a nightly poll would just
-    // hammer Nager for nothing. Weekly is plenty to catch newly published years or rare
-    // corrections. If you need it sooner, use POST /api/admin/bank-holidays/sync.
-    private static readonly TimeSpan Interval = TimeSpan.FromDays(7);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
+        // Defaults to weekly: public holiday data barely changes once published, so a
+        // nightly poll would just hammer the source for nothing. A file source that gets
+        // edited is the case worth shortening it for. Either way, an admin who needs it
+        // sooner can use POST /api/admin/bank-holidays/sync.
+        using var timer = new PeriodicTimer(holidayOptions.Value.SyncInterval);
 
         do
         {

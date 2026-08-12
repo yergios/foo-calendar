@@ -1,4 +1,6 @@
-export type HolidaySource = "Manual" | "Nager";
+// Mirrors the API's HolidaySource enum. Anything other than "Manual" was put there by the
+// configured holiday source (see Holidays:Source) and is refreshed on every sync.
+export type HolidaySource = "Manual" | "Nager" | "File";
 
 export interface BankHolidayDto {
   id: number;

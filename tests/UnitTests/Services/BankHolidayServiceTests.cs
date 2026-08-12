@@ -1,8 +1,6 @@
-using System.Net;
-using System.Text;
-
 using Api.Data.Models;
 using Api.Dtos;
+using Api.Interfaces;
 using Api.Services;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,26 +15,26 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 {
     private const string Actor = "admin";
 
-    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
-        : HttpMessageHandler
+    /// <summary>Stands in for whichever IHolidaySource a deployment configures. What the
+    /// service does with the holidays is the same either way, so these tests hand it a
+    /// list directly instead of going through a source's own wire format.</summary>
+    private sealed class StubHolidaySource(
+        Func<string, int, IReadOnlyList<SourceHoliday>> responder,
+        HolidaySource kind = HolidaySource.Nager) : IHolidaySource
     {
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(responder(request));
+        public HolidaySource Kind => kind;
+
+        public Task<IReadOnlyList<SourceHoliday>> GetAsync(
+            string countryCode, int year, CancellationToken ct = default) =>
+            Task.FromResult(responder(countryCode, year));
     }
 
-    private static HttpResponseMessage JsonResponse(string json, HttpStatusCode status = HttpStatusCode.OK) =>
-        new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
-
-    private BankHolidayService CreateService(Func<HttpRequestMessage, HttpResponseMessage> responder = null)
-    {
-        responder ??= _ => JsonResponse("[]");
-        var http = new HttpClient(new StubHttpMessageHandler(responder))
-        {
-            BaseAddress = new Uri("https://fake.nager.test/"),
-        };
-        return new BankHolidayService(Db, http, NullLogger<BankHolidayService>.Instance);
-    }
+    private BankHolidayService CreateService(
+        Func<string, int, IReadOnlyList<SourceHoliday>> responder = null,
+        HolidaySource kind = HolidaySource.Nager) =>
+        new(Db,
+            new StubHolidaySource(responder ?? ((_, _) => []), kind),
+            NullLogger<BankHolidayService>.Instance);
 
     [Fact]
     public async Task GetForRegionsAsync_IncludesNationwideHolidaysWhenQueryingASpecificRegion()
@@ -185,15 +183,14 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_AddsGlobalAndCountySpecificHolidaysFromNagerResponse()
+    public async Task SyncCountriesAsync_AddsNationwideAndRegionalHolidaysFromTheSource()
     {
-        const string json = """
-            [
-              { "date": "2026-01-01", "localName": "Neujahr", "name": "New Year's Day", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] },
-              { "date": "2026-04-13", "localName": "Sechselauten", "name": "Sechselauten", "countryCode": "CH", "global": false, "counties": ["CH-ZH", "CH-BE"], "types": ["Public"] }
-            ]
-            """;
-        var sut = CreateService(_ => JsonResponse(json));
+        var sut = CreateService((_, _) =>
+        [
+            new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day"),
+            new SourceHoliday("CH-ZH", new DateOnly(2026, 4, 13), "Sechselauten"),
+            new SourceHoliday("CH-BE", new DateOnly(2026, 4, 13), "Sechselauten"),
+        ]);
 
         var failed = await sut.SyncCountriesAsync(["CH"], 2026);
 
@@ -217,10 +214,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         });
         Db.SaveChanges();
 
-        const string json = """
-            [{ "date": "2026-01-01", "localName": "Neujahr", "name": "New Year's Day", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] }]
-            """;
-        var sut = CreateService(_ => JsonResponse(json));
+        var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day")]);
 
         await sut.SyncCountriesAsync(["CH"], 2026);
 
@@ -230,7 +224,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_RefreshesNameForAnExistingNagerHoliday()
+    public async Task SyncCountriesAsync_RefreshesNameForAnExistingSyncedHoliday()
     {
         Db.BankHolidays.Add(new BankHoliday
         {
@@ -242,10 +236,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         });
         Db.SaveChanges();
 
-        const string json = """
-            [{ "date": "2026-01-01", "localName": "Neujahr", "name": "New Name", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] }]
-            """;
-        var sut = CreateService(_ => JsonResponse(json));
+        var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Name")]);
 
         await sut.SyncCountriesAsync(["CH"], 2026);
 
@@ -255,13 +246,11 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     [Fact]
     public async Task SyncCountriesAsync_DedupesDuplicateEntriesWithinTheSameResponse()
     {
-        const string json = """
-            [
-              { "date": "2026-01-01", "localName": "A", "name": "First Wins", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] },
-              { "date": "2026-01-01", "localName": "B", "name": "Second", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] }
-            ]
-            """;
-        var sut = CreateService(_ => JsonResponse(json));
+        var sut = CreateService((_, _) =>
+        [
+            new SourceHoliday("CH", new DateOnly(2026, 1, 1), "First Wins"),
+            new SourceHoliday("CH", new DateOnly(2026, 1, 1), "Second"),
+        ]);
 
         await sut.SyncCountriesAsync(["CH"], 2026);
 
@@ -273,13 +262,9 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     [Fact]
     public async Task SyncCountriesAsync_WhenOneCountryFails_StillSyncsTheOthersAndReportsTheFailure()
     {
-        var sut = CreateService(request =>
-        {
-            var isFailingCountry = request.RequestUri!.ToString().Contains("/2026/DE");
-            return isFailingCountry
-                ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                : JsonResponse("""[{ "date": "2026-01-01", "localName": "A", "name": "New Year", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] }]""");
-        });
+        var sut = CreateService((country, _) => country == "DE"
+            ? throw new HttpRequestException("the source is unreachable")
+            : [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year")]);
 
         var failed = await sut.SyncCountriesAsync(["CH", "DE"], 2026);
 
@@ -375,10 +360,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         });
         Db.SaveChanges();
 
-        const string json = """
-            [{ "date": "2026-01-01", "localName": "Neujahr", "name": "New Year's Day", "countryCode": "CH", "global": true, "counties": null, "types": ["Public"] }]
-            """;
-        var sut = CreateService(_ => JsonResponse(json));
+        var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day")]);
 
         await sut.SyncCountriesAsync(["CH"], 2026);
 
@@ -386,5 +368,42 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var holiday = matches.ShouldHaveSingleItem();
         holiday.Name.ShouldBe("Our Custom Name");
         holiday.Date.ShouldBe(new DateOnly(2020, 1, 1));
+    }
+
+    [Fact]
+    public async Task SyncCountriesAsync_StampsRowsWithTheConfiguredSource()
+    {
+        var sut = CreateService(
+            (_, _) => [new SourceHoliday("CH", new DateOnly(2026, 12, 24), "Office closed")],
+            HolidaySource.File);
+
+        await sut.SyncCountriesAsync(["CH"], 2026);
+
+        var holiday = Db.BankHolidays.ToList().ShouldHaveSingleItem();
+        holiday.Source.ShouldBe(HolidaySource.File);
+        holiday.CreatedBy.ShouldBe("file-sync");
+    }
+
+    [Fact]
+    public async Task SyncCountriesAsync_RelabelsAnExistingRowWhenTheSourceChanges()
+    {
+        Db.BankHolidays.Add(new BankHoliday
+        {
+            Region = "CH",
+            Date = new DateOnly(2026, 1, 1),
+            Name = "New Year",
+            Source = HolidaySource.Nager,
+            CreatedBy = "nager-sync",
+        });
+        Db.SaveChanges();
+        var sut = CreateService(
+            (_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year")],
+            HolidaySource.File);
+
+        await sut.SyncCountriesAsync(["CH"], 2026);
+
+        var holiday = Db.BankHolidays.ToList().ShouldHaveSingleItem();
+        holiday.Source.ShouldBe(HolidaySource.File);
+        holiday.UpdatedBy.ShouldBe("file-sync");
     }
 }
