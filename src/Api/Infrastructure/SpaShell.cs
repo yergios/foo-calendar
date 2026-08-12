@@ -41,7 +41,11 @@ public static partial class SpaShell
             // it points at. The assets themselves stay cacheable; only this must not be.
             http.Response.Headers.CacheControl = "no-store";
             return Results.Content(html, "text/html; charset=utf-8");
-        });
+        })
+        // Opting out of the fallback authorization policy: this is the page that has to
+        // load *before* anyone can sign in. It is the same public index.html the static
+        // file middleware already serves, and it carries no user data.
+        .AllowAnonymous();
     }
 
     [GeneratedRegex("<base\\s+href=\"[^\"]*\"", RegexOptions.IgnoreCase)]

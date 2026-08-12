@@ -13,6 +13,7 @@ using Api.Services;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -158,56 +159,64 @@ services.AddHealthChecks()
 // Both settings became lists. Binding would otherwise quietly ignore the old scalar form
 // and leave the admin area gated on nothing, so say exactly what to change instead. This
 // check can go once deployments have moved over.
-if (config["Auth:AdminPermission"] is not null)
+if (config[$"{AuthOptions.SectionName}:AdminPermission"] is not null)
     throw new InvalidOperationException(
         "Auth:AdminPermission is now the list Auth:AdminPermissions, e.g. " +
         "[\"APP_FOO_CALENDAR_ADMIN\"] or Auth__AdminPermissions__0=APP_FOO_CALENDAR_ADMIN.");
 
-if (config["Auth:ClaimTypes:Permissions"] is not null)
+if (config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"] is not null)
     throw new InvalidOperationException(
         "Auth:ClaimTypes:Permissions is now a list, e.g. [\"roles\"] or " +
         "Auth__ClaimTypes__Permissions__0=roles.");
 
-var authConfig = config.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
-    ?? throw new InvalidOperationException("Auth options are not configured.");
-
-// Fail closed: an empty list would leave every /admin request to be rejected with no
-// indication why, and an accidental "grant everyone" is worse still.
-if (!authConfig.AdminPermissions.Any(v => !string.IsNullOrWhiteSpace(v)))
-    throw new InvalidOperationException("Auth:AdminPermissions must list at least one value.");
-
-if (!authConfig.ClaimTypes.Permissions.Any(v => !string.IsNullOrWhiteSpace(v)))
-    throw new InvalidOperationException("Auth:ClaimTypes:Permissions must list at least one claim name.");
-
-// Blanks come from shortening a list through environment variables, where the leftover
-// indexes are set to empty rather than removed. An empty claim name would otherwise match
-// claims that have no type, and an empty accepted value would match a claim with no value.
-services.PostConfigure<AuthOptions>(o =>
-{
-    o.AdminPermissions.RemoveAll(string.IsNullOrWhiteSpace);
-    o.ClaimTypes.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
-});
-
-if (authConfig.Provider == AuthOptions.ProviderNone && !builder.Environment.IsDevelopment())
-    throw new InvalidOperationException("Auth:Provider=None is only allowed in Development.");
-
-if (authConfig.Provider != AuthOptions.ProviderNone)
-{
-    if (string.IsNullOrWhiteSpace(authConfig.Authority))
-        throw new InvalidOperationException("Auth:Authority must be configured.");
-    if (string.IsNullOrWhiteSpace(authConfig.Audience))
-        throw new InvalidOperationException("Auth:Audience must be configured.");
-    // The API never uses this itself, but the SPA can't start a login without it, and
-    // failing at startup beats a frontend that only breaks once someone tries to sign in.
-    if (string.IsNullOrWhiteSpace(authConfig.ClientId))
-        throw new InvalidOperationException("Auth:ClientId must be configured.");
-}
+var isDevelopment = builder.Environment.IsDevelopment();
 
 services.AddOptions<AuthOptions>()
     .Bind(config.GetSection(AuthOptions.SectionName))
+    .PostConfigure(o => o.RemoveBlankEntries())
+    .Validate(o => o.Provider is AuthOptions.ProviderOidc or AuthOptions.ProviderNone,
+        $"Auth:Provider must be one of {AuthOptions.ProviderOidc}, {AuthOptions.ProviderNone}.")
+    .Validate(o => o.Provider != AuthOptions.ProviderNone || isDevelopment,
+        "Auth:Provider=None is only allowed in Development.")
+    .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Authority),
+        "Auth:Authority must be configured.")
+    .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Audience),
+        "Auth:Audience must be configured.")
+    // The API never uses ClientId itself, but the SPA can't start a login without it, and
+    // failing at startup beats a frontend that only breaks once someone tries to sign in.
+    .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.ClientId),
+        "Auth:ClientId must be configured.")
+    // Fail closed: an empty list would leave every /admin request to be rejected with no
+    // indication why, and an accidental "grant everyone" is worse still.
+    .Validate(o => o.AdminPermissions.Count > 0,
+        "Auth:AdminPermissions must list at least one value.")
+    .Validate(o => o.ClaimTypes.Permissions.Count > 0,
+        "Auth:ClaimTypes:Permissions must list at least one claim name.")
     .ValidateOnStart();
 
-services.AddAuthorization();
+// Read once more, unbound, because which authentication scheme to register has to be
+// decided before the container exists. Anything invalid in here is rejected by the
+// validation above before the app serves a request.
+var authConfig = config.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
+    ?? throw new InvalidOperationException("Auth options are not configured.");
+authConfig.RemoveBlankEntries();
+
+services.AddAuthorization(options =>
+{
+    // Closed by default: an endpoint added without RequireAuthorization is protected
+    // rather than public, so forgetting to say anything fails safe. The handful of
+    // genuinely public routes opt out with AllowAnonymous.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    // Not RequireClaim: that pairs one claim name with its accepted values, and this has
+    // to hold across several of each.
+    options.AddPolicy(AuthOptions.AdminPolicy, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(ctx => ctx.User.HasAnyPermission(
+            authConfig.ClaimTypes.Permissions, authConfig.AdminPermissions)));
+});
 
 if (authConfig.Provider == AuthOptions.ProviderNone)
 {
@@ -253,9 +262,11 @@ if (proxyConfig.TrustForwardedHeaders)
 
 // ---- Observability --------------------------------------------------------
 
+// No ValidateOnStart here: what has to be well-formed is the effective endpoint and
+// protocol, which merge this section with the OTEL_* environment variables the bound
+// options never see. Both are checked where they are resolved, below.
 services.AddOptions<TelemetryOptions>()
-    .Bind(config.GetSection(TelemetryOptions.SectionName))
-    .ValidateOnStart();
+    .Bind(config.GetSection(TelemetryOptions.SectionName));
 
 // The config value wins when set; otherwise fall back to the OTEL_* env vars that every
 // OpenTelemetry-aware collector and platform already sets. Blank counts as unset, since
@@ -298,12 +309,27 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
     var otlpProtocol = telemetryOptions.OtlpProtocol;
     if (string.IsNullOrWhiteSpace(otlpProtocol))
         otlpProtocol = config[TelemetryOptions.ProtocolEnvironmentVariableName];
+    if (string.IsNullOrWhiteSpace(otlpProtocol))
+        otlpProtocol = TelemetryOptions.ProtocolGrpc;
+
+    // None of this is needed for the app to work, but a typo should say so plainly rather
+    // than silently export over the wrong protocol or throw from inside the exporter.
+    var httpProtobuf = string.Equals(
+        otlpProtocol, TelemetryOptions.ProtocolHttpProtobuf, StringComparison.OrdinalIgnoreCase);
+
+    if (!httpProtobuf && !string.Equals(
+            otlpProtocol, TelemetryOptions.ProtocolGrpc, StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+            $"OTLP protocol must be one of {TelemetryOptions.ProtocolGrpc}, " +
+            $"{TelemetryOptions.ProtocolHttpProtobuf}; got '{otlpProtocol}'.");
+
+    if (!Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var otlpUri))
+        throw new InvalidOperationException(
+            $"OTLP endpoint must be an absolute URL; got '{otlpEndpoint}'.");
 
     telemetry.UseOtlpExporter(
-        string.Equals(otlpProtocol, "http/protobuf", StringComparison.OrdinalIgnoreCase)
-            ? OtlpExportProtocol.HttpProtobuf
-            : OtlpExportProtocol.Grpc,
-        new Uri(otlpEndpoint));
+        httpProtobuf ? OtlpExportProtocol.HttpProtobuf : OtlpExportProtocol.Grpc,
+        otlpUri);
 }
 
 // ---- Build ----------------------------------------------------------------
@@ -311,6 +337,17 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 var app = builder.Build();
 
 // ---- Startup tasks --------------------------------------------------------
+
+// Loud on purpose. This is the one configuration where every request is authenticated as
+// a fixed identity with no token involved; the startup check above keeps it out of other
+// environments, but ASPNETCORE_ENVIRONMENT is the only thing that does, so an accidental
+// Development deployment should be obvious in the logs rather than silent.
+if (authConfig.Provider == AuthOptions.ProviderNone)
+    app.Logger.LogWarning(
+        "Auth:Provider=None: authentication is bypassed and every request is '{Username}' "
+        + "holding [{Permissions}]. Development only, never deploy this.",
+        authConfig.DevUser.Username,
+        string.Join(", ", authConfig.DevUser.Permissions));
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
@@ -351,7 +388,24 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Anonymous, because this is what the container's HEALTHCHECK and orchestrator probes
+// call. It still runs every check, so the status code means what it always did, but the
+// body carries nothing else: check descriptions and exception messages spell out database
+// paths and connection details, and this endpoint is reachable by anyone.
 app.MapHealthChecks("/healthchecks", new HealthCheckOptions
+{
+    Predicate = _ => true,
+    ResponseWriter = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new { status = report.Status.ToString() });
+    }
+})
+.AllowAnonymous();
+
+// The per-check detail an operator needs to tell *why* the summary above went red, behind
+// the admin permission for the same reason the summary omits it.
+app.MapHealthChecks("/healthchecks/detail", new HealthCheckOptions
 {
     Predicate = _ => true,
     ResponseWriter = async (ctx, report) =>
@@ -374,7 +428,7 @@ app.MapHealthChecks("/healthchecks", new HealthCheckOptions
         await ctx.Response.WriteAsJsonAsync(result);
     }
 })
-.AllowAnonymous();
+.RequireAuthorization(AuthOptions.AdminPolicy);
 app.MapPeopleEndpoints();
 app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();

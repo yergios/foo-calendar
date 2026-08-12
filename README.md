@@ -153,7 +153,7 @@ If the container restarts in a loop, read the logs first: configuration is valid
 **Notes for other environments**
 
 - The container listens on `8080` and runs as the non-root `app` user from the .NET base image.
-- The image includes a `HEALTHCHECK` against `/healthchecks`, which is anonymous and reports per-check detail as JSON. Kubernetes and other platforms that probe over HTTP themselves don't need the `curl` that check relies on, and can drop that layer from the runtime stage.
+- The image includes a `HEALTHCHECK` against `/healthchecks`. That endpoint is anonymous and runs every check, but reports only the overall status (`{"status":"Healthy"}`) — per-check detail, including exception messages, is at `/healthchecks/detail` and requires the admin permission. Kubernetes and other platforms that probe over HTTP themselves don't need the `curl` that check relies on, and can drop that layer from the runtime stage.
 - A **named volume** picks up the right ownership automatically. A **bind mount** does not: `chown 1654 /your/host/path` first, or migrations will fail on first start with a read-only database error.
 - Configure everything through environment variables, as `.env.example` shows. Nothing needs to be baked into the image, which is why the same image works for every deployment.
 - Migrations are applied automatically at startup, so upgrading is a matter of pulling a newer image and restarting. This is also why more than one replica is not yet safe — see [Scaling](#scaling).
@@ -351,6 +351,8 @@ Grant the admin permission to a user in your OIDC provider's dashboard. Locally,
 - Claim names are matched exactly (JWT claim names are case-sensitive), values case-insensitively — group ids are often GUIDs whose casing differs between a provider's dashboard and its tokens.
 
 The API's authorization policy and the frontend's admin nav read the same two settings, so they cannot disagree.
+
+**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. Admin-only routes ask for the `AuthOptions.AdminPolicy` policy (`.RequireAuthorization(AuthOptions.AdminPolicy)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
 
 > Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__AdminPermissions__1=`). Blank entries are dropped rather than matched.
 

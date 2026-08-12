@@ -4,12 +4,19 @@ public sealed class AuthOptions
 {
     public const string SectionName = "Auth";
 
+    /// <summary>Value of <see cref="Provider"/> that validates real bearer tokens.</summary>
+    public const string ProviderOidc = "Oidc";
+
     /// <summary>Value of <see cref="Provider"/> that turns on the dev-only bypass.</summary>
     public const string ProviderNone = "None";
 
+    /// <summary>Authorization policy gating the admin area. Registered in Program.cs from
+    /// <see cref="AdminPermissions"/> and <see cref="ClaimTypeOptions.Permissions"/>.</summary>
+    public const string AdminPolicy = "Admin";
+
     /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" is a
     /// dev-only bypass (see DevAuthHandler) that skips SSO entirely.</summary>
-    public string Provider { get; init; } = "Oidc";
+    public string Provider { get; init; } = ProviderOidc;
 
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
@@ -34,6 +41,16 @@ public sealed class AuthOptions
 
     public ClaimTypeOptions ClaimTypes { get; init; } = new();
     public DevUserOptions DevUser { get; init; } = new();
+
+    /// <summary>Drops blank list entries, which come from shortening a list through
+    /// environment variables: the leftover indexes are set to empty rather than removed.
+    /// An empty claim name would otherwise match claims that have no type, and an empty
+    /// accepted value would match a claim with no value.</summary>
+    public void RemoveBlankEntries()
+    {
+        AdminPermissions.RemoveAll(string.IsNullOrWhiteSpace);
+        ClaimTypes.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
+    }
 }
 
 /// <summary>Claim names to read identity/permission info from. Defaults are standard OIDC

@@ -13,14 +13,8 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        var authConfig = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
-
         var group = app.MapGroup("/api/admin")
-            .RequireAuthorization()
-            // Not RequireClaim: that pairs one claim name with its accepted values, and
-            // this has to hold across several of each.
-            .RequireAuthorization(p => p.RequireAssertion(ctx =>
-                ctx.User.HasAnyPermission(authConfig.ClaimTypes.Permissions, authConfig.AdminPermissions)));
+            .RequireAuthorization(AuthOptions.AdminPolicy);
 
         group.MapPost("/people", CreatePerson);
         group.MapPost("/people/import", ImportPeople);

@@ -7,6 +7,10 @@ public sealed class TelemetryOptions
     public const string ProtocolEnvironmentVariableName = "OTEL_EXPORTER_OTLP_PROTOCOL";
     public const string ServiceNameEnvironmentVariableName = "OTEL_SERVICE_NAME";
 
+    /// <summary>Accepted <see cref="OtlpProtocol"/> values, as spelled by the OTLP spec.</summary>
+    public const string ProtocolGrpc = "grpc";
+    public const string ProtocolHttpProtobuf = "http/protobuf";
+
     /// <summary>
     /// Where to push traces, metrics, and logs over OTLP. Empty falls back to the
     /// OTEL_EXPORTER_OTLP_ENDPOINT environment variable, which the SDK reads itself.
