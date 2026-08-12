@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/appUrl";
 import type { RuntimeConfig } from "@/types/config";
 
 /**
@@ -11,7 +12,9 @@ import type { RuntimeConfig } from "@/types/config";
 let config: RuntimeConfig | null = null;
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
-  const res = await fetch("/api/config/bootstrap", { headers: { Accept: "application/json" } });
+  const res = await fetch(appUrl("/api/config/bootstrap"), {
+    headers: { Accept: "application/json" },
+  });
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 
   config = (await res.json()) as RuntimeConfig;

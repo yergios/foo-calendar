@@ -2,6 +2,7 @@ import { type User as OidcUser, UserManager } from "oidc-client-ts";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
+import { appUrl } from "@/lib/appUrl";
 import { runtimeConfig } from "@/lib/runtimeConfig";
 import type { RuntimeAuthConfig } from "@/types/config";
 
@@ -58,8 +59,9 @@ export function initAuth(auth: RuntimeAuthConfig): void {
     authority: auth.authority,
     client_id: auth.clientId,
     // Relative by default, resolved against wherever the app is actually being served
-    // from, so one deployment artifact works on any hostname without a rebuild.
-    redirect_uri: new URL(auth.redirectUri, window.location.origin).toString(),
+    // from - hostname and sub-path both - so one build works for any deployment. An
+    // absolute URL is passed through untouched.
+    redirect_uri: appUrl(auth.redirectUri),
     scope: auth.scope,
     response_type: "code",
     automaticSilentRenew: false,

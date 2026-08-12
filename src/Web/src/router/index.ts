@@ -4,6 +4,7 @@ import type { RouteLocationNormalized } from "vue-router";
 
 import { handleRedirectCallback, resolveAccessToken, signinRedirect, useAuth, useAuthStore } from "@/auth";
 import AppLayout from "@/layouts/AppLayout.vue";
+import { basePath } from "@/lib/appUrl";
 import AdminView from "@/views/AdminView.vue";
 import ErrorView from "@/views/ErrorView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
@@ -13,7 +14,9 @@ import ProfileView from "@/views/ProfileView.vue";
 import UnauthorizedView from "@/views/UnauthorizedView.vue";
 
 const router = createRouter({
-  history: createWebHistory(),
+  // Routes below are written as if the app owned the root; the history base is what maps
+  // them onto the sub-path a deployment is actually served from.
+  history: createWebHistory(basePath),
   routes: [
     {
       path: "/",

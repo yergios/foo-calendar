@@ -1,4 +1,5 @@
 import { resolveAccessToken } from "@/auth";
+import { appUrl } from "@/lib/appUrl";
 import { usePersonStore } from "@/stores/person";
 
 // Matches CurrentPersonAccessor's exact message on the backend. An admin can delete
@@ -15,9 +16,11 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   };
 }
 
+// Call sites pass app-relative paths ("/api/people"); appUrl is what puts them under the
+// deployment's base path, so none of them have to know about it.
 export async function apiFetchRaw(input: string, init?: RequestInit): Promise<Response> {
   const headers = await getAuthHeaders();
-  return fetch(input, { ...init, headers: { ...headers, ...init?.headers } });
+  return fetch(appUrl(input), { ...init, headers: { ...headers, ...init?.headers } });
 }
 
 /**

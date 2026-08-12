@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -13,6 +14,7 @@ using Api.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
@@ -50,6 +52,14 @@ services.AddOptions<NagerOptions>()
 services.AddOptions<BrandingOptions>()
     .Bind(config.GetSection(BrandingOptions.SectionName))
     .Validate(o => !string.IsNullOrWhiteSpace(o.AppName), "Branding:AppName must be configured.")
+    .ValidateOnStart();
+
+services.AddOptions<ReverseProxyOptions>()
+    .Bind(config.GetSection(ReverseProxyOptions.SectionName))
+    .Validate(o => o.PathBase.Length == 0 || o.PathBase.StartsWith('/'),
+        "ReverseProxy:PathBase must start with '/', e.g. \"/calendar\".")
+    .Validate(o => o.PathBase.Length == 0 || !o.PathBase.EndsWith('/'),
+        "ReverseProxy:PathBase must not end with '/'.")
     .ValidateOnStart();
 
 // ---- Database -------------------------------------------------------------
@@ -128,6 +138,33 @@ else
         });
 }
 
+// ---- Reverse proxy --------------------------------------------------------
+
+var proxyConfig = config.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>()
+    ?? new ReverseProxyOptions();
+
+if (proxyConfig.TrustForwardedHeaders)
+{
+    services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+            | ForwardedHeaders.XForwardedProto
+            | ForwardedHeaders.XForwardedHost;
+
+        // The defaults trust loopback only, which is never where the proxy sits in a
+        // container deployment. Start from nothing and add back what was configured;
+        // leaving both empty accepts forwarded headers from any peer.
+        o.KnownProxies.Clear();
+        o.KnownIPNetworks.Clear();
+
+        foreach (var proxy in proxyConfig.KnownProxies)
+            o.KnownProxies.Add(IPAddress.Parse(proxy));
+
+        foreach (var network in proxyConfig.KnownNetworks)
+            o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    });
+}
+
 // ---- Observability --------------------------------------------------------
 
 services.AddOptions<TelemetryOptions>()
@@ -197,14 +234,34 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 // ---- Middleware ------------------------------------------------------------
 
+// First in the pipeline, so everything after it sees the scheme, host and client address
+// the original caller used rather than the proxy's.
+if (proxyConfig.TrustForwardedHeaders)
+    app.UseForwardedHeaders();
+
+// Only rewrites requests that actually carry the prefix, so this is a no-op when the
+// proxy strips it before forwarding. Both arrangements work with the same setting.
+if (!string.IsNullOrEmpty(proxyConfig.PathBase))
+    app.UsePathBase(proxyConfig.PathBase);
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseDefaultFiles();
+// No UseDefaultFiles: "/" is left to fall through to MapSpaFallback below, which serves
+// the one copy of index.html that has had its <base href> rewritten. Serving it off disk
+// here as a default document would hand out the un-rewritten file instead.
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(
         Path.Combine(app.Environment.ContentRootPath, "wwwroot"))
 });
+
+// Explicit, and deliberately placed here. Left implicit, WebApplication inserts routing at
+// the very start of the pipeline, where it would match against the path before UsePathBase
+// has stripped the prefix and send every sub-path API call to the SPA fallback instead.
+// It also has to stay after the static files above, which serve assets without consulting
+// routing at all.
+app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -237,6 +294,6 @@ app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
-app.MapFallbackToFile("index.html");
+app.MapSpaFallback(proxyConfig.PathBase);
 
 await app.RunAsync();

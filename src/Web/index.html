@@ -2,6 +2,10 @@
 <html lang="">
   <head>
     <meta charset="UTF-8" />
+    <!-- Every asset, route and API call the app emits is relative to this tag. The API
+         rewrites it when ReverseProxy:PathBase is set (see SpaShell.cs), which is what
+         lets one build be served from a sub-path without being rebuilt. -->
+    <base href="/" />
     <link
       rel="icon"
       type="image/svg+xml"

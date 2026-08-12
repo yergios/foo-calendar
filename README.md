@@ -158,6 +158,47 @@ If the container restarts in a loop, read the logs first: configuration is valid
 - Configure everything through environment variables, as `.env.example` shows. Nothing needs to be baked into the image, which is why the same image works for every deployment.
 - Migrations are applied automatically at startup, so upgrading is a matter of pulling a newer image and restarting. This is also why more than one replica is not yet safe — see [Scaling](#scaling).
 
+#### Behind a reverse proxy
+
+Nothing here is needed when the app owns its own hostname and terminates its own TLS. Both settings are off by default.
+
+**Serving from a sub-path.** To host the app at `https://intra.example.com/calendar` rather than at the root of a hostname:
+
+```bash
+ReverseProxy__PathBase=/calendar
+```
+
+The frontend build is not involved. `index.html` carries a `<base href>` that the API rewrites at startup, and every asset URL, router route and API call the app emits is relative to it — which is why the same image serves `/` and `/calendar` with no rebuild.
+
+Set it whether or not your proxy strips the prefix before forwarding. `UsePathBase` only rewrites requests that actually arrive carrying it, so both arrangements work:
+
+```nginx
+# Prefix forwarded intact
+location /calendar/ {
+    proxy_pass http://foo-calendar:8080/calendar/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The container's own health probe calls `/healthchecks` without the prefix, which keeps working either way.
+
+**TLS terminated elsewhere.** So the app sees the scheme, host and client address the original caller used rather than the proxy's:
+
+```bash
+ReverseProxy__TrustForwardedHeaders=true
+```
+
+This is off by default on purpose. With nothing in front of the app, any client can set `X-Forwarded-For` and forge its own address in your logs and traces. Turn it on only when the app is genuinely behind a proxy, and restrict which peers may send those headers if the app is reachable any other way:
+
+```bash
+ReverseProxy__KnownProxies__0=10.0.0.7
+ReverseProxy__KnownNetworks__0=10.0.0.0/8
+```
+
+Leaving both empty accepts forwarded headers from any peer, which is the normal container setup where the proxy is the only route in.
+
 #### Scaling
 
 The app is designed to run as a single instance, and two things assume it:

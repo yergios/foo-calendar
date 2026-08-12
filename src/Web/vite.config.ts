@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
 
   return {
+    // Relative asset URLs, so they resolve against the <base href> in index.html rather
+    // than against the server root. Deployments under a sub-path depend on it.
+    base: "./",
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
     },
