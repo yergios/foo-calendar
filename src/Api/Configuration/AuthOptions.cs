@@ -13,7 +13,12 @@ public sealed class AuthOptions
 
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
-    public required string AdminPermission { get; init; }
+
+    /// <summary>Claim values that grant access to the admin area. Holding any one of them
+    /// is enough, which is what lets a deployment accept, say, both an app role and a
+    /// group id without the identity provider having to mint a single tidy permission.
+    /// </summary>
+    public List<string> AdminPermissions { get; init; } = [];
 
     /// <summary>The SPA's own OIDC client id. Not used by the API itself, it is handed to
     /// the browser at runtime so the frontend doesn't have to be rebuilt per IdP.</summary>
@@ -39,7 +44,16 @@ public sealed class ClaimTypeOptions
     public string FirstName { get; init; } = "given_name";
     public string LastName { get; init; } = "family_name";
     public string Email { get; init; } = "email";
-    public string Permissions { get; init; } = "permissions";
+
+    /// <summary>Claims that carry permissions, searched in order. More than one because
+    /// providers split them up: Entra ID puts app roles in "roles" and group ids in
+    /// "groups", and a deployment may want to accept either.
+    ///
+    /// Deliberately empty rather than defaulting to ["permissions"]: configuration binds
+    /// into an existing list by appending, so a default here would stay accepted even
+    /// after a deployment configured its own claim names. The shipped default lives in
+    /// appsettings.json, where overriding it actually replaces it.</summary>
+    public List<string> Permissions { get; init; } = [];
 }
 
 public sealed class DevUserOptions

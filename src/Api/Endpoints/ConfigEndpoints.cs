@@ -22,8 +22,8 @@ public sealed record BootstrapAuthConfig(
     string Audience,
     string Scope,
     string RedirectUri,
-    string AdminPermission,
-    string PermissionsClaim,
+    List<string> AdminPermissions,
+    List<string> PermissionsClaims,
     BootstrapDevUser DevUser);
 
 /// <summary>Only populated when Auth:Provider=None, which is Development-only. It lets the
@@ -70,7 +70,7 @@ public static class ConfigEndpoints
                 auth.Audience,
                 auth.Scope,
                 auth.RedirectUri,
-                auth.AdminPermission,
+                auth.AdminPermissions,
                 auth.ClaimTypes.Permissions,
                 auth.Provider == AuthOptions.ProviderNone
                     ? new BootstrapDevUser(

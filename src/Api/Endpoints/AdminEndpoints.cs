@@ -17,7 +17,10 @@ public static class AdminEndpoints
 
         var group = app.MapGroup("/api/admin")
             .RequireAuthorization()
-            .RequireAuthorization(p => p.RequireClaim(authConfig.ClaimTypes.Permissions, authConfig.AdminPermission));
+            // Not RequireClaim: that pairs one claim name with its accepted values, and
+            // this has to hold across several of each.
+            .RequireAuthorization(p => p.RequireAssertion(ctx =>
+                ctx.User.HasAnyPermission(authConfig.ClaimTypes.Permissions, authConfig.AdminPermissions)));
 
         group.MapPost("/people", CreatePerson);
         group.MapPut("/people/{id:int}", UpdatePerson);

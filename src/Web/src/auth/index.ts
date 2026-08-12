@@ -45,7 +45,8 @@ export function initAuth(auth: RuntimeAuthConfig): void {
     // the UI can't disagree with what the API will actually allow.
     devToken = `dev.${btoa(
       JSON.stringify({
-        [auth.permissionsClaim]: devUser?.permissions ?? [],
+        // Under the first claim name, matching what DevAuthHandler emits.
+        [auth.permissionsClaims[0] ?? "permissions"]: devUser?.permissions ?? [],
         exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
       }),
     )}.dev`;
@@ -117,13 +118,16 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   }
 }
 
-// Which claim carries permissions is per-IdP config, and providers are inconsistent about
-// whether a single value arrives as a string or a one-element array. Normalize both.
-function readPermissions(payload: Record<string, unknown>, claim: string): string[] {
-  const value = payload[claim];
-  if (Array.isArray(value)) return value as string[];
-  if (typeof value === "string") return [value];
-  return [];
+// Which claims carry permissions is per-IdP config, and providers are inconsistent about
+// whether a single value arrives as a string or a one-element array. Normalize both, and
+// collect across every configured claim.
+function readPermissions(payload: Record<string, unknown>, claims: string[]): string[] {
+  return claims.flatMap((claim) => {
+    const value = payload[claim];
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value === "string") return [value];
+    return [];
+  });
 }
 
 // Keeps a request from handing out a token that's about to expire mid-flight.
@@ -141,7 +145,7 @@ export const useAuthStore = defineStore("auth", () => {
     accessToken.value = newToken;
 
     const payload = decodeJwtPayload(newToken);
-    permissions.value = readPermissions(payload, runtimeConfig().auth.permissionsClaim);
+    permissions.value = readPermissions(payload, runtimeConfig().auth.permissionsClaims);
     tokenExpiresAt.value = typeof payload.exp === "number" ? payload.exp * 1000 : 0;
   };
 
@@ -161,11 +165,14 @@ export const useAuthStore = defineStore("auth", () => {
     return parts.length > 0 ? parts.join(" ") : null;
   };
 
-  const hasPermission = (permission: string): boolean => {
-    return permissions.value.includes(permission);
-  };
+  // Case-insensitive to match the API's own check: group identifiers are often GUIDs
+  // whose casing differs between a provider's dashboard and its tokens.
+  const hasAnyPermission = (accepted: string[]): boolean =>
+    permissions.value.some((held) =>
+      accepted.some((value) => value.toLowerCase() === held.toLowerCase()),
+    );
 
-  const isAdmin = computed(() => hasPermission(runtimeConfig().auth.adminPermission));
+  const isAdmin = computed(() => hasAnyPermission(runtimeConfig().auth.adminPermissions));
 
   /** Resets auth state back to its initial values. */
   const reset = (): void => {

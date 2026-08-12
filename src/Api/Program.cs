@@ -155,8 +155,38 @@ services.AddHealthChecks()
 
 // ---- Auth -----------------------------------------------------------------
 
+// Both settings became lists. Binding would otherwise quietly ignore the old scalar form
+// and leave the admin area gated on nothing, so say exactly what to change instead. This
+// check can go once deployments have moved over.
+if (config["Auth:AdminPermission"] is not null)
+    throw new InvalidOperationException(
+        "Auth:AdminPermission is now the list Auth:AdminPermissions, e.g. " +
+        "[\"APP_FOO_CALENDAR_ADMIN\"] or Auth__AdminPermissions__0=APP_FOO_CALENDAR_ADMIN.");
+
+if (config["Auth:ClaimTypes:Permissions"] is not null)
+    throw new InvalidOperationException(
+        "Auth:ClaimTypes:Permissions is now a list, e.g. [\"roles\"] or " +
+        "Auth__ClaimTypes__Permissions__0=roles.");
+
 var authConfig = config.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
     ?? throw new InvalidOperationException("Auth options are not configured.");
+
+// Fail closed: an empty list would leave every /admin request to be rejected with no
+// indication why, and an accidental "grant everyone" is worse still.
+if (!authConfig.AdminPermissions.Any(v => !string.IsNullOrWhiteSpace(v)))
+    throw new InvalidOperationException("Auth:AdminPermissions must list at least one value.");
+
+if (!authConfig.ClaimTypes.Permissions.Any(v => !string.IsNullOrWhiteSpace(v)))
+    throw new InvalidOperationException("Auth:ClaimTypes:Permissions must list at least one claim name.");
+
+// Blanks come from shortening a list through environment variables, where the leftover
+// indexes are set to empty rather than removed. An empty claim name would otherwise match
+// claims that have no type, and an empty accepted value would match a claim with no value.
+services.PostConfigure<AuthOptions>(o =>
+{
+    o.AdminPermissions.RemoveAll(string.IsNullOrWhiteSpace);
+    o.ClaimTypes.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
+});
 
 if (authConfig.Provider == AuthOptions.ProviderNone && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException("Auth:Provider=None is only allowed in Development.");

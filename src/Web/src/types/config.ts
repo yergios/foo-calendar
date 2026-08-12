@@ -28,8 +28,10 @@ export interface RuntimeAuthConfig {
   audience: string;
   scope: string;
   redirectUri: string;
-  adminPermission: string;
-  permissionsClaim: string;
+  /** Holding any one of these grants the admin area. */
+  adminPermissions: string[];
+  /** Claims that carry permissions, searched in order. */
+  permissionsClaims: string[];
   devUser: RuntimeDevUser | null;
 }
 

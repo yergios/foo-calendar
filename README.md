@@ -64,7 +64,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 Out of the box, `src/Api/appsettings.Development.json` sets `Auth:Provider` to `None`, which fully bypasses SSO in local development, so you can run the app with no OIDC/IdP tenant at all. Everything below is only needed once you point at a real provider (staging/production, or if you want to exercise the real auth path locally):
 
-1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `AdminPermission`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
+1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `AdminPermissions`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
 2. Holidays are pulled from the public Nager.Date API by default, which needs no setup. See [Where holidays come from](#where-holidays-come-from) to point that elsewhere.
 
 The frontend needs no setup of its own: it reads branding and OIDC settings from the API at startup — see [Configuring a deployment](#configuring-a-deployment).
@@ -106,7 +106,7 @@ At startup the frontend fetches `GET /api/config/bootstrap` (the one anonymous e
 | `Auth:Audience` | Which API the access token is issued for. |
 | `Auth:Scope` | Scopes the SPA requests. |
 | `Auth:RedirectUri` | Where the IdP returns after login. Relative by default, so any hostname works. |
-| `Auth:AdminPermission` | Permission value gating `/admin`, on both sides. |
+| `Auth:AdminPermissions` | Claim values gating `/admin`, on both sides. Any one of them grants it. |
 | `Auth:ClaimTypes:*` | Which claims carry identity and permissions, on both sides. |
 
 Every one of these is overridable per environment without touching `appsettings.json`, using the standard .NET double-underscore environment variables — which is usually how you'd configure a container:
@@ -117,7 +117,7 @@ Branding__SupportUrl="mailto:it@acme.example" \
 Auth__Authority="https://acme.okta.com" \
 Auth__ClientId="0oa1b2c3" \
 Auth__Audience="https://leave.acme.example/api" \
-Auth__ClaimTypes__Permissions="roles" \
+Auth__ClaimTypes__Permissions__0="roles" \
 ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
@@ -289,11 +289,26 @@ Most of the app is available to anyone signed in. A single elevated permission g
 | Who                                                                          | Can do                                                                                                                  |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Anyone signed in                                                             | View the calendar, manage their own profile and absences, add/edit/delete bank holidays                                 |
-| Holder of the `Auth:AdminPermission` permission (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, trigger a bank-holiday sync, view team-wide absence stats |
+| Holder of any `Auth:AdminPermissions` value (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, trigger a bank-holiday sync, view team-wide absence stats |
 
 Grant the admin permission to a user in your OIDC provider's dashboard. Locally, the dev bypass grants whatever is listed in `Auth:DevUser:Permissions` (`src/Api/appsettings.Development.json`), which already includes the admin permission — so the admin area is reachable without an admin-permissioned account.
 
-Which claim carries permissions varies by provider; set `Auth:ClaimTypes:Permissions` to match (`permissions`, `roles`, `groups`, ...). Both the API's authorization policy and the frontend's admin nav read that one setting.
+**Matching what your provider actually emits.** Both of these are lists, because providers rarely hand you one tidy permission string:
+
+```json
+"Auth": {
+  "AdminPermissions": [ "8f4c2f1a-0000-4c1e-9a3e-1c2d3e4f5a6b", "leave-admin" ],
+  "ClaimTypes": { "Permissions": [ "roles", "groups" ] }
+}
+```
+
+- `ClaimTypes:Permissions` names the claims to look in, searched in order. Entra ID, for instance, puts app roles in `roles` and group memberships in `groups`; listing both lets either grant admin.
+- `AdminPermissions` lists the values that count. Holding **any one** is enough, so a group id and a friendlier role name can coexist while you migrate between them.
+- Claim names are matched exactly (JWT claim names are case-sensitive), values case-insensitively — group ids are often GUIDs whose casing differs between a provider's dashboard and its tokens.
+
+The API's authorization policy and the frontend's admin nav read the same two settings, so they cannot disagree.
+
+> Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__AdminPermissions__1=`). Blank entries are dropped rather than matched.
 
 ### Reacting to absences
 
