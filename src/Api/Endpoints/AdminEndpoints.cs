@@ -23,6 +23,7 @@ public static class AdminEndpoints
                 ctx.User.HasAnyPermission(authConfig.ClaimTypes.Permissions, authConfig.AdminPermissions)));
 
         group.MapPost("/people", CreatePerson);
+        group.MapPost("/people/import", ImportPeople);
         group.MapPut("/people/{id:int}", UpdatePerson);
         group.MapDelete("/people/{id:int}", DeletePerson);
         group.MapGet("/people/stats", GetAllPeopleStats);
@@ -38,6 +39,24 @@ public static class AdminEndpoints
     {
         var created = await people.CreateAsync(request, user.GetUsername(authOptions.Value.ClaimTypes.UserName), ct);
         return Results.Created("/api/admin/people/me", created);
+    }
+
+    private static async Task<IResult> ImportPeople(
+        HttpRequest httpRequest,
+        ClaimsPrincipal user,
+        IPersonService people,
+        IOptions<AuthOptions> authOptions,
+        CancellationToken ct)
+    {
+        // The raw body rather than a multipart upload: this is reached from a script or a
+        // curl pipe far more often than from a file picker.
+        using var reader = new StreamReader(httpRequest.Body);
+        var csv = await reader.ReadToEndAsync(ct);
+
+        var result = await people.ImportAsync(
+            csv, user.GetUsername(authOptions.Value.ClaimTypes.UserName), ct);
+
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> UpdatePerson(

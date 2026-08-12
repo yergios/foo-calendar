@@ -282,6 +282,50 @@ Edit the `PersonColorPalette` array in `src/Api/appsettings.json` — each entry
 
 ---
 
+### Importing people in bulk
+
+Onboarding a whole team one person at a time gets old around the tenth. `POST /api/admin/people/import` takes a CSV body and creates a person per row:
+
+```bash
+curl -X POST https://leave.acme.example/api/admin/people/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: text/csv" \
+  --data-binary @people.csv
+```
+
+```csv
+username,firstName,lastName,email,homeCity
+jdoe,Jane,Doe,jane@acme.example,ES-MD
+asmith,Alan,Smith,alan@acme.example,CH-ZH
+```
+
+**Only `username` is required**, and it has to match whatever `Auth:ClaimTypes:UserName` will carry for that person, since that is what links a sign-in to their record. Everything else is optional:
+
+| Column | Notes |
+| ------------- | ---------------------------------------------------------------------------- |
+| `username` | Required. Must match the sign-in identity. |
+| `firstName`, `lastName` | Up to 100 characters each. |
+| `displayName` | Defaults to "First Last", or the username when neither is given. |
+| `email` | Up to 255 characters. |
+| `homeCity` | ISO 3166-2, matching `RegionCatalog`, e.g. `ES-MD`. Blank is fine. |
+| `color` | Assigned from `PersonColorPalette` when blank, which is the usual case. |
+
+Header names are matched loosely — case, spaces and underscores are ignored, so `Home City`, `home_city` and `homeCity` are the same column — and column order doesn't matter. Quoted fields, embedded commas and a UTF-8 BOM are all handled, so a spreadsheet export works as-is.
+
+**Existing usernames are skipped, never updated.** That makes re-running the same file safe: fix what was reported and run it again, and the people who already made it through come back as skipped rather than duplicated. Editing an existing person stays a job for `/admin`.
+
+Valid rows are imported even when others fail, and the response says exactly what happened, by line number:
+
+```json
+{
+  "created": ["jdoe", "asmith"],
+  "skipped": [{ "row": 5, "username": "ok", "reason": "Already imported, or already exists in the app." }],
+  "failed": [{ "row": 6, "username": "broken", "reason": "The field HomeCity must match the regular expression ..." }]
+}
+```
+
+> **Palette size caps your headcount.** Each person's calendar color has to be unique, so the app holds at most as many people as `PersonColorPalette` has colors — 32 as shipped. An import that runs out says so, per row. Add more colors before importing a larger team, see [Adding an assignable color](#adding-an-assignable-color).
+
 ### Access levels
 
 Most of the app is available to anyone signed in. A single elevated permission gates the admin area:
@@ -289,7 +333,7 @@ Most of the app is available to anyone signed in. A single elevated permission g
 | Who                                                                          | Can do                                                                                                                  |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Anyone signed in                                                             | View the calendar, manage their own profile and absences, add/edit/delete bank holidays                                 |
-| Holder of any `Auth:AdminPermissions` value (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, trigger a bank-holiday sync, view team-wide absence stats |
+| Holder of any `Auth:AdminPermissions` value (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, [import people in bulk](#importing-people-in-bulk), trigger a bank-holiday sync, view team-wide absence stats |
 
 Grant the admin permission to a user in your OIDC provider's dashboard. Locally, the dev bypass grants whatever is listed in `Auth:DevUser:Permissions` (`src/Api/appsettings.Development.json`), which already includes the admin permission — so the admin area is reachable without an admin-permissioned account.
 

@@ -1,5 +1,8 @@
+using Api.Configuration;
 using Api.Dtos;
 using Api.Services;
+
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -13,7 +16,7 @@ public sealed class PersonServiceTests : SqliteTestBase
 
     public PersonServiceTests()
     {
-        sut = new PersonService(Db);
+        sut = new PersonService(Db, Options.Create<PersonColorPaletteOptions>([]));
     }
 
     private static CreatePersonRequest CreateRequest(string username, string color) =>
