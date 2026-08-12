@@ -1,11 +1,11 @@
 /**
- * Brand theme — override these to make the app look like yours.
+ * Brand theme: override these to make the app look like yours.
  * Everything else in the app (colors, radii, fonts) derives from these
  * values, so changing them here is enough to re-skin the whole UI.
  *
  * Each color is `light-dark(light-mode value, dark-mode value)`. Which one
- * actually shows is controlled by the single `color-scheme` line below —
- * set it to `dark` to make dark the app's default look.
+ * actually shows is controlled by the single `color-scheme` line below.
+ * Set it to `dark` to make dark the app's default look.
  *
  * Accessibility: the values below are picked so every text/background pair
  * the app can produce clears WCAG 2.1 AA (4.5:1 for text, 3:1 for control
@@ -15,7 +15,7 @@
  *     and `--brand-surface`.
  *   - A brand color used as a solid fill (`--brand-primary`,
  *     `--brand-accent-solid`) needs 4.5:1 against its own `--brand-on-*`
- *     label color — not against the page.
+ *     label color, not against the page.
  *   - A brand color used as text or an outline on the page
  *     (`--brand-primary-text`, `--brand-accent`) needs 4.5:1 on
  *     `--brand-bg` and `--brand-surface`.
@@ -48,7 +48,7 @@
   --brand-border: light-dark(#dae1ec, #2d3a4f); /* structural lines: grid, dividers */
   --brand-border-strong: light-dark(#75808f, #6c7c95); /* outlines of inputs and selects */
 
-  /* Shadow tints — dark mode needs a much heavier shadow to read at all */
+  /* Shadow tints: dark mode needs a much heavier shadow to read at all */
   --brand-shadow: light-dark(rgb(20 27 43 / 0.1), rgb(0 0 0 / 0.55));
   --brand-shadow-soft: light-dark(rgb(20 27 43 / 0.05), rgb(0 0 0 / 0.35));
 

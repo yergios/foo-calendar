@@ -2,11 +2,11 @@
 @import "tailwindcss";
 
 @theme {
-  /* Fonts — sourced from theme.css */
+  /* Fonts: sourced from theme.css */
   --font-display: var(--brand-font-display);
   --font-body: var(--brand-font-body);
 
-  /* Palette — sourced from theme.css.
+  /* Palette: sourced from theme.css.
      `primary`/`accent-solid` are solid fills and are only ever paired with their
      `on-*` label color; `primary-text`/`accent` are the variants meant to be read
      directly against the page. See theme.css for why the two can't be one value. */
@@ -22,7 +22,7 @@
   --color-accent-solid: var(--brand-accent-solid);
   --color-on-accent: var(--brand-on-accent);
 
-  /* Semantic — derived so they automatically track the brand palette and light/dark mode */
+  /* Semantic: derived so they automatically track the brand palette and light/dark mode */
   --color-row-alt: color-mix(in srgb, var(--color-surface) 45%, var(--color-background));
   --color-border: var(--brand-border); /* grid lines, dividers */
   --color-border-strong: var(--brand-border-strong); /* input/select outlines (WCAG 1.4.11) */
@@ -37,7 +37,7 @@
   --shadow-card-hover: 0 4px 12px var(--brand-shadow), 0 2px 4px var(--brand-shadow-soft);
   --transition-fast: 150ms ease-out;
 
-  /* Corner Radius — scaled from theme.css's --brand-radius-scale */
+  /* Corner Radius: scaled from theme.css's --brand-radius-scale */
   --radius-4: calc(4px * var(--brand-radius-scale));
   --radius-8: calc(8px * var(--brand-radius-scale));
   --radius-12: calc(12px * var(--brand-radius-scale));

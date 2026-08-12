@@ -481,7 +481,7 @@ function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): 
   return TODAY_OUTLINE;
 }
 
-// Month boundaries stay a real border — every 1st-of-month column carries it, so the
+// Month boundaries stay a real border. Every 1st-of-month column carries it, so the
 // extra width is uniform. On the rare day the 1st *is* today, today's outline reads as
 // the divider and the border only holds its place, keeping the column widths equal.
 function columnSideBorderClass(day: { isToday: boolean; dayNum: number }): string {

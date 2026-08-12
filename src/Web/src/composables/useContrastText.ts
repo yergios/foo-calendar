@@ -9,7 +9,7 @@ function relativeLuminance(hex: string): number {
 }
 
 // Person colors are fixed business data (see PersonColorPalette), independent of the app's
-// brand/light-dark theme, so the contrasting text color must stay fixed too — it can't reference
+// brand/light-dark theme, so the contrasting text color must stay fixed too. It can't reference
 // --color-ink, which now flips with light/dark mode.
 const DARK_TEXT = "#0f172a";
 
