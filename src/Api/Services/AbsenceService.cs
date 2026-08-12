@@ -7,8 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Services;
 
-public sealed class AbsenceService(AppDbContext db) : IAbsenceService
+public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) : IAbsenceService
 {
+    // Published after the change is committed, so a receiver can never be told about an
+    // absence that then failed to save.
+    private void PublishEvent(string name, Absence absence, Person person) =>
+        webhooks.Publish(new WebhookEvent(
+            Guid.NewGuid().ToString(),
+            name,
+            DateTime.UtcNow,
+            person.Username,
+            WebhookAbsence.FromEntity(absence, person.DisplayName)));
+
     public async Task<AbsencesResponse> GetOverlappingAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var absences = await ApprovedOverlapping(db.Absences, from, to)
@@ -73,6 +83,8 @@ public sealed class AbsenceService(AppDbContext db) : IAbsenceService
 
         db.Absences.Add(absence);
         await db.SaveChangesAsync(ct);
+
+        PublishEvent(WebhookEvents.AbsenceCreated, absence, person);
         return AbsenceDto.FromEntity(absence);
     }
 
@@ -102,19 +114,23 @@ public sealed class AbsenceService(AppDbContext db) : IAbsenceService
         absence.UpdatedBy = person.Username;
         await db.SaveChangesAsync(ct);
 
+        PublishEvent(WebhookEvents.AbsenceUpdated, absence, person);
         return AbsenceDto.FromEntity(absence);
     }
 
-    public async Task DeleteAsync(int personId, int absenceId, CancellationToken ct = default)
+    public async Task DeleteAsync(Person person, int absenceId, CancellationToken ct = default)
     {
         var absence = await db.Absences.FindAsync([absenceId], ct)
             ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
 
-        if (absence.PersonId != personId)
+        if (absence.PersonId != person.Id)
             throw new UnauthorizedAccessException("Cannot delete another person's absence.");
 
         db.Absences.Remove(absence);
         await db.SaveChangesAsync(ct);
+
+        // Describes the absence as it was, since there is nothing left to look up.
+        PublishEvent(WebhookEvents.AbsenceDeleted, absence, person);
     }
 
     private static IQueryable<Absence> ApprovedOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>

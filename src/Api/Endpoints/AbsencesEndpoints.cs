@@ -55,7 +55,7 @@ public static class AbsencesEndpoints
         CancellationToken ct)
     {
         var person = await currentPerson.GetAsync(ct);
-        await absences.DeleteAsync(person.Id, id, ct);
+        await absences.DeleteAsync(person, id, ct);
         return Results.NoContent();
     }
 }

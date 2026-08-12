@@ -1,5 +1,6 @@
 using Api.Data.Models;
 using Api.Dtos;
+using Api.Interfaces;
 using Api.Services;
 
 using Shouldly;
@@ -10,11 +11,20 @@ namespace UnitTests.Services;
 
 public sealed class AbsenceServiceTests : SqliteTestBase
 {
+    /// <summary>Records what the service published instead of delivering anything.</summary>
+    private sealed class RecordingWebhookPublisher : IWebhookPublisher
+    {
+        public List<WebhookEvent> Published { get; } = [];
+
+        public void Publish(WebhookEvent webhookEvent) => Published.Add(webhookEvent);
+    }
+
+    private readonly RecordingWebhookPublisher webhooks = new();
     private readonly AbsenceService sut;
 
     public AbsenceServiceTests()
     {
-        sut = new AbsenceService(Db);
+        sut = new AbsenceService(Db, webhooks);
     }
 
     private Person CreatePerson(string username = "jdoe", string color = "#111111")
@@ -144,7 +154,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var created = await sut.CreateAsync(owner, Request("2026-03-02", "2026-03-06"));
 
         await Should.ThrowAsync<UnauthorizedAccessException>(
-            () => sut.DeleteAsync(intruder.Id, created.Id));
+            () => sut.DeleteAsync(intruder, created.Id));
     }
 
     [Fact]
@@ -152,7 +162,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var person = CreatePerson();
 
-        await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteAsync(person.Id, 999));
+        await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteAsync(person, 999));
     }
 
     [Fact]
@@ -161,7 +171,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
-        await sut.DeleteAsync(person.Id, created.Id);
+        await sut.DeleteAsync(person, created.Id);
 
         var remaining = await sut.GetOverlappingAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31));
         remaining.Absences.ShouldBeEmpty();
@@ -274,5 +284,76 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         var absence = result.Absences.ShouldHaveSingleItem();
         absence.Type.ShouldBe(AbsenceType.Vacation);
+    }
+
+    [Fact]
+    public async Task CreateAsync_PublishesAnAbsenceCreatedEvent()
+    {
+        var person = CreatePerson();
+
+        var created = await sut.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 5), AbsenceType.Vacation, "Trip"));
+
+        var published = webhooks.Published.ShouldHaveSingleItem();
+        published.Event.ShouldBe(WebhookEvents.AbsenceCreated);
+        published.Actor.ShouldBe(person.Username);
+        published.Absence.Id.ShouldBe(created.Id);
+        published.Absence.PersonName.ShouldBe(person.DisplayName);
+        published.Absence.Type.ShouldBe(AbsenceType.Vacation);
+        published.Absence.Note.ShouldBe("Trip");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PublishesAnAbsenceUpdatedEventWithTheNewDates()
+    {
+        var person = CreatePerson();
+        var created = await sut.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 5), AbsenceType.Vacation, null));
+        webhooks.Published.Clear();
+
+        await sut.UpdateAsync(
+            person,
+            created.Id,
+            new CreateAbsenceRequest(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 2), AbsenceType.Sick, null));
+
+        var published = webhooks.Published.ShouldHaveSingleItem();
+        published.Event.ShouldBe(WebhookEvents.AbsenceUpdated);
+        published.Absence.StartDate.ShouldBe(new DateOnly(2026, 6, 1));
+        published.Absence.Type.ShouldBe(AbsenceType.Sick);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_PublishesAnAbsenceDeletedEventDescribingTheRemovedAbsence()
+    {
+        var person = CreatePerson();
+        var created = await sut.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 5), AbsenceType.Vacation, null));
+        webhooks.Published.Clear();
+
+        await sut.DeleteAsync(person, created.Id);
+
+        var published = webhooks.Published.ShouldHaveSingleItem();
+        published.Event.ShouldBe(WebhookEvents.AbsenceDeleted);
+        published.Absence.Id.ShouldBe(created.Id);
+        published.Absence.StartDate.ShouldBe(new DateOnly(2026, 5, 1));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenTheAbsenceIsRejected_PublishesNothing()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 5), AbsenceType.Vacation, null));
+        webhooks.Published.Clear();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 3), new DateOnly(2026, 5, 4), AbsenceType.Sick, null)));
+
+        webhooks.Published.ShouldBeEmpty();
     }
 }

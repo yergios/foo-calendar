@@ -1,0 +1,40 @@
+using Api.Data.Models;
+
+namespace Api.Dtos;
+
+public static class WebhookEvents
+{
+    public const string AbsenceCreated = "absence.created";
+    public const string AbsenceUpdated = "absence.updated";
+    public const string AbsenceDeleted = "absence.deleted";
+}
+
+/// <summary>The body POSTed to the configured webhook. This is a published contract that
+/// receivers parse, so treat renames here as breaking changes.</summary>
+public sealed record WebhookEvent(
+    string Id,
+    string Event,
+    DateTime OccurredAt,
+    string Actor,
+    WebhookAbsence Absence);
+
+/// <summary>The absence an event is about, carrying enough to act on without calling back
+/// into the API. For a deletion this describes the absence as it was.</summary>
+public sealed record WebhookAbsence(
+    int Id,
+    int PersonId,
+    string PersonName,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    AbsenceType Type,
+    string Note)
+{
+    public static WebhookAbsence FromEntity(Absence absence, string personName) => new(
+        absence.Id,
+        absence.PersonId,
+        personName,
+        absence.StartDate,
+        absence.EndDate,
+        absence.Type,
+        absence.Note);
+}

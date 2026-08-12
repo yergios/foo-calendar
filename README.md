@@ -295,6 +295,65 @@ Grant the admin permission to a user in your OIDC provider's dashboard. Locally,
 
 Which claim carries permissions varies by provider; set `Auth:ClaimTypes:Permissions` to match (`permissions`, `roles`, `groups`, ...). Both the API's authorization policy and the frontend's admin nav read that one setting.
 
+### Reacting to absences
+
+The app can POST an event to a URL of your choosing whenever an absence changes, so it can feed whatever you already run — a Slack or Teams message, an email, a ticket, an HR export. There are deliberately no per-vendor connectors: there is one hook, and the glue on your side is usually a few lines.
+
+```bash
+Webhook__Url=https://hooks.example.internal/foo-calendar
+Webhook__Secret=a-long-random-string
+```
+
+Three events are sent: `absence.created`, `absence.updated` and `absence.deleted`. Each one carries the absence in full, so a receiver rarely needs to call back:
+
+```json
+{
+  "id": "f3428de8-3643-4eee-81d7-632ed1f1c695",
+  "event": "absence.created",
+  "occurredAt": "2026-05-01T09:00:00.000Z",
+  "actor": "jdoe",
+  "absence": {
+    "id": 7,
+    "personId": 3,
+    "personName": "Jane Doe",
+    "startDate": "2026-05-04",
+    "endDate": "2026-05-08",
+    "type": "Vacation",
+    "note": "Trip"
+  }
+}
+```
+
+For a deletion, `absence` describes the absence as it was.
+
+**Headers**
+
+| Header | Purpose |
+| ------------------------- | ------------------------------------------------------------------ |
+| `X-FooCalendar-Event` | The event name, for routing without parsing the body. |
+| `X-FooCalendar-Delivery` | Unique per delivery, and repeated in `id`, for deduplication. |
+| `X-FooCalendar-Signature` | `sha256=<hex>`, HMAC-SHA256 of the raw body keyed with `Webhook:Secret`. Absent when no secret is set. |
+
+Verify the signature over the **raw bytes you received**, before parsing:
+
+```python
+expected = "sha256=" + hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
+if not hmac.compare_digest(expected, request.headers["X-FooCalendar-Signature"]):
+    abort(401)
+```
+
+Without a secret, anyone who learns the URL can post convincing events at it. Set one.
+
+**Delivery is best effort, on purpose.** Events are queued in memory and delivered by a background loop, so a receiver that is slow, down or misconfigured can never slow down or fail the request that produced the event. The consequences are worth being explicit about:
+
+- A failed delivery is retried `Webhook:MaxAttempts` times (3 by default, backing off 2s then 4s) and then dropped with an error in the log.
+- A restart drops anything still queued, and a receiver that stays down long enough will have events dropped from a full queue.
+- Events are delivered in order, one at a time.
+
+So treat these as notifications, not as a ledger. Anything that must not miss a change should reconcile against `GET /api/absences` rather than counting on the hook.
+
+Note that `note` is free text a person typed, and it is included in the payload. If that is sensitive in your organisation, terminate the webhook somewhere you control rather than pointing it at a third-party service.
+
 ### Observability
 
 The app emits traces, metrics, and logs via OpenTelemetry and pushes all three over OTLP. It is not tied to any vendor: point it at whatever you already run.

@@ -65,6 +65,15 @@ services.AddOptions<BrandingOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.AppName), "Branding:AppName must be configured.")
     .ValidateOnStart();
 
+services.AddOptions<WebhookOptions>()
+    .Bind(config.GetSection(WebhookOptions.SectionName))
+    .Validate(
+        o => string.IsNullOrWhiteSpace(o.Url) || Uri.IsWellFormedUriString(o.Url, UriKind.Absolute),
+        "Webhook:Url must be an absolute URL.")
+    .Validate(o => o.MaxAttempts >= 1, "Webhook:MaxAttempts must be at least 1.")
+    .Validate(o => o.Timeout > TimeSpan.Zero, "Webhook:Timeout must be positive.")
+    .ValidateOnStart();
+
 services.AddOptions<ReverseProxyOptions>()
     .Bind(config.GetSection(ReverseProxyOptions.SectionName))
     .Validate(o => o.PathBase.Length == 0 || o.PathBase.StartsWith('/'),
@@ -116,6 +125,17 @@ if (holidayConfig.Source != HolidayOptions.SourceNone)
     services.AddHostedService<BankHolidaySyncBackgroundService>();
 
 services.AddScoped<IBankHolidayService, BankHolidayService>();
+
+// ---- Webhook --------------------------------------------------------------
+
+// Always registered so callers have something to publish to; it drops events on the floor
+// until a URL is configured. The delivery loop is only started when there is one.
+services.AddHttpClient(WebhookPublisher.HttpClientName);
+services.AddSingleton<WebhookPublisher>();
+services.AddSingleton<IWebhookPublisher>(sp => sp.GetRequiredService<WebhookPublisher>());
+
+if (!string.IsNullOrWhiteSpace(config[$"{WebhookOptions.SectionName}:{nameof(WebhookOptions.Url)}"]))
+    services.AddHostedService(sp => sp.GetRequiredService<WebhookPublisher>());
 
 services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();

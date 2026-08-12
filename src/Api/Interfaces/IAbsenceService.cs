@@ -10,5 +10,5 @@ public interface IAbsenceService
     Task<AllAbsenceStatsResponse> GetAllStatsAsync(int year, CancellationToken ct = default);
     Task<AbsenceDto> CreateAsync(Person person, CreateAbsenceRequest request, CancellationToken ct = default);
     Task<AbsenceDto> UpdateAsync(Person person, int absenceId, CreateAbsenceRequest request, CancellationToken ct = default);
-    Task DeleteAsync(int personId, int absenceId, CancellationToken ct = default);
+    Task DeleteAsync(Person person, int absenceId, CancellationToken ct = default);
 }
