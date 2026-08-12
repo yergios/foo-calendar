@@ -1,0 +1,22 @@
+name: foo-calendar
+
+services:
+  app:
+    build: .
+    image: foo-calendar:1.0.0
+    restart: unless-stopped
+    ports:
+      - "${FOO_CALENDAR_PORT:-8080}:8080"
+    # Plain .NET configuration keys, so anything in appsettings.json can be overridden
+    # here. Copy .env.example to .env to fill them in. Optional on purpose: without it the
+    # app still starts and then reports which setting is missing, which is a better first
+    # run than compose refusing to do anything because a gitignored file isn't there yet.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - foo-calendar-data:/var/lib/foo-calendar
+
+volumes:
+  # Holds the SQLite database. Back this up and you have backed up the whole application.
+  foo-calendar-data:

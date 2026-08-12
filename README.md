@@ -38,7 +38,7 @@ tests/
 └── UnitTests/    xUnit test project (scaffold — no tests written yet)
 ```
 
-The frontend is compiled by Vite during CI and placed in `src/Api/wwwroot`. The .NET app serves it as static files. In production there is one process, one port, one deployment artifact.
+The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app serves it as static files. In production there is one process, one port, one deployment artifact — the `Dockerfile` at the repository root builds exactly that, see [Deploying](#deploying).
 
 **Key technologies**
 
@@ -125,6 +125,47 @@ dotnet run --project src/Api
 The same applies to the `RegionCatalog` and `PersonColorPalette` sections below, and to `Telemetry`.
 
 To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
+
+---
+
+### Deploying
+
+The `Dockerfile` builds the whole thing — Vite compiles the SPA, `dotnet publish` packages the API, and the result is one image running one process on one port. There is no separate web server to deploy or configure.
+
+```bash
+cp .env.example .env    # fill in at least the Auth__* values
+docker compose up -d
+```
+
+That serves the app on `http://localhost:8080` and keeps the SQLite database in the `foo-calendar-data` volume. **That volume is the entire application state** — back it up and you have backed up everything.
+
+To try the app before setting up an identity provider, run it in the Development environment, where SSO is bypassed entirely (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, admin included:
+
+```bash
+docker build -t foo-calendar:1.0.0 .
+docker run --rm -p 8080:8080 -e ASPNETCORE_ENVIRONMENT=Development foo-calendar:1.0.0
+```
+
+Nothing persists there — no volume is mounted, and the database goes away with the container. Uncommenting `ASPNETCORE_ENVIRONMENT=Development` in `.env` does the same through compose, keeping the volume. Either way the API refuses to start with `Auth:Provider=None` outside Development, so this can't be deployed by accident.
+
+If the container restarts in a loop, read the logs first: configuration is validated at startup, so a missing `Auth__Authority` or `Auth__ClientId` shows up there as a plain `must be configured` message rather than as a broken page later.
+
+**Notes for other environments**
+
+- The container listens on `8080` and runs as the non-root `app` user from the .NET base image.
+- The image includes a `HEALTHCHECK` against `/healthchecks`, which is anonymous and reports per-check detail as JSON. Kubernetes and other platforms that probe over HTTP themselves don't need the `curl` that check relies on, and can drop that layer from the runtime stage.
+- A **named volume** picks up the right ownership automatically. A **bind mount** does not: `chown 1654 /your/host/path` first, or migrations will fail on first start with a read-only database error.
+- Configure everything through environment variables, as `.env.example` shows. Nothing needs to be baked into the image, which is why the same image works for every deployment.
+- Migrations are applied automatically at startup, so upgrading is a matter of pulling a newer image and restarting. This is also why more than one replica is not yet safe — see [Scaling](#scaling).
+
+#### Scaling
+
+The app is designed to run as a single instance, and two things assume it:
+
+- **Migrations run on startup.** Several replicas starting at once would race each other applying the same migration.
+- **The bank-holiday sync is in-process.** Every replica would run its own weekly sync against Nager.
+
+SQLite is not the blocker here; both would need addressing before a second replica, whatever the database. For the size of team this tool is for, one instance is the intended shape.
 
 ---
 

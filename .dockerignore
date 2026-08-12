@@ -1,0 +1,23 @@
+# Keep the build context small, and keep local state out of the image. The database
+# exclusion matters: without it a developer's own foo-calendar.db would be baked in.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+src/Api/wwwroot/
+
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+.git/
+.github/
+.claude/
+.editorconfig
+.gitignore
+
+**/.env
+**/*.user
+**/*.suo
+
+tests/

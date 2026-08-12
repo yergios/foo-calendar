@@ -1,0 +1,69 @@
+# Builds the single artifact described in the README: the Vue SPA compiled into the API's
+# wwwroot, served by the same .NET process on one port.
+
+# ---- Frontend -------------------------------------------------------------------------
+# Debian rather than Alpine on purpose: pnpm-lock.yaml is resolved against glibc, and the
+# musl builds of Rollup's native binaries are a different set of optional dependencies.
+# This stage is thrown away, so its size doesn't reach the final image.
+FROM node:22-bookworm-slim AS web
+
+# Corepack installs the exact pnpm version pinned in package.json's "packageManager".
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
+WORKDIR /src/Web
+
+# Dependencies first, so editing application code doesn't re-run the install.
+COPY src/Web/package.json src/Web/pnpm-lock.yaml src/Web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY src/Web/ ./
+# vite.config.ts sends the build to ../Api/wwwroot, i.e. /src/Api/wwwroot here.
+RUN pnpm build
+
+# ---- API ------------------------------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api
+
+WORKDIR /src
+
+# Same idea: restore against just the project files so a code change doesn't refetch NuGet.
+COPY Directory.Build.props Directory.Packages.props nuget.config ./
+COPY src/Api/Api.csproj src/Api/
+RUN dotnet restore src/Api/Api.csproj
+
+COPY src/Api/ src/Api/
+COPY --from=web /src/Api/wwwroot src/Api/wwwroot
+
+RUN dotnet publish src/Api/Api.csproj --configuration Release --no-restore --output /app
+
+# ---- Runtime --------------------------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+# The only addition to the base image, and only so HEALTHCHECK below has a client to call
+# with. Orchestrators that probe over HTTP themselves (Kubernetes httpGet, for one) don't
+# need it, and can drop this layer.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=api /app ./
+
+# SQLite writes next to its file, so the database lives on a mount rather than in the
+# container's writable layer. Owned by the non-root app user up front: a named volume
+# inherits the ownership of the directory it covers, which is what keeps migrations from
+# failing on first start. A bind mount does not, and has to be chown'd on the host.
+ENV ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/foo-calendar.db"
+RUN mkdir --parents /var/lib/foo-calendar && chown $APP_UID /var/lib/foo-calendar
+
+ENV ASPNETCORE_HTTP_PORTS=8080
+EXPOSE 8080
+
+USER $APP_UID
+
+# Reports Degraded, not Unhealthy, when only the database check fails, so this treats
+# anything other than a clean 200 as unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl --fail --silent --show-error http://localhost:8080/healthchecks || exit 1
+
+ENTRYPOINT ["dotnet", "Api.dll"]
