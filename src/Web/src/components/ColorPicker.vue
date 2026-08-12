@@ -36,9 +36,7 @@
 import { computed } from "vue";
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
-import { useContrastText } from "@/composables/useContrastText";
-
-const { textColorFor } = useContrastText();
+import { textColorFor } from "@/lib/contrastText";
 
 const props = withDefaults(
   defineProps<{

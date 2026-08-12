@@ -351,9 +351,7 @@ async function submitForm() {
         color: form.color,
       });
     }
-    editingId.value = null;
-    editingOriginalColor.value = null;
-    resetForm();
+    cancelEdit();
     await loadPeople(true);
   } catch (error: unknown) {
     console.error("ERROR => Failed to save person:", error);

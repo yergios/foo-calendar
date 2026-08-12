@@ -86,7 +86,7 @@ import { computed, ref, watch } from "vue";
 
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
 import AppModal from "@/components/AppModal.vue";
-import { useDateFormat } from "@/composables/useDateFormat";
+import { today } from "@/lib/dates";
 import type { AbsenceDto, AbsenceType } from "@/types/absence";
 
 const props = withDefaults(
@@ -105,8 +105,6 @@ const emit = defineEmits<{
   saved: [absence: AbsenceDto];
   deleted: [id: number];
 }>();
-
-const { today } = useDateFormat();
 
 const isEditing = computed(() => props.absence !== null);
 

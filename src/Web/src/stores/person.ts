@@ -24,11 +24,15 @@ export const usePersonStore = defineStore("person", () => {
   let resolveOnboarding: ((p: PersonDto | null) => void) | null = null;
   let pendingCheck: Promise<PersonDto | null> | null = null;
 
-  function setPerson(p: PersonDto | null) {
+  function hydrate(p: PersonDto | null) {
     person.value = p;
     hydrated.value = true;
     if (p) writeCache(CACHE_KEY, p);
     else clearCache(CACHE_KEY);
+  }
+
+  function setPerson(p: PersonDto | null) {
+    hydrate(p);
     version.value++;
   }
 
@@ -44,10 +48,7 @@ export const usePersonStore = defineStore("person", () => {
 
     pendingCheck ??= tryGetMe()
       .then((p) => {
-        person.value = p;
-        hydrated.value = true;
-        if (p) writeCache(CACHE_KEY, p);
-        else clearCache(CACHE_KEY);
+        hydrate(p);
         return p;
       })
       .finally(() => {

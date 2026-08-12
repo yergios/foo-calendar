@@ -127,7 +127,7 @@
               :title="cellTitle(row.person, cell.absence)"
               @click="handleAbsenceClick(cell.absence)"
             >
-              {{ cell.isLabelCell ? typeLabel(cell.absence.type) : "" }}
+              {{ cell.isLabelCell ? ABSENCE_TYPE_INITIALS[cell.absence.type] : "" }}
             </div>
           </td>
         </tr>
@@ -161,11 +161,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
-import { useContrastText } from "@/composables/useContrastText";
-import { useDateFormat } from "@/composables/useDateFormat";
+import { textColorFor } from "@/lib/contrastText";
+import { parse, toIso } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import { usePersonStore } from "@/stores/person";
-import type { AbsenceDto, AbsenceType } from "@/types/absence";
+import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 import type { PersonDto } from "@/types/person";
 
@@ -184,9 +184,6 @@ const emit = defineEmits<{
   "add-holiday": [date: string];
   reorder: [personId: number, targetPersonId: number];
 }>();
-
-const { toIso, parse } = useDateFormat();
-const { textColorFor } = useContrastText();
 
 const configStore = useConfigStore();
 const personStore = usePersonStore();
@@ -527,10 +524,6 @@ function handleHeaderClick(day: { iso: string }) {
   if (canAddHoliday(day.iso)) {
     emit("add-holiday", day.iso);
   }
-}
-
-function typeLabel(type: AbsenceType): string {
-  return { Vacation: "V", Sick: "S", Other: "O" }[type];
 }
 
 function cellTitle(person: PersonDto, absence: AbsenceDto): string {

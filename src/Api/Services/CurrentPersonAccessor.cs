@@ -1,6 +1,4 @@
-﻿using System.Security.Claims;
-
-using Api.Configuration;
+﻿using Api.Configuration;
 using Api.Data;
 using Api.Data.Models;
 using Api.Interfaces;
@@ -24,8 +22,7 @@ public sealed class CurrentPersonAccessor(
         var user = httpContextAccessor.HttpContext?.User
             ?? throw new InvalidOperationException("No HttpContext available.");
 
-        var username = user.FindFirstValue(authOptions.Value.ClaimTypes.UserName)
-            ?? throw new InvalidOperationException("No Username identifier claim present.");
+        var username = user.GetUsername(authOptions.Value.ClaimTypes.UserName);
 
         cached = await db.People.SingleOrDefaultAsync(p => p.Username == username, ct)
             ?? throw new KeyNotFoundException("No person exists for this account yet.");

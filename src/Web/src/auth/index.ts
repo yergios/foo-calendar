@@ -92,11 +92,6 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   }
 }
 
-export const getPermissionsFromToken = (token: string): string[] => {
-  const payload = decodeJwtPayload(token);
-  return (payload.permissions as string[]) ?? [];
-};
-
 // Keeps a request from handing out a token that's about to expire mid-flight.
 const TOKEN_EXPIRY_BUFFER_MS = 10_000;
 
@@ -127,16 +122,8 @@ export const useAuthStore = defineStore("auth", () => {
     currentUser.value = newUser;
   };
 
-  const getGivenName = (): string | null => {
-    return (currentUser.value?.given_name as string) ?? null;
-  };
-
-  const getFamilyName = (): string | null => {
-    return (currentUser.value?.family_name as string) ?? null;
-  };
-
   const getFullName = (): string | null => {
-    const parts = [getGivenName(), getFamilyName()].filter(Boolean);
+    const parts = [currentUser.value?.given_name, currentUser.value?.family_name].filter(Boolean);
     return parts.length > 0 ? parts.join(" ") : null;
   };
 
@@ -169,7 +156,6 @@ export const useAuthStore = defineStore("auth", () => {
     setToken,
     setUser,
     getFullName,
-    hasPermission,
     getCachedToken,
     reset,
   };

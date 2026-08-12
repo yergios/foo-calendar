@@ -41,7 +41,7 @@
   </AppModal>
 
   <AppModal v-if="changelogOpen" title="What's new" @close="changelogOpen = false">
-    <MarkdownContent :content="changelogContent" />
+    <MarkdownContent :content="changelogDoc" />
   </AppModal>
 </template>
 
@@ -77,9 +77,8 @@ function splitHelp(raw: string) {
 }
 
 const helpContent = splitHelp(helpDoc);
-const changelogContent = changelogDoc;
 
-const openSupport = () => {
+function openSupport() {
   window.open(issueUrl, "_blank");
-};
+}
 </script>

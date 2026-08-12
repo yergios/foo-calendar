@@ -1,5 +1,12 @@
 export type AbsenceType = "Vacation" | "Sick" | "Other";
 
+/** Single-letter marker painted into a calendar cell. Keyed by the label the legend shows. */
+export const ABSENCE_TYPE_INITIALS: Record<AbsenceType, string> = {
+  Vacation: "V",
+  Sick: "S",
+  Other: "O",
+};
+
 export interface AbsenceDto {
   id: number;
   personId: number;

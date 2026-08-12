@@ -14,14 +14,10 @@ function relativeLuminance(hex: string): number {
 const DARK_TEXT = "#0f172a";
 
 /** Returns the text color (white or dark) with the better contrast against the given background. */
-export function useContrastText() {
-  function textColorFor(bgHex: string): "#FFFFFF" | typeof DARK_TEXT {
-    const bgLum = relativeLuminance(bgHex);
-    const contrastWithWhite = 1.05 / (bgLum + 0.05);
-    const contrastWithDark = (bgLum + 0.05) / 0.05; // approx, dark-text luminance ~= 0
+export function textColorFor(bgHex: string): "#FFFFFF" | typeof DARK_TEXT {
+  const bgLum = relativeLuminance(bgHex);
+  const contrastWithWhite = 1.05 / (bgLum + 0.05);
+  const contrastWithDark = (bgLum + 0.05) / 0.05; // approx, dark-text luminance ~= 0
 
-    return contrastWithWhite >= contrastWithDark ? "#FFFFFF" : DARK_TEXT;
-  }
-
-  return { textColorFor };
+  return contrastWithWhite >= contrastWithDark ? "#FFFFFF" : DARK_TEXT;
 }

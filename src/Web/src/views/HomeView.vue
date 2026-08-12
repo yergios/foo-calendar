@@ -89,26 +89,16 @@
           />
           <span>Bank holiday</span>
         </div>
-        <div class="flex items-center gap-1.5">
+        <div
+          v-for="(initial, label) in ABSENCE_TYPE_INITIALS"
+          :key="label"
+          class="flex items-center gap-1.5"
+        >
           <span
             class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
-            >V</span
+            >{{ initial }}</span
           >
-          <span>Vacation</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
-            >S</span
-          >
-          <span>Sick</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
-            >O</span
-          >
-          <span>Other</span>
+          <span>{{ label }}</span>
         </div>
       </div>
 
@@ -126,16 +116,16 @@
       :initial-date="prefillDate"
       :absence="editingAbsence"
       @close="showAbsenceModal = false"
-      @saved="handleAbsenceSaved"
-      @deleted="handleAbsenceDeleted"
+      @saved="closeAbsenceModal"
+      @deleted="closeAbsenceModal"
     />
     <AddBankHolidayModal
       v-if="showHolidayModal"
       :holiday="editingHoliday"
       :initial-date="prefillHolidayDate"
       @close="showHolidayModal = false"
-      @saved="handleHolidaySaved"
-      @deleted="handleHolidayDeleted"
+      @saved="closeHolidayModal"
+      @deleted="closeHolidayModal"
     />
   </div>
 </template>
@@ -150,18 +140,17 @@ import AddAbsenceModal from "@/components/AddAbsenceModal.vue";
 import AddBankHolidayModal from "@/components/AddBankHolidayModal.vue";
 import CalendarGrid from "@/components/CalendarGrid.vue";
 import YearPicker from "@/components/YearPicker.vue";
-import { useDateFormat } from "@/composables/useDateFormat";
 import { readCache, writeCache } from "@/lib/browserCache";
+import { toIso, today } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
-import type { AbsenceDto } from "@/types/absence";
+import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 import type { PersonDto } from "@/types/person";
 
 type SortMode = "name" | "absentToday" | "custom";
 
-const { toIso } = useDateFormat();
 const { people } = storeToRefs(usePeopleStore());
 const personStore = usePersonStore();
 const configStore = useConfigStore();
@@ -220,13 +209,6 @@ function personLabel(person: PersonDto): string {
   return (person.displayName ?? person.username).toLowerCase();
 }
 
-function isAbsentToday(personId: number): boolean {
-  const todayIso = toIso(new Date());
-  return absences.value.some(
-    (a) => a.personId === personId && a.startDate <= todayIso && a.endDate >= todayIso,
-  );
-}
-
 // A region filter matches its own code exactly, or any subdivision under it. So if
 // you pick a country like "CH", you also get people set to "CH-ZH", "CH-BE", etc.
 function matchesRegionFilter(homeCity: string | null): boolean {
@@ -235,26 +217,31 @@ function matchesRegionFilter(homeCity: string | null): boolean {
   return homeCity === regionFilter.value || homeCity.startsWith(`${regionFilter.value}-`);
 }
 
-const visiblePeople = computed(() => {
-  const filtered = people.value.filter((p) => matchesRegionFilter(p.homeCity));
-
+// Every sort mode falls back to name, so they only differ in the primary rank they give
+// each person. Whatever that rank needs is indexed once here rather than recomputed
+// inside the comparator, which would otherwise re-scan every absence on each comparison.
+function primaryRank(): (person: PersonDto) => number {
   if (sortMode.value === "custom" && customOrder.value.length > 0) {
-    const orderIndex = new Map(customOrder.value.map((id, index) => [id, index]));
-    return [...filtered].sort((a, b) => {
-      const ai = orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-      const bi = orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-      return ai !== bi ? ai - bi : personLabel(a).localeCompare(personLabel(b));
-    });
+    const order = new Map(customOrder.value.map((id, index) => [id, index]));
+    return (p) => order.get(p.id) ?? Number.MAX_SAFE_INTEGER;
   }
 
   if (sortMode.value === "absentToday") {
-    return [...filtered].sort((a, b) => {
-      const diff = Number(isAbsentToday(b.id)) - Number(isAbsentToday(a.id));
-      return diff !== 0 ? diff : personLabel(a).localeCompare(personLabel(b));
-    });
+    const iso = today();
+    const absent = new Set(
+      absences.value.filter((a) => a.startDate <= iso && a.endDate >= iso).map((a) => a.personId),
+    );
+    return (p) => (absent.has(p.id) ? 0 : 1);
   }
 
-  return [...filtered].sort((a, b) => personLabel(a).localeCompare(personLabel(b)));
+  return () => 0; // by name alone
+}
+
+const visiblePeople = computed(() => {
+  const rank = primaryRank();
+  return people.value
+    .filter((p) => matchesRegionFilter(p.homeCity))
+    .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)));
 });
 
 // Reordering starts from the order you currently see, not the saved customOrder array
@@ -307,28 +294,19 @@ onMounted(() => {
   });
 });
 
-function handleAbsenceSaved() {
+// Saving and deleting leave the same thing to do: drop the modal state and reload the
+// year. The reloaded data is what tells the grid which of the two actually happened.
+function closeAbsenceModal() {
   showAbsenceModal.value = false;
   editingAbsence.value = null;
   prefillDate.value = null;
   loadYear();
 }
 
-function handleAbsenceDeleted() {
-  showAbsenceModal.value = false;
-  editingAbsence.value = null;
-  loadYear();
-}
-
-function handleHolidaySaved() {
+function closeHolidayModal() {
   showHolidayModal.value = false;
   editingHoliday.value = null;
-  loadYear();
-}
-
-function handleHolidayDeleted() {
-  showHolidayModal.value = false;
-  editingHoliday.value = null;
+  prefillHolidayDate.value = null;
   loadYear();
 }
 </script>

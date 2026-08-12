@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 using Api.Configuration;
 using Api.Data;
+using Api.Dtos;
 using Api.Endpoints;
 using Api.Infrastructure;
 using Api.Interfaces;
@@ -36,7 +37,7 @@ services.AddOptions<RegionCatalogOptions>()
 services.AddOptions<PersonColorPaletteOptions>()
     .Bind(config.GetSection(PersonColorPaletteOptions.SectionName))
     .Validate(colors => colors.Count > 0, "PersonColorPalette must contain at least one color.")
-    .Validate(colors => colors.All(c => Regex.IsMatch(c, "^#[0-9A-Fa-f]{6}$")),
+    .Validate(colors => colors.All(c => Regex.IsMatch(c, ValidationPatterns.HexColor)),
         "PersonColorPalette entries must be valid 6-digit hex colors.")
     .ValidateOnStart();
 
@@ -57,9 +58,6 @@ services.AddDbContext<AppDbContext>(o =>
 
 services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-
-services.AddSingleton(_ =>
-    typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown");
 
 services.AddHostedService<BankHolidaySyncBackgroundService>();
 
@@ -122,30 +120,26 @@ else
 
 // ---- Observability --------------------------------------------------------
 
-var telemetryOptions = config
-    .GetSection(TelemetryOptions.SectionName)
-    .Get<TelemetryOptions>();
+// The config value wins when set; otherwise fall back to the well-known env var that
+// Azure App Service injects. Blank counts as unset, since appsettings.json ships the
+// key with an empty default.
+var appInsightsConn = config.GetSection(TelemetryOptions.SectionName)
+    .Get<TelemetryOptions>()?.ApplicationInsightsConnectionString;
+if (string.IsNullOrWhiteSpace(appInsightsConn))
+    appInsightsConn = config[TelemetryOptions.EnvironmentVariableName];
 
-var appInsightsConn = telemetryOptions.ApplicationInsightsConnectionString
-    ?? config[TelemetryOptions.EnvironmentVariableName];
-
-services.AddOpenTelemetry()
+var telemetry = services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService(serviceName: builder.Environment.ApplicationName))
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation());
-
-if (!string.IsNullOrWhiteSpace(appInsightsConn))
-{
-    services.AddOpenTelemetry().UseAzureMonitor(options =>
-        options.ConnectionString = appInsightsConn);
-}
-
-services.AddOpenTelemetry()
+        .AddHttpClientInstrumentation())
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation());
+
+if (!string.IsNullOrWhiteSpace(appInsightsConn))
+    telemetry.UseAzureMonitor(options => options.ConnectionString = appInsightsConn);
 
 // ---- Build ----------------------------------------------------------------
 
