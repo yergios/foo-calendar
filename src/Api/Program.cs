@@ -47,6 +47,11 @@ services.AddOptions<NagerOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.BaseUrl), "Nager:BaseUrl must be configured.")
     .ValidateOnStart();
 
+services.AddOptions<BrandingOptions>()
+    .Bind(config.GetSection(BrandingOptions.SectionName))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.AppName), "Branding:AppName must be configured.")
+    .ValidateOnStart();
+
 // ---- Database -------------------------------------------------------------
 
 services.AddDbContext<AppDbContext>(o =>
@@ -87,15 +92,19 @@ services.AddHealthChecks()
 var authConfig = config.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
     ?? throw new InvalidOperationException("Auth options are not configured.");
 
-if (authConfig.Provider == "None" && !builder.Environment.IsDevelopment())
+if (authConfig.Provider == AuthOptions.ProviderNone && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException("Auth:Provider=None is only allowed in Development.");
 
-if (authConfig.Provider != "None")
+if (authConfig.Provider != AuthOptions.ProviderNone)
 {
     if (string.IsNullOrWhiteSpace(authConfig.Authority))
         throw new InvalidOperationException("Auth:Authority must be configured.");
     if (string.IsNullOrWhiteSpace(authConfig.Audience))
         throw new InvalidOperationException("Auth:Audience must be configured.");
+    // The API never uses this itself, but the SPA can't start a login without it, and
+    // failing at startup beats a frontend that only breaks once someone tries to sign in.
+    if (string.IsNullOrWhiteSpace(authConfig.ClientId))
+        throw new InvalidOperationException("Auth:ClientId must be configured.");
 }
 
 services.AddOptions<AuthOptions>()
@@ -104,7 +113,7 @@ services.AddOptions<AuthOptions>()
 
 services.AddAuthorization();
 
-if (authConfig.Provider == "None")
+if (authConfig.Provider == AuthOptions.ProviderNone)
 {
     services.AddAuthentication(DevAuthHandler.SchemeName)
         .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, _ => { });

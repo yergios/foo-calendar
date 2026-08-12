@@ -52,10 +52,9 @@ import AppModal from "@/components/AppModal.vue";
 import MarkdownContent from "@/components/MarkdownContent.vue";
 import changelogDoc from "@/docs/changelog.md";
 import helpDoc from "@/docs/help.md";
+import { runtimeConfig } from "@/lib/runtimeConfig";
 
-const issueUrl = import.meta.env.VITE_ISSUE_URL;
-const supportUrl = import.meta.env.VITE_SUPPORT_URL;
-const appName = import.meta.env.VITE_APP_NAME ?? "Foo Calendar";
+const { appName, supportUrl, issueUrl } = runtimeConfig();
 const version = __APP_VERSION__;
 const year = new Date().getFullYear();
 
@@ -65,10 +64,10 @@ const changelogOpen = ref(false);
 const tabs = ["Documentation", "FAQ"] as const;
 const activeTab = ref<(typeof tabs)[number]>("Documentation");
 
-// Split help.md into two sections by h2, filling in the %VITE_SUPPORT_URL% placeholder
+// Split help.md into two sections by h2, filling in the %SUPPORT_URL% placeholder
 // so the support link stays configurable per deployment instead of baked into the doc.
 function splitHelp(raw: string) {
-  const filled = raw.replaceAll("%VITE_SUPPORT_URL%", supportUrl ?? "");
+  const filled = raw.replaceAll("%SUPPORT_URL%", supportUrl);
   const [, docs = "", faq = ""] = filled.split(/^## /m);
   return {
     Documentation: `## ${docs}`.trim(),

@@ -8,6 +8,7 @@
 
 <script setup lang="ts">
 import ErrorLayout from "@/components/ErrorLayout.vue";
+import { runtimeConfig } from "@/lib/runtimeConfig";
 
-const issueUrl = import.meta.env.VITE_ISSUE_URL;
+const issueUrl = runtimeConfig().issueUrl;
 </script>

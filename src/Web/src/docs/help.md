@@ -38,7 +38,7 @@ If you have admin access, an **Admin** link appears in the header. From there yo
 
 ---
 
-Still need help? [Contact support](%VITE_SUPPORT_URL%).
+Still need help? [Contact support](%SUPPORT_URL%).
 
 ## FAQ
 
@@ -65,4 +65,4 @@ The Vacation/Sick/Other totals on your profile only count working days within th
 
 ---
 
-Still need help? [Contact support](%VITE_SUPPORT_URL%).
+Still need help? [Contact support](%SUPPORT_URL%).

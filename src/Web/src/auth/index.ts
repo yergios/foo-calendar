@@ -1,50 +1,73 @@
-import { UserManager, type User as OidcUser } from "oidc-client-ts";
+import { type User as OidcUser, UserManager } from "oidc-client-ts";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-// VITE_AUTH_MODE=dev is only ever set in .env.development, so this can't accidentally
-// skip real SSO once deployed. It lets the app run with zero external IdP dependency
+import { runtimeConfig } from "@/lib/runtimeConfig";
+import type { RuntimeAuthConfig } from "@/types/config";
+
+// The API reports Auth:Provider=None when SSO is bypassed entirely, which Program.cs
+// refuses outside Development. It lets the app run with zero external IdP dependency
 // when no real OIDC tenant is available (see DevAuthHandler on the API side).
-const isDevMode = import.meta.env.VITE_AUTH_MODE === "dev";
+const DEV_PROVIDER = "None";
 
-const userManager = isDevMode
-  ? null
-  : new UserManager({
-      authority: import.meta.env.VITE_OIDC_AUTHORITY,
-      client_id: import.meta.env.VITE_OIDC_CLIENT_ID,
-      redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI,
-      scope: import.meta.env.VITE_OIDC_SCOPE,
-      response_type: "code",
-      automaticSilentRenew: false,
-      // "audience" isn't part of core OIDC, but several providers (e.g. Auth0) use it to
-      // select which API the access token is issued for. Passed through only if set.
-      extraQueryParams: import.meta.env.VITE_OIDC_AUDIENCE
-        ? { audience: import.meta.env.VITE_OIDC_AUDIENCE }
-        : undefined,
-    });
-
-const DEV_PROFILE = {
-  given_name: "Dev",
-  family_name: "User",
-  email: "dev@example.local",
-};
-
-// The API's DevAuthHandler never inspects the token in dev mode - this only needs a
-// decodable payload so the existing token/permission plumbing below keeps working.
-const DEV_TOKEN = `dev.${btoa(
-  JSON.stringify({
-    permissions: [import.meta.env.VITE_ADMIN_PERMISSION].filter(Boolean),
-    exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
-  }),
-)}.dev`;
+let userManager: UserManager | null = null;
+let isDevMode = false;
+let devToken = "";
 
 const oidcUser = ref<OidcUser | null>(null);
-const isAuthenticated = ref(isDevMode);
-const isAuthLoading = ref(!isDevMode);
+const devProfile = ref<Record<string, unknown> | null>(null);
+const isAuthenticated = ref(false);
+const isAuthLoading = ref(true);
 
-const currentProfile = computed(() => (isDevMode ? DEV_PROFILE : (oidcUser.value?.profile ?? null)));
+const currentProfile = computed(() =>
+  isDevMode ? devProfile.value : (oidcUser.value?.profile ?? null),
+);
 
-if (!isDevMode && userManager) {
+/**
+ * Wires up authentication from the config the API served. Called once by main.ts before
+ * the app mounts, so nothing in this module works until it has run.
+ */
+export function initAuth(auth: RuntimeAuthConfig): void {
+  isDevMode = auth.provider === DEV_PROVIDER;
+
+  if (isDevMode) {
+    const devUser = auth.devUser;
+    devProfile.value = {
+      given_name: devUser?.firstName,
+      family_name: devUser?.lastName,
+      email: devUser?.email,
+    };
+
+    // The API's DevAuthHandler never inspects the token in dev mode - this only needs a
+    // decodable payload so the existing token/permission plumbing below keeps working.
+    // The permissions come from the same Auth:DevUser the API is authenticating as, so
+    // the UI can't disagree with what the API will actually allow.
+    devToken = `dev.${btoa(
+      JSON.stringify({
+        [auth.permissionsClaim]: devUser?.permissions ?? [],
+        exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+      }),
+    )}.dev`;
+
+    isAuthenticated.value = true;
+    isAuthLoading.value = false;
+    return;
+  }
+
+  userManager = new UserManager({
+    authority: auth.authority,
+    client_id: auth.clientId,
+    // Relative by default, resolved against wherever the app is actually being served
+    // from, so one deployment artifact works on any hostname without a rebuild.
+    redirect_uri: new URL(auth.redirectUri, window.location.origin).toString(),
+    scope: auth.scope,
+    response_type: "code",
+    automaticSilentRenew: false,
+    // "audience" isn't part of core OIDC, but several providers (e.g. Auth0) use it to
+    // select which API the access token is issued for. Passed through only if set.
+    extraQueryParams: auth.audience ? { audience: auth.audience } : undefined,
+  });
+
   userManager.events.addUserLoaded((u) => {
     oidcUser.value = u;
     isAuthenticated.value = true;
@@ -92,12 +115,21 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   }
 }
 
+// Which claim carries permissions is per-IdP config, and providers are inconsistent about
+// whether a single value arrives as a string or a one-element array. Normalize both.
+function readPermissions(payload: Record<string, unknown>, claim: string): string[] {
+  const value = payload[claim];
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value === "string") return [value];
+  return [];
+}
+
 // Keeps a request from handing out a token that's about to expire mid-flight.
 const TOKEN_EXPIRY_BUFFER_MS = 10_000;
 
 export const useAuthStore = defineStore("auth", () => {
   const isLoading = ref<boolean>(false);
-  const currentUser = ref<Record<string, unknown> | null>(isDevMode ? DEV_PROFILE : null);
+  const currentUser = ref<Record<string, unknown> | null>(isDevMode ? devProfile.value : null);
   const permissions = ref<string[]>([]);
   const accessToken = ref<string | null>(null);
   const tokenExpiresAt = ref(0);
@@ -107,7 +139,7 @@ export const useAuthStore = defineStore("auth", () => {
     accessToken.value = newToken;
 
     const payload = decodeJwtPayload(newToken);
-    permissions.value = (payload.permissions as string[]) ?? [];
+    permissions.value = readPermissions(payload, runtimeConfig().auth.permissionsClaim);
     tokenExpiresAt.value = typeof payload.exp === "number" ? payload.exp * 1000 : 0;
   };
 
@@ -131,13 +163,7 @@ export const useAuthStore = defineStore("auth", () => {
     return permissions.value.includes(permission);
   };
 
-  // VITE_BYPASS_ADMIN_PERMISSION is only ever set in .env.development, so this can't
-  // accidentally bypass the check once deployed.
-  const isAdmin = computed(
-    () =>
-      import.meta.env.VITE_BYPASS_ADMIN_PERMISSION === "true" ||
-      hasPermission(import.meta.env.VITE_ADMIN_PERMISSION ?? ""),
-  );
+  const isAdmin = computed(() => hasPermission(runtimeConfig().auth.adminPermission));
 
   /** Resets auth state back to its initial values. */
   const reset = (): void => {
@@ -148,7 +174,7 @@ export const useAuthStore = defineStore("auth", () => {
     tokenExpiresAt.value = 0;
   };
 
-  if (isDevMode) setToken(DEV_TOKEN);
+  if (isDevMode) setToken(devToken);
 
   return {
     isLoading,
@@ -169,7 +195,7 @@ let pendingToken: Promise<string> | null = null;
 export async function resolveAccessToken(): Promise<string> {
   const authStore = useAuthStore();
 
-  if (isDevMode) return DEV_TOKEN;
+  if (isDevMode) return devToken;
 
   const cached = authStore.getCachedToken();
   if (cached) return cached;

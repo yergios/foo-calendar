@@ -62,11 +62,12 @@ The frontend is compiled by Vite during CI and placed in `src/Api/wwwroot`. The 
 
 > I strongly suggest using dotnet user secrets for anything sensitive (OIDC credentials, connection strings), rather than editing `appsettings.json` directly.
 
-Out of the box, `src/Api/appsettings.Development.json` sets `Auth:Provider` to `None` and the frontend's `src/Web/.env.development` sets `VITE_AUTH_MODE=dev` — together these fully bypass SSO in local development, so you can run the app with no OIDC/IdP tenant at all. Everything below is only needed once you point at a real provider (staging/production, or if you want to exercise the real auth path locally):
+Out of the box, `src/Api/appsettings.Development.json` sets `Auth:Provider` to `None`, which fully bypasses SSO in local development, so you can run the app with no OIDC/IdP tenant at all. Everything below is only needed once you point at a real provider (staging/production, or if you want to exercise the real auth path locally):
 
-1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `AdminPermission`) — `Authority`/`Audience` come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
+1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `AdminPermission`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
 2. `Nager:BaseUrl` defaults to the public Nager.Date API (`https://date.nager.at/api/v3/`) and normally doesn't need changing.
-3. At `src/Web/.env.development`, set the `VITE_OIDC_*` values for your OIDC provider (and remove/unset `VITE_AUTH_MODE`). Set `VITE_BYPASS_ADMIN_PERMISSION=true` if you want to see the admin UI locally without an admin-permissioned account — this flag is only ever read in development.
+
+The frontend needs no setup of its own: it reads branding and OIDC settings from the API at startup — see [Configuring a deployment](#configuring-a-deployment).
 
 **Run the API**
 
@@ -86,6 +87,44 @@ pnpm dev
 ```
 
 The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` requests to the .NET API. Configure the target port via `VITE_API_TARGET_URL` in `src/Web/.env.development`.
+
+---
+
+### Configuring a deployment
+
+Everything that differs between one company's deployment and another's is API configuration, read at startup. **The frontend bundle contains no environment-specific values**, so a single build artifact can be deployed anywhere: rebranding it or pointing it at a different identity provider never requires rebuilding the SPA.
+
+At startup the frontend fetches `GET /api/config/bootstrap` (the one anonymous endpoint, since it's what tells the app how to sign in) and configures itself from the response:
+
+| Setting | Purpose |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `Branding:AppName` | Name in the header, the footer, and the browser tab title. |
+| `Branding:SupportUrl` | "Contact support" links, including inside the help doc. Any scheme. |
+| `Branding:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
+| `Auth:Authority` | OIDC issuer. Used by the API to validate tokens and by the SPA to log in. |
+| `Auth:ClientId` | The SPA's OIDC client id. Frontend-only, but required at startup. |
+| `Auth:Audience` | Which API the access token is issued for. |
+| `Auth:Scope` | Scopes the SPA requests. |
+| `Auth:RedirectUri` | Where the IdP returns after login. Relative by default, so any hostname works. |
+| `Auth:AdminPermission` | Permission value gating `/admin`, on both sides. |
+| `Auth:ClaimTypes:*` | Which claims carry identity and permissions, on both sides. |
+
+Every one of these is overridable per environment without touching `appsettings.json`, using the standard .NET double-underscore environment variables — which is usually how you'd configure a container:
+
+```bash
+Branding__AppName="Acme Leave" \
+Branding__SupportUrl="mailto:it@acme.example" \
+Auth__Authority="https://acme.okta.com" \
+Auth__ClientId="0oa1b2c3" \
+Auth__Audience="https://leave.acme.example/api" \
+Auth__ClaimTypes__Permissions="roles" \
+ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
+dotnet run --project src/Api
+```
+
+The same applies to the `RegionCatalog` and `PersonColorPalette` sections below, and to `Telemetry`.
+
+To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
 
 ---
 
@@ -124,7 +163,9 @@ Most of the app is available to anyone signed in. A single elevated permission g
 | Anyone signed in                                                             | View the calendar, manage their own profile and absences, add/edit/delete bank holidays                                 |
 | Holder of the `Auth:AdminPermission` permission (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, trigger a bank-holiday sync, view team-wide absence stats |
 
-Grant the admin permission to a user in your OIDC provider's dashboard. Locally, set `VITE_BYPASS_ADMIN_PERMISSION=true` in `src/Web/.env.development` instead of needing an actual admin-permissioned account — see [Quickstart](#quickstart-local-development) above.
+Grant the admin permission to a user in your OIDC provider's dashboard. Locally, the dev bypass grants whatever is listed in `Auth:DevUser:Permissions` (`src/Api/appsettings.Development.json`), which already includes the admin permission — so the admin area is reachable without an admin-permissioned account.
+
+Which claim carries permissions varies by provider; set `Auth:ClaimTypes:Permissions` to match (`permissions`, `roles`, `groups`, ...). Both the API's authorization policy and the frontend's admin nav read that one setting.
 
 ### Observability
 

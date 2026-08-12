@@ -8,6 +8,7 @@
 
 <script setup lang="ts">
 import ErrorLayout from "@/components/ErrorLayout.vue";
+import { runtimeConfig } from "@/lib/runtimeConfig";
 
-const supportUrl = `mailto:${import.meta.env.VITE_SUPPORT_MAIL}`;
+const supportUrl = runtimeConfig().supportUrl;
 </script>

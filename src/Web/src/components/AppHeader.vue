@@ -41,12 +41,13 @@ import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/auth";
+import { runtimeConfig } from "@/lib/runtimeConfig";
 import { usePersonStore } from "@/stores/person";
 
 const personStore = usePersonStore();
 const authStore = useAuthStore();
 const route = useRoute();
-const appName = import.meta.env.VITE_APP_NAME ?? "Foo Calendar";
+const appName = runtimeConfig().appName;
 
 const navItems = computed(() => {
   const items = [
