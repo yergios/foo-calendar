@@ -10,6 +10,17 @@ See [help.md](src/Web/src/docs/help.md) for usage documentation and FAQ.
 
 See [changelog.md](src/Web/src/docs/changelog.md) for version history.
 
+## License
+
+Foo Calendar is source-available under the [Elastic License 2.0](LICENSE.txt) (`Elastic-2.0`). In plain terms:
+
+- **You may** read the source, run it, self-host it, and modify it — including inside a for-profit company, to coordinate that company's own teams.
+- **You may** redistribute it and your modifications, as long as you pass along these terms and mark clearly what you changed.
+- **You may not** offer it to third parties as a hosted or managed service that exposes a substantial part of its functionality.
+- **You may not** strip or obscure the licensing and copyright notices.
+
+The full text is in [LICENSE.txt](LICENSE.txt) and it is the only thing that governs; the summary above is not legal advice.
+
 ---
 
 ## Developer guide
