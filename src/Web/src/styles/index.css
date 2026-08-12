@@ -6,30 +6,35 @@
   --font-display: var(--brand-font-display);
   --font-body: var(--brand-font-body);
 
-  /* Palette — sourced from theme.css */
+  /* Palette — sourced from theme.css.
+     `primary`/`accent-solid` are solid fills and are only ever paired with their
+     `on-*` label color; `primary-text`/`accent` are the variants meant to be read
+     directly against the page. See theme.css for why the two can't be one value. */
   --color-background: var(--brand-bg);
+  --color-surface: var(--brand-surface);
   --color-primary: var(--brand-primary);
+  --color-on-primary: var(--brand-on-primary);
+  --color-primary-text: var(--brand-primary-text);
   --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, black); /* filled-button hover */
-  --color-primary-dark: var(--brand-ink); /* the app's default text ("ink") color */
+  --color-ink: var(--brand-ink); /* the app's default text color */
   --color-secondary: var(--brand-secondary);
   --color-accent: var(--brand-accent);
+  --color-accent-solid: var(--brand-accent-solid);
+  --color-on-accent: var(--brand-on-accent);
 
   /* Semantic — derived so they automatically track the brand palette and light/dark mode */
-  --color-surface: color-mix(in srgb, var(--color-primary) 10%, var(--color-background));
-  --color-row-alt: color-mix(in srgb, var(--color-primary) 4%, var(--color-background));
-  --color-border: color-mix(in srgb, var(--color-primary) 20%, var(--color-background));
-  --color-holiday: light-dark(
-    color-mix(in srgb, #f59e0b 20%, white),
-    color-mix(in srgb, #f59e0b 35%, black)
-  );
-  --color-error: light-dark(#dc2626, #f87171);
-  --color-error-bg: light-dark(#fef2f2, #450a0a);
-  --color-green: light-dark(#059669, #34d399);
+  --color-row-alt: color-mix(in srgb, var(--color-surface) 45%, var(--color-background));
+  --color-border: var(--brand-border); /* grid lines, dividers */
+  --color-border-strong: var(--brand-border-strong); /* input/select outlines (WCAG 1.4.11) */
+  --color-holiday: light-dark(#f9e3b0, #5a4118);
+  --color-error: light-dark(#c8232c, #f87171);
+  --color-error-bg: light-dark(#fdf1f2, #3c1518);
+  --color-green: light-dark(#047857, #34d399);
   --color-today: var(--color-accent);
 
   /* Shadows */
-  --shadow-card: 0 1px 3px rgba(2, 0, 53, 0.08), 0 1px 2px rgba(2, 0, 53, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(2, 0, 53, 0.1);
+  --shadow-card: 0 1px 3px var(--brand-shadow), 0 1px 2px var(--brand-shadow-soft);
+  --shadow-card-hover: 0 4px 12px var(--brand-shadow), 0 2px 4px var(--brand-shadow-soft);
   --transition-fast: 150ms ease-out;
 
   /* Corner Radius — scaled from theme.css's --brand-radius-scale */
@@ -37,20 +42,11 @@
   --radius-8: calc(8px * var(--brand-radius-scale));
   --radius-12: calc(12px * var(--brand-radius-scale));
   --radius-pill: 999px;
-
-  /* Text sizes — scaled from theme.css's --brand-font-scale. Line-heights are already
-     unitless ratios (Tailwind default), so they stay proportional automatically. */
-  --text-xs: calc(0.75rem * var(--brand-font-scale));
-  --text-sm: calc(0.875rem * var(--brand-font-scale));
-  --text-base: calc(1rem * var(--brand-font-scale));
-  --text-lg: calc(1.125rem * var(--brand-font-scale));
-  --text-2xl: calc(1.5rem * var(--brand-font-scale));
-  --text-6xl: calc(3.75rem * var(--brand-font-scale));
 }
 
 @layer base {
   body {
-    @apply font-body text-primary-dark bg-background;
+    @apply font-body text-ink bg-background;
   }
 
   h1 {

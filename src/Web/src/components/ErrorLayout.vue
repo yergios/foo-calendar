@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen flex flex-col items-center justify-center gap-4">
-    <span class="font-display font-bold text-6xl text-primary opacity-20">{{ code }}</span>
+    <span class="font-display font-bold text-6xl text-primary-text opacity-20">{{ code }}</span>
     <p class="text-secondary text-sm">{{ message }}</p>
     <RouterLink
       v-if="action?.internal"

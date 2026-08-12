@@ -39,6 +39,8 @@
           {{ deleting ? "Deleting…" : "Delete profile" }}
         </button>
         <p v-if="saved" class="flex items-center gap-1 text-sm text-green mt-2">
+          <!-- No inline color: fill="currentColor" inherits text-green from the parent,
+               so the tick stays readable in dark mode too. -->
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -47,7 +49,6 @@
             width="16"
             height="16"
             viewBox="0 0 24 24"
-            style="color: rgb(15, 110, 86); opacity: 1; transform: rotate(0deg)"
           >
             <path
               fill="currentColor"
@@ -68,15 +69,15 @@
         </div>
         <div v-else-if="stats" class="grid grid-cols-3 gap-3 mt-3">
           <div class="bg-surface rounded-12 p-4 text-center">
-            <div class="text-2xl font-bold text-primary-dark">{{ stats.vacationDays }}</div>
+            <div class="text-2xl font-bold text-ink">{{ stats.vacationDays }}</div>
             <div class="text-xs text-secondary mt-1">Vacation</div>
           </div>
           <div class="bg-surface rounded-12 p-4 text-center">
-            <div class="text-2xl font-bold text-primary-dark">{{ stats.sickDays }}</div>
+            <div class="text-2xl font-bold text-ink">{{ stats.sickDays }}</div>
             <div class="text-xs text-secondary mt-1">Sick</div>
           </div>
           <div class="bg-surface rounded-12 p-4 text-center">
-            <div class="text-2xl font-bold text-primary-dark">{{ stats.otherDays }}</div>
+            <div class="text-2xl font-bold text-ink">{{ stats.otherDays }}</div>
             <div class="text-xs text-secondary mt-1">Other</div>
           </div>
         </div>

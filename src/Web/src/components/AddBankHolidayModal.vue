@@ -9,7 +9,7 @@
           id="holidayDate"
           v-model="date"
           type="date"
-          class="border border-border rounded-8 px-3 py-2"
+          class="border border-border-strong rounded-8 px-3 py-2"
         />
       </div>
 
@@ -20,7 +20,7 @@
         <select
           id="holidayRegion"
           v-model="region"
-          class="border border-border rounded-8 px-3 py-2 bg-background"
+          class="border border-border-strong rounded-8 px-3 py-2 bg-background"
         >
           <option value="" disabled>Select a region</option>
           <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
@@ -42,7 +42,7 @@
           type="text"
           maxlength="200"
           placeholder="e.g. Founder's Day"
-          class="border border-border rounded-8 px-3 py-2"
+          class="border border-border-strong rounded-8 px-3 py-2"
         />
       </div>
 
@@ -59,7 +59,7 @@
       <div class="flex items-center gap-3">
         <button
           type="button"
-          class="flex-1 bg-primary text-white border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
+          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
           :disabled="!canSubmit || submitting || deleting"
           :title="canSubmit ? undefined : 'Select a region, date, and name first.'"
           @click="submit"

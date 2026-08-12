@@ -29,7 +29,7 @@
             :key="group.month"
             scope="colgroup"
             :colspan="group.span"
-            class="border-b border-l-2 border-border px-1 py-1 text-center text-xs font-semibold text-primary-dark bg-surface"
+            class="border-b border-l-2 border-border px-1 py-1 text-center text-xs font-semibold text-ink bg-surface"
           >
             {{ group.label }}
           </th>
@@ -44,7 +44,7 @@
             :class="[
               dayHeaderClass(day),
               columnSideBorderClass(day),
-              columnTopBorderClass(day.isToday),
+              todayColumnClass(day.isToday, 'top'),
               editableHoliday(day.iso) || canAddHoliday(day.iso)
                 ? 'cursor-pointer hover:opacity-70'
                 : '',
@@ -54,7 +54,7 @@
             :data-iso="day.iso"
             @click="handleHeaderClick(day)"
           >
-            <div class="font-semibold text-primary-dark">{{ day.dayNum }}</div>
+            <div class="font-semibold text-ink">{{ day.dayNum }}</div>
             <div class="text-[10px] text-secondary">{{ day.weekdayLabel }}</div>
           </th>
         </tr>
@@ -92,7 +92,7 @@
                 class="inline-block w-2.5 h-2.5 rounded-pill shrink-0"
                 :style="{ backgroundColor: row.person.color }"
               />
-              <span class="truncate text-primary-dark">{{
+              <span class="truncate text-ink">{{
                 row.person.displayName ?? row.person.username
               }}</span>
             </div>
@@ -101,13 +101,13 @@
           <td
             v-for="cell in row.cells"
             :key="`${row.person.id}-${cell.day.iso}`"
-            class="h-9 p-0 align-middle"
+            class="h-9 p-0 align-middle border-b border-border"
             :class="[
               dayHeaderClass(cell.day, row.background),
               columnSideBorderClass(cell.day),
-              columnBottomBorderClass(
+              todayColumnClass(
                 cell.day.isToday,
-                rowIndex === rows.length - 1 && fillerRowCount === 0,
+                rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
               ),
               !cell.absence && isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
             ]"
@@ -144,11 +144,11 @@
           <td
             v-for="day in days"
             :key="day.iso"
-            class="h-9 p-0 align-middle"
+            class="h-9 p-0 align-middle border-b border-border"
             :class="[
               dayHeaderClass(day, filler.background),
               columnSideBorderClass(day),
-              columnBottomBorderClass(day.isToday, filler.isLast),
+              todayColumnClass(day.isToday, filler.isLast ? 'bottom' : 'middle'),
             ]"
           />
         </tr>
@@ -251,7 +251,8 @@ function setHoverColumn(iso: string | null) {
   }
   if (container && iso) {
     for (const el of container.querySelectorAll<HTMLElement>(`[data-iso="${iso}"]`)) {
-      el.style.boxShadow = "inset 0 0 0 9999px rgba(17, 119, 224, 0.08)";
+      el.style.boxShadow =
+        "inset 0 0 0 9999px color-mix(in srgb, var(--color-accent) 10%, transparent)";
     }
   }
   hoveredIso = iso;
@@ -464,23 +465,28 @@ function rowBackgroundClass(rowIndex: number): string {
   return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-background";
 }
 
-// Today's column gets a continuous outline down its full height, so it takes priority
-// over the plain month-boundary divider that would otherwise land on its left edge.
+// Today's column is outlined by an overlay pseudo-element rather than by a border on the
+// cell itself. A real border takes up space in the cell's box, which pushed the day number
+// off-centre and made today's column wider than its neighbours. The overlay is absolutely
+// positioned, so it costs no layout and still paints above a filled-in absence block
+// instead of being hidden underneath it.
+const TODAY_OUTLINE =
+  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:border-l-2 after:border-r-2 after:border-today";
+
+// The header row is always the top of the outline; only the last row has to close it off.
+function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): string {
+  if (!isToday) return "";
+  if (edge === "top") return `${TODAY_OUTLINE} after:border-t-2`;
+  if (edge === "bottom") return `${TODAY_OUTLINE} after:border-b-2`;
+  return TODAY_OUTLINE;
+}
+
+// Month boundaries stay a real border — every 1st-of-month column carries it, so the
+// extra width is uniform. On the rare day the 1st *is* today, today's outline reads as
+// the divider and the border only holds its place, keeping the column widths equal.
 function columnSideBorderClass(day: { isToday: boolean; dayNum: number }): string {
-  if (day.isToday) return "border-l-2 border-r-2 border-today";
-  return day.dayNum === 1 ? "border-l-2 border-l-border" : "";
-}
-
-// The header row is always the top of the outline, so today's top edge doesn't need a
-// "which row" check the way the bottom edge does.
-function columnTopBorderClass(isToday: boolean): string {
-  return isToday ? "border-t-2 border-today" : "";
-}
-
-// Every row needs a bottom divider, but only the last row's today cell should close
-// off the outline instead of drawing the usual thin divider underneath it.
-function columnBottomBorderClass(isToday: boolean, isLastRow: boolean): string {
-  return isToday && isLastRow ? "border-b-2 border-today" : "border-b border-border";
+  if (day.dayNum !== 1) return "";
+  return day.isToday ? "border-l-2 border-l-transparent" : "border-l-2 border-l-border";
 }
 
 function holidayName(iso: string): string {

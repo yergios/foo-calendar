@@ -3,7 +3,7 @@
     <div class="max-w-[1920px] mx-auto flex items-center justify-between gap-6">
       <RouterLink
         to="/"
-        class="font-display font-bold text-2xl text-primary-dark hover:text-accent transition shrink-0"
+        class="font-display font-bold text-2xl text-ink hover:text-accent transition shrink-0"
       >
         {{ appName }}
       </RouterLink>
@@ -16,8 +16,8 @@
           class="font-display text-sm w-24 text-center py-1.5 rounded-pill transition-colors"
           :class="
             isActive(item.to)
-              ? 'bg-surface text-primary-dark font-semibold'
-              : 'text-secondary hover:text-primary-dark hover:bg-surface/60'
+              ? 'bg-surface text-ink font-semibold'
+              : 'text-secondary hover:text-ink hover:bg-surface/60'
           "
         >
           {{ item.label }}

@@ -9,7 +9,7 @@
           id="absenceStart"
           v-model="startDate"
           type="date"
-          class="border border-border rounded-8 px-3 py-2"
+          class="border border-border-strong rounded-8 px-3 py-2"
         />
       </div>
 
@@ -21,7 +21,7 @@
           id="absenceEnd"
           v-model="endDate"
           type="date"
-          class="border border-border rounded-8 px-3 py-2"
+          class="border border-border-strong rounded-8 px-3 py-2"
         />
       </div>
 
@@ -32,7 +32,7 @@
         <select
           id="absenceType"
           v-model="type"
-          class="border border-border rounded-8 px-3 py-2 bg-background"
+          class="border border-border-strong rounded-8 px-3 py-2 bg-background"
         >
           <option value="Vacation">Vacation</option>
           <option value="Sick">Sick</option>
@@ -48,7 +48,7 @@
           rows="3"
           maxlength="500"
           placeholder="e.g. Traveling to see family, back to full availability the following Monday."
-          class="border border-border rounded-8 px-3 py-2 resize-y w-full"
+          class="border border-border-strong rounded-8 px-3 py-2 resize-y w-full"
         />
       </div>
     </div>
@@ -60,7 +60,7 @@
       <div class="flex items-center gap-3">
         <button
           type="button"
-          class="flex-1 bg-primary text-white border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
+          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
           :disabled="!canSubmit || submitting || deleting"
           :title="canSubmit ? undefined : 'Set a valid start and end date first.'"
           @click="submit"

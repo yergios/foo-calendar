@@ -3,20 +3,14 @@
     <div class="max-w-[1920px] mx-auto flex items-center justify-between h-4">
       <span class="text-xs text-secondary">© {{ year }} {{ appName }}. All rights reserved.</span>
       <div class="flex items-center gap-4">
-        <button
-          class="text-xs text-secondary hover:text-primary-dark transition"
-          @click="helpOpen = true"
-        >
+        <button class="text-xs text-secondary hover:text-ink transition" @click="helpOpen = true">
           Help
         </button>
-        <button
-          class="text-xs text-secondary hover:text-primary-dark transition"
-          @click="openSupport"
-        >
+        <button class="text-xs text-secondary hover:text-ink transition" @click="openSupport">
           Support
         </button>
         <button
-          class="text-xs text-secondary hover:text-primary-dark transition"
+          class="text-xs text-secondary hover:text-ink transition"
           @click="changelogOpen = true"
         >
           v{{ version }}
@@ -35,7 +29,7 @@
           :class="
             activeTab === tab
               ? 'border-accent text-accent'
-              : 'border-transparent text-secondary hover:text-primary-dark hover:border-border'
+              : 'border-transparent text-secondary hover:text-ink hover:border-border'
           "
           @click="activeTab = tab"
         >

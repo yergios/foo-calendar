@@ -14,7 +14,7 @@ const rendered = computed(() => marked.parse(props.content) as string);
 
 <style scoped>
 .prose {
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
   line-height: 1.7;
 }
 .prose :deep(h1) {
@@ -22,14 +22,14 @@ const rendered = computed(() => marked.parse(props.content) as string);
   font-weight: 700;
   font-size: 1.25rem;
   margin: 1.5rem 0 0.75rem;
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
 }
 .prose :deep(h2) {
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 1rem;
   margin: 1.25rem 0 0.5rem;
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
 }
 .prose :deep(h3) {
   font-family: var(--font-body);
@@ -57,7 +57,7 @@ const rendered = computed(() => marked.parse(props.content) as string);
 }
 .prose :deep(strong) {
   font-weight: 600;
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
 }
 .prose :deep(code) {
   font-family: var(--font-mono, monospace);

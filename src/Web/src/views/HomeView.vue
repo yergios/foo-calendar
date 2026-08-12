@@ -6,7 +6,7 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="w-42 text-center bg-primary text-white border border-transparent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+          class="w-42 text-center bg-primary text-on-primary border border-transparent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
           :disabled="!personStore.person"
           :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddAbsence()"
@@ -30,7 +30,7 @@
           <select
             id="sortMode"
             v-model="sortMode"
-            class="border border-border rounded-8 px-2 py-1 text-sm bg-background"
+            class="border border-border-strong rounded-8 px-2 py-1 text-sm bg-background"
           >
             <option value="name">Name</option>
             <option value="absentToday">Absent today, then name</option>
@@ -43,7 +43,7 @@
           <select
             id="regionFilter"
             v-model="regionFilter"
-            class="border border-border rounded-8 px-2 py-1 text-sm bg-background"
+            class="border border-border-strong rounded-8 px-2 py-1 text-sm bg-background"
           >
             <option value="">All regions</option>
             <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
@@ -85,27 +85,27 @@
         </div>
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-holiday border border-border"
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-holiday border border-border-strong"
           />
           <span>Bank holiday</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent text-white text-[8px] font-bold"
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
             >V</span
           >
           <span>Vacation</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent text-white text-[8px] font-bold"
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
             >S</span
           >
           <span>Sick</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent text-white text-[8px] font-bold"
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
             >O</span
           >
           <span>Other</span>

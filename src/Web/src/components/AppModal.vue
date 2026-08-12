@@ -9,8 +9,8 @@
         :class="size === 'md' ? 'max-w-md' : 'max-w-3xl'"
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <h2 class="font-display font-bold text-lg text-primary-dark">{{ title }}</h2>
-          <button class="text-secondary hover:text-primary-dark transition" @click="$emit('close')">
+          <h2 class="font-display font-bold text-lg text-ink">{{ title }}</h2>
+          <button class="text-secondary hover:text-ink transition" @click="$emit('close')">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="w-5 h-5"

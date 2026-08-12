@@ -9,7 +9,7 @@
         :key="c"
         type="button"
         class="relative w-7 h-7 rounded-pill border-2 transition-all duration-150 ease-out hover:scale-115 hover:shadow-card active:scale-95"
-        :class="modelValue === c ? 'border-primary-dark scale-110' : 'border-transparent'"
+        :class="modelValue === c ? 'border-ink scale-110' : 'border-transparent'"
         :style="{ backgroundColor: c }"
         :title="c"
         @click="$emit('update:modelValue', c)"
