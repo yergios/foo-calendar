@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
@@ -9,8 +10,6 @@ using Api.Infrastructure;
 using Api.Interfaces;
 using Api.Services;
 
-using Azure.Monitor.OpenTelemetry.AspNetCore;
-
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -19,6 +18,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -120,26 +121,58 @@ else
 
 // ---- Observability --------------------------------------------------------
 
-// The config value wins when set; otherwise fall back to the well-known env var that
-// Azure App Service injects. Blank counts as unset, since appsettings.json ships the
-// key with an empty default.
-var appInsightsConn = config.GetSection(TelemetryOptions.SectionName)
-    .Get<TelemetryOptions>()?.ApplicationInsightsConnectionString;
-if (string.IsNullOrWhiteSpace(appInsightsConn))
-    appInsightsConn = config[TelemetryOptions.EnvironmentVariableName];
+services.AddOptions<TelemetryOptions>()
+    .Bind(config.GetSection(TelemetryOptions.SectionName))
+    .ValidateOnStart();
+
+// The config value wins when set; otherwise fall back to the OTEL_* env vars that every
+// OpenTelemetry-aware collector and platform already sets. Blank counts as unset, since
+// appsettings.json ships the keys with empty defaults.
+var telemetryOptions = config.GetSection(TelemetryOptions.SectionName)
+    .Get<TelemetryOptions>() ?? new TelemetryOptions();
+
+var otlpEndpoint = telemetryOptions.OtlpEndpoint;
+if (string.IsNullOrWhiteSpace(otlpEndpoint))
+    otlpEndpoint = config[TelemetryOptions.EndpointEnvironmentVariableName];
+
+var serviceName = telemetryOptions.ServiceName;
+if (string.IsNullOrWhiteSpace(serviceName))
+    serviceName = config[TelemetryOptions.ServiceNameEnvironmentVariableName];
+if (string.IsNullOrWhiteSpace(serviceName))
+    serviceName = builder.Environment.ApplicationName;
+
+// Strip the +commithash build metadata; it is noise on a dashboard label.
+var serviceVersion = Assembly.GetExecutingAssembly()
+    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+    .InformationalVersion.Split('+')[0];
 
 var telemetry = services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
-        .AddService(serviceName: builder.Environment.ApplicationName))
+        .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation())
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation());
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation())
+    .WithLogging();
 
-if (!string.IsNullOrWhiteSpace(appInsightsConn))
-    telemetry.UseAzureMonitor(options => options.ConnectionString = appInsightsConn);
+// With no endpoint from either source nothing is listening, so skip the exporter rather
+// than let it default to localhost:4317 and log a failed export per batch. Credentials
+// travel in OTEL_EXPORTER_OTLP_HEADERS, which the SDK reads on its own.
+if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+{
+    var otlpProtocol = telemetryOptions.OtlpProtocol;
+    if (string.IsNullOrWhiteSpace(otlpProtocol))
+        otlpProtocol = config[TelemetryOptions.ProtocolEnvironmentVariableName];
+
+    telemetry.UseOtlpExporter(
+        string.Equals(otlpProtocol, "http/protobuf", StringComparison.OrdinalIgnoreCase)
+            ? OtlpExportProtocol.HttpProtobuf
+            : OtlpExportProtocol.Grpc,
+        new Uri(otlpEndpoint));
+}
 
 // ---- Build ----------------------------------------------------------------
 

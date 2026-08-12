@@ -46,7 +46,7 @@ The frontend is compiled by Vite during CI and placed in `src/Api/wwwroot`. The 
 - [Nager.Date](https://date.nager.at/) public holiday API, synced automatically on a weekly background job (and on demand from the admin page)
 - Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication and permission-based admin access — or a zero-setup dev-only bypass, see below
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
-- OpenTelemetry / Azure Monitor for observability
+- OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
 
 ---
 
@@ -126,8 +126,38 @@ Most of the app is available to anyone signed in. A single elevated permission g
 
 Grant the admin permission to a user in your OIDC provider's dashboard. Locally, set `VITE_BYPASS_ADMIN_PERMISSION=true` in `src/Web/.env.development` instead of needing an actual admin-permissioned account — see [Quickstart](#quickstart-local-development) above.
 
-### Debugging
+### Observability
 
-Azure Application Insights / OpenTelemetry are configured for this project (`src/Api/Configuration/TelemetryOptions.cs`).
+The app emits traces, metrics, and logs via OpenTelemetry and pushes all three over OTLP. It is not tied to any vendor: point it at whatever you already run.
+
+**Nothing is exported until you set an endpoint.** With none configured the instrumentation stays inert, so the default deployment is silent rather than retrying a collector that isn't there.
+
+The standard `OTEL_*` environment variables are read as-is, which is what most platforms and sidecars already inject:
+
+| Variable | Purpose |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector base URL. Setting it is what turns exporting on. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` (default, port 4317) or `http/protobuf` (port 4318). |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated headers, e.g. `api-key=…` for a hosted backend. |
+| `OTEL_SERVICE_NAME` | Reported as `service.name`. Defaults to the application name. |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes, e.g. `deployment.environment=staging`. |
+
+```bash
+# Everything to a local collector over gRPC
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 dotnet run --project src/Api
+
+# A hosted backend over HTTP, authenticated
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.example.com \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+OTEL_EXPORTER_OTLP_HEADERS=api-key=secret \
+OTEL_SERVICE_NAME=foo-calendar \
+dotnet run --project src/Api
+```
+
+The `Telemetry` section in `src/Api/appsettings.json` (`OtlpEndpoint`, `OtlpProtocol`, `ServiceName`) mirrors the first four and **takes precedence** when a value is non-empty; leave the keys blank to let the environment decide. See `src/Api/Configuration/TelemetryOptions.cs`.
+
+Prometheus users should scrape an OpenTelemetry Collector placed in front of the app rather than the app itself — the app only pushes OTLP and exposes no `/metrics` endpoint.
+
+### Debugging
 
 You'll also find, in the web app itself, page `/admin`, where an admin can inspect and manage the full list of people and re-trigger the bank-holiday sync.
