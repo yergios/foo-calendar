@@ -21,4 +21,16 @@ public interface IHolidaySource
     /// </summary>
     Task<IReadOnlyList<SourceHoliday>> GetAsync(
         string countryCode, int year, CancellationToken ct = default);
+
+    /// <summary>Every country this source can supply holidays for, as ISO 3166-1 codes.
+    /// Backs the region picker on the profile page, so it answers "what could someone
+    /// pick", not "what does this team track". Empty is a valid answer and leaves the
+    /// picker with only the regions already in use.</summary>
+    Task<IReadOnlyList<string>> GetCountriesAsync(CancellationToken ct = default);
+
+    /// <summary>The subdivisions of one country this source distinguishes, as ISO 3166-2
+    /// codes. Empty means the source only has nationwide holidays for it, which is the
+    /// common case: most countries have no regional holidays at all.</summary>
+    Task<IReadOnlyList<string>> GetRegionsAsync(
+        string countryCode, CancellationToken ct = default);
 }

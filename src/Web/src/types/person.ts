@@ -1,5 +1,8 @@
 export interface PeopleResponse {
   people: PersonDto[];
+  /** Display names for every region the team occupies and the countries they sit in.
+   * Sent with the people because it changes with them, unlike anything in AppConfig. */
+  regionLabels: Record<string, string>;
 }
 
 export interface PersonDto {

@@ -21,16 +21,20 @@ public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolid
 
     public HolidaySource Kind => HolidaySource.File;
 
+    // Read on every call rather than cached at startup: the file is small, calls are rare,
+    // and an edited file should take effect on the next sync rather than requiring a
+    // restart. A missing or malformed file throws, which the caller reports as a failed
+    // country instead of silently syncing nothing.
+    private async Task<List<FileHoliday>> ReadAsync(CancellationToken ct)
+    {
+        await using var stream = File.OpenRead(options.Value.File.Path);
+        return await JsonSerializer.DeserializeAsync<List<FileHoliday>>(stream, JsonOptions, ct) ?? [];
+    }
+
     public async Task<IReadOnlyList<SourceHoliday>> GetAsync(
         string countryCode, int year, CancellationToken ct = default)
     {
-        // Read on every sync rather than cached at startup: the file is small, syncs are
-        // rare, and an edited file should take effect on the next sync rather than
-        // requiring a restart. A missing or malformed file throws, which the caller
-        // reports as a failed country instead of silently syncing nothing.
-        await using var stream = File.OpenRead(options.Value.File.Path);
-        var entries = await JsonSerializer
-            .DeserializeAsync<List<FileHoliday>>(stream, JsonOptions, ct) ?? [];
+        var entries = await ReadAsync(ct);
 
         return
         [
@@ -43,4 +47,24 @@ public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolid
                 .Select(x => new SourceHoliday(x.Entry.Region, x.Date!.Value, x.Entry.Name))
         ];
     }
+
+    // Whatever the file mentions is exactly what this source can offer, so both lists are
+    // derived from its contents rather than from any external catalogue.
+    public async Task<IReadOnlyList<string>> GetCountriesAsync(CancellationToken ct = default) =>
+    [
+        .. (await ReadAsync(ct))
+            .Select(e => RegionCode.CountryOf(e.Region))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+    ];
+
+    public async Task<IReadOnlyList<string>> GetRegionsAsync(
+        string countryCode, CancellationToken ct = default) =>
+    [
+        .. (await ReadAsync(ct))
+            .Select(e => e.Region)
+            .Where(r => r != countryCode && RegionCode.BelongsTo(r, countryCode))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+    ];
 }

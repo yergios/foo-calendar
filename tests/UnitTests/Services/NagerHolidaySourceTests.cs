@@ -98,4 +98,46 @@ public sealed class NagerHolidaySourceTests
     {
         CreateSource(_ => JsonResponse("[]")).Kind.ShouldBe(HolidaySource.Nager);
     }
+
+    [Fact]
+    public async Task GetCountriesAsync_ReturnsTheAvailableCountryCodes()
+    {
+        var sut = CreateSource(_ => JsonResponse("""
+            [{ "countryCode": "CH", "name": "Switzerland" }, { "countryCode": "ES", "name": "Spain" }]
+            """));
+
+        var countries = await sut.GetCountriesAsync();
+
+        countries.ShouldBe(["CH", "ES"]);
+    }
+
+    // The enumeration cache is static, so these use country codes no other test touches.
+    // Sharing one would mean whichever test ran first decided the answer for the others.
+    [Fact]
+    public async Task GetRegionsAsync_ReturnsDistinctCountiesFromAYearOfHolidays()
+    {
+        var sut = CreateSource(_ => JsonResponse("""
+            [
+              { "date": "2026-01-01", "name": "Nationwide", "countryCode": "QA", "global": true, "counties": null },
+              { "date": "2026-04-13", "name": "Regional", "countryCode": "QA", "global": false, "counties": ["QA-1", "QA-2"] },
+              { "date": "2026-09-08", "name": "Also regional", "countryCode": "QA", "global": false, "counties": ["QA-2"] }
+            ]
+            """));
+
+        var regions = await sut.GetRegionsAsync("QA");
+
+        regions.ShouldBe(["QA-1", "QA-2"]);
+    }
+
+    [Fact]
+    public async Task GetRegionsAsync_WhenNoHolidayIsRegional_ReturnsNothing()
+    {
+        var sut = CreateSource(_ => JsonResponse("""
+            [{ "date": "2026-01-01", "name": "Nationwide", "countryCode": "QB", "global": true, "counties": null }]
+            """));
+
+        var regions = await sut.GetRegionsAsync("QB");
+
+        regions.ShouldBeEmpty();
+    }
 }

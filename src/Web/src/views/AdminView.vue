@@ -113,24 +113,9 @@
               class="border border-border-strong rounded-8 px-3 py-2"
             />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-semibold text-secondary">Home city</label>
-            <select
-              v-model="form.homeCity"
-              class="border border-border-strong rounded-8 px-3 py-2 bg-background"
-            >
-              <option :value="null">Not set</option>
-              <optgroup
-                v-for="country in regionCountries"
-                :key="country.code"
-                :label="country.name"
-              >
-                <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
-                  {{ opt.label }}
-                </option>
-              </optgroup>
-            </select>
-          </div>
+          <!-- Keyed so switching to another person, or back to the blank form, rebuilds
+               the picker around their region instead of keeping the last one's. -->
+          <RegionPicker :key="editingId ?? 'new'" v-model="form.homeCity" id-prefix="admin" />
         </div>
 
         <div class="flex flex-col gap-1.5 mt-3">
@@ -174,7 +159,8 @@
     <section>
       <h4>Bank holidays</h4>
       <p class="text-sm text-secondary mt-1">
-        Pulls public holidays for every configured region from the Nager API for the given year.
+        Pulls public holidays for the regions the team occupies. Picking a single region re-runs
+        just that one, which is what a region listed as failed needs.
       </p>
 
       <div class="flex items-center gap-3 mt-3">
@@ -183,6 +169,18 @@
           type="number"
           class="border border-border-strong rounded-8 px-3 py-2 w-28"
         />
+        <select
+          v-model="syncRegion"
+          class="border border-border-strong rounded-8 px-3 py-2 bg-background text-sm"
+        >
+          <option :value="null">All regions</option>
+          <optgroup v-for="country in regionGroups" :key="country.code" :label="country.label">
+            <option :value="country.code">{{ country.label }} (nationwide)</option>
+            <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
+              {{ opt.label }}
+            </option>
+          </optgroup>
+        </select>
         <button
           type="button"
           class="bg-primary text-on-primary border border-transparent rounded-8 px-4 py-2 text-sm transition-all duration-150 ease-out hover:bg-primary-hover disabled:opacity-40"
@@ -197,9 +195,9 @@
         {{ syncError }}
       </p>
       <div v-if="syncResult" class="text-sm mt-3">
-        <p class="text-secondary">Synced: {{ syncResult.syncedCountries.join(", ") || "none" }}</p>
-        <p v-if="syncResult.failedCountries.length > 0" class="text-error mt-1">
-          Failed: {{ syncResult.failedCountries.join(", ") }}
+        <p class="text-secondary">Synced: {{ syncResult.syncedRegions.join(", ") || "none" }}</p>
+        <p v-if="syncResult.failedRegions.length > 0" class="text-error mt-1">
+          Failed: {{ syncResult.failedRegions.join(", ") }}
         </p>
       </div>
     </section>
@@ -219,21 +217,26 @@ import {
 } from "@/api/admin";
 import { getColorsInUse } from "@/api/people";
 import ColorPicker from "@/components/ColorPicker.vue";
+import RegionPicker from "@/components/RegionPicker.vue";
 import YearPicker from "@/components/YearPicker.vue";
+import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import type { SyncBankHolidaysResponse } from "@/types/bankHoliday";
 import type { PersonAbsenceStatsDto, PersonDto } from "@/types/person";
 
 const configStore = useConfigStore();
-const regionCountries = computed(() => configStore.config?.regions ?? []);
 const palette = computed(() => configStore.config?.colorPalette ?? []);
 const configLoading = ref(true);
 
 // This is the same store HomeView's CalendarGrid uses. Routing admin CRUD through it
 // instead of a separate fetch keeps both views in sync with a single refresh() call.
 const peopleStore = usePeopleStore();
-const { people } = storeToRefs(peopleStore);
+const { people, regionLabels } = storeToRefs(peopleStore);
+
+// The regions worth offering a re-sync for are the ones the team occupies, which is
+// exactly what the scheduled sync covers and what the API will accept here.
+const regionGroups = computed(() => groupRegions(regionLabels.value));
 const loadingPeople = ref(true);
 const colorsInUse = ref<string[]>([]);
 
@@ -377,6 +380,7 @@ async function handleDelete(person: PersonDto) {
 }
 
 const syncYear = ref(new Date().getFullYear());
+const syncRegion = ref<string | null>(null);
 const syncing = ref(false);
 const syncError = ref<string | null>(null);
 const syncResult = ref<SyncBankHolidaysResponse | null>(null);
@@ -386,7 +390,7 @@ async function handleSync() {
   syncError.value = null;
   syncResult.value = null;
   try {
-    syncResult.value = await syncBankHolidays(syncYear.value);
+    syncResult.value = await syncBankHolidays(syncYear.value, syncRegion.value);
   } catch (error: unknown) {
     console.error("ERROR => Failed to sync bank holidays:", error);
     syncError.value = error instanceof Error ? error.message : "Failed to sync bank holidays.";

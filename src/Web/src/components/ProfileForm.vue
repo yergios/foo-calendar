@@ -14,23 +14,7 @@
       />
     </div>
 
-    <div class="flex flex-col gap-1.5">
-      <label for="homeCity" class="text-xs font-semibold text-secondary">Home city</label>
-      <AppSkeleton v-if="configLoading" class="h-10 w-full" />
-      <select
-        v-else
-        id="homeCity"
-        v-model="homeCity"
-        class="border border-border-strong rounded-8 px-3 py-2 bg-background"
-      >
-        <option :value="null">Not set</option>
-        <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
-          <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
-            {{ opt.label }}
-          </option>
-        </optgroup>
-      </select>
-    </div>
+    <RegionPicker v-model="homeCity" />
 
     <div class="flex flex-col gap-1.5">
       <label class="text-xs font-semibold text-secondary"
@@ -64,8 +48,8 @@ import { computed, onMounted, ref } from "vue";
 
 import { getColorsInUse } from "@/api/people";
 import { useAuthStore } from "@/auth";
-import AppSkeleton from "@/components/AppSkeleton.vue";
 import ColorPicker from "@/components/ColorPicker.vue";
+import RegionPicker from "@/components/RegionPicker.vue";
 import { useConfigStore } from "@/stores/config";
 
 const props = withDefaults(
@@ -94,15 +78,15 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 
 const palette = computed(() => configStore.config?.colorPalette ?? []);
-const regionCountries = computed(() => configStore.config?.regions ?? []);
 const colorsInUse = ref<string[]>([]);
 
 const displayName = ref(props.initialDisplayName ?? authStore.getFullName() ?? "");
-const homeCity = ref<string | null>(props.initialHomeCity);
 const color = ref<string | null>(props.initialColor);
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const configLoading = ref(true);
+
+const homeCity = ref<string | null>(props.initialHomeCity);
 
 onMounted(async () => {
   try {

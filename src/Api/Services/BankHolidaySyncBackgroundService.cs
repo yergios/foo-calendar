@@ -7,7 +7,6 @@ namespace Api.Services;
 
 public sealed class BankHolidaySyncBackgroundService(
     IServiceScopeFactory scopeFactory,
-    IOptions<RegionCatalogOptions> regionCatalog,
     IOptions<HolidayOptions> holidayOptions) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,11 +28,15 @@ public sealed class BankHolidaySyncBackgroundService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IBankHolidayService>();
+        var teamRegions = scope.ServiceProvider.GetRequiredService<ITeamRegionService>();
 
         var currentYear = DateTime.UtcNow.Year;
-        var countries = regionCatalog.Value.Select(c => c.Code).ToList();
+
+        // Re-read every run rather than captured once: people join and leave between ticks,
+        // and this is what keeps the yearly rollover covering everywhere the team now is.
+        var regions = await teamRegions.InUseAsync(ct);
 
         foreach (var year in new[] { currentYear, currentYear + 1 })
-            await service.SyncCountriesAsync(countries, year, ct);
+            await service.SyncRegionsAsync(regions, year, ct);
     }
 }

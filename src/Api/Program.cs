@@ -33,9 +33,19 @@ var services = builder.Services;
 
 // ---- Options --------------------------------------------------------------
 
+// No longer the source of truth for what is selectable, so an empty one is valid: it is
+// only overriding display names now, see RegionCatalogOptions.
 services.AddOptions<RegionCatalogOptions>()
     .Bind(config.GetSection(RegionCatalogOptions.SectionName))
-    .Validate(regions => regions.Count > 0, "RegionCatalog must contain at least one country.")
+    .ValidateOnStart();
+
+services.AddOptions<TeamOptions>()
+    .Bind(config.GetSection(TeamOptions.SectionName))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.HomeRegion),
+        "Team:HomeRegion must be configured, e.g. \"CH-ZH\".")
+    .Validate(o => string.IsNullOrWhiteSpace(o.HomeRegion)
+            || Regex.IsMatch(o.HomeRegion, ValidationPatterns.RegionCode),
+        "Team:HomeRegion must be an ISO 3166-2 code, e.g. \"CH\" or \"CH-ZH\".")
     .ValidateOnStart();
 
 services.AddOptions<PersonColorPaletteOptions>()
@@ -126,6 +136,10 @@ if (holidayConfig.Source != HolidayOptions.SourceNone)
     services.AddHostedService<BankHolidaySyncBackgroundService>();
 
 services.AddScoped<IBankHolidayService, BankHolidayService>();
+services.AddScoped<ITeamRegionService, TeamRegionService>();
+
+// Singleton: it reads a static name table off disk once and answers from memory after.
+services.AddSingleton<RegionLabels>();
 
 // ---- Webhook --------------------------------------------------------------
 
@@ -434,6 +448,7 @@ app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
+app.MapRegionEndpoints();
 app.MapSpaFallback(proxyConfig.PathBase);
 
 await app.RunAsync();

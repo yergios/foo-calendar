@@ -30,8 +30,14 @@ export function getAllPeopleStats(year: number): Promise<AllAbsenceStatsResponse
   return apiJson(`/api/admin/people/stats?year=${year}`);
 }
 
-export function syncBankHolidays(year: number): Promise<SyncBankHolidaysResponse> {
-  return apiJson(`/api/admin/bank-holidays/sync?year=${year}`, {
+/** Omitting the region syncs every region the team occupies; naming one re-runs just that
+ * region's country, which is what retrying a single failure needs. */
+export function syncBankHolidays(
+  year: number,
+  region?: string | null,
+): Promise<SyncBankHolidaysResponse> {
+  const regionQuery = region ? `&region=${encodeURIComponent(region)}` : "";
+  return apiJson(`/api/admin/bank-holidays/sync?year=${year}${regionQuery}`, {
     method: "POST",
   });
 }

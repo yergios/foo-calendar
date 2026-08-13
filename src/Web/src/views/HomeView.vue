@@ -46,8 +46,8 @@
             class="border border-border-strong rounded-8 px-2 py-1 text-sm bg-background"
           >
             <option value="">All regions</option>
-            <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
-              <option :value="country.code">{{ country.name }} (all)</option>
+            <optgroup v-for="country in regionGroups" :key="country.code" :label="country.label">
+              <option :value="country.code">{{ country.label }} (all)</option>
               <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
                 {{ opt.label }}
               </option>
@@ -142,6 +142,7 @@ import CalendarGrid from "@/components/CalendarGrid.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
+import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
@@ -151,10 +152,14 @@ import type { PersonDto } from "@/types/person";
 
 type SortMode = "name" | "absentToday" | "custom";
 
-const { people } = storeToRefs(usePeopleStore());
+const { people, regionLabels } = storeToRefs(usePeopleStore());
 const personStore = usePersonStore();
 const configStore = useConfigStore();
-const regionCountries = computed(() => configStore.config?.regions ?? []);
+
+// The filter offers exactly where the team is, which the API sends alongside the people it
+// is filtering. Deriving it rather than reading a configured list is what lets someone
+// joining a new region show up here without a redeploy.
+const regionGroups = computed(() => groupRegions(regionLabels.value));
 
 const year = ref(new Date().getFullYear());
 const absences = ref<AbsenceDto[]>([]);

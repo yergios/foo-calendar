@@ -29,6 +29,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Copied next to the binary rather than embedded, so a deployment can replace the
+		     region name table without a rebuild. Update, not Include: the Web SDK already
+		     globs *.json into Content. -->
+		<Content Update="Data\regions.json" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Compile Remove="src\**" />
 		<Content Remove="src\**" />
 		<EmbeddedResource Remove="src\**" />

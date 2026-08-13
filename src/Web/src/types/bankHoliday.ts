@@ -23,6 +23,8 @@ export interface AddManualHolidayRequest {
 }
 
 export interface SyncBankHolidaysResponse {
-  syncedCountries: string[];
-  failedCountries: string[];
+  syncedRegions: string[];
+  /** A whole country's fetch failing takes every region of it down together, so these
+   * come back in groups rather than one at a time. */
+  failedRegions: string[];
 }

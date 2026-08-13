@@ -23,8 +23,8 @@
           class="border border-border-strong rounded-8 px-3 py-2 bg-background"
         >
           <option value="" disabled>Select a region</option>
-          <optgroup v-for="country in regionCountries" :key="country.code" :label="country.name">
-            <option :value="country.code">{{ country.name }} (nationwide)</option>
+          <optgroup v-for="country in regionGroups" :key="country.code" :label="country.label">
+            <option :value="country.code">{{ country.label }} (nationwide)</option>
             <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
               {{ opt.label }}
             </option>
@@ -81,11 +81,13 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 
 import { addManualHoliday, deleteBankHoliday, updateBankHoliday } from "@/api/bankHolidays";
 import AppModal from "@/components/AppModal.vue";
-import { useConfigStore } from "@/stores/config";
+import { groupRegions } from "@/lib/regionGroups";
+import { usePeopleStore } from "@/stores/people";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 
 const props = withDefaults(
@@ -105,8 +107,12 @@ const emit = defineEmits<{
   deleted: [id: number];
 }>();
 
-const configStore = useConfigStore();
-const regionCountries = computed(() => configStore.config?.regions ?? []);
+const peopleStore = usePeopleStore();
+const { regionLabels } = storeToRefs(peopleStore);
+
+// Only where the team already is: the API rejects anything else, since a holiday stored
+// against a region nobody occupies would never appear on the calendar.
+const regionGroups = computed(() => groupRegions(regionLabels.value));
 
 const isEditing = computed(() => props.holiday !== null);
 
@@ -119,8 +125,8 @@ const submitting = ref(false);
 const deleting = ref(false);
 
 onMounted(() => {
-  configStore.loadOnce().catch((err: unknown) => {
-    console.error("ERROR => Failed to load region catalog:", err);
+  peopleStore.loadOnce().catch((err: unknown) => {
+    console.error("ERROR => Failed to load the team's regions:", err);
   });
 });
 

@@ -106,4 +106,37 @@ public sealed class FileHolidaySourceTests : IDisposable
         sut.Kind.ShouldBe(HolidaySource.File);
         (await sut.GetAsync("CH", 2026)).ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task GetCountriesAsync_DerivesCountriesFromWhateverTheFileMentions()
+    {
+        var sut = CreateSource("""
+            [
+              { "region": "CH", "date": "2026-08-01", "name": "National Day" },
+              { "region": "CH-ZH", "date": "2026-04-13", "name": "Sechselauten" },
+              { "region": "ES-MD", "date": "2026-05-02", "name": "Dos de Mayo" }
+            ]
+            """);
+
+        var countries = await sut.GetCountriesAsync();
+
+        countries.ShouldBe(["CH", "ES"]);
+    }
+
+    [Fact]
+    public async Task GetRegionsAsync_ReturnsSubdivisionsOfOneCountryWithoutTheCountryItself()
+    {
+        var sut = CreateSource("""
+            [
+              { "region": "CH", "date": "2026-08-01", "name": "National Day" },
+              { "region": "CH-ZH", "date": "2026-04-13", "name": "Sechselauten" },
+              { "region": "CH-BE", "date": "2026-01-02", "name": "Berchtoldstag" },
+              { "region": "ES-MD", "date": "2026-05-02", "name": "Dos de Mayo" }
+            ]
+            """);
+
+        var regions = await sut.GetRegionsAsync("CH");
+
+        regions.ShouldBe(["CH-BE", "CH-ZH"]);
+    }
 }

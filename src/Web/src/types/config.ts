@@ -2,13 +2,16 @@ export interface RegionOption {
   code: string;
   label: string;
 }
-export interface CountryRegions {
-  code: string;
-  name: string;
+
+/** Mirrors the API's AvailableRegionsResponse: what the holiday source knows about, which
+ * is what someone can pick on their profile, not what this team currently tracks. */
+export interface AvailableRegionsResponse {
   regions: RegionOption[];
 }
+
 export interface AppConfig {
-  regions: CountryRegions[];
+  /** The team's own region. Synced and shown whether or not anyone is in it. */
+  homeRegion: string;
   colorPalette: string[];
 }
 

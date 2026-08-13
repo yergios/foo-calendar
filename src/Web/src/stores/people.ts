@@ -6,8 +6,12 @@ import { createLoadOnce } from "@/lib/loadOnce";
 import { usePersonStore } from "@/stores/person";
 
 export const usePeopleStore = defineStore("people", () => {
-  const { data, loadOnce, invalidate } = createLoadOnce(async () => (await getAllPeople()).people);
-  const people = computed(() => data.value ?? []);
+  const { data, loadOnce, invalidate } = createLoadOnce(getAllPeople);
+  const people = computed(() => data.value?.people ?? []);
+
+  // Kept from the same response as the people rather than fetched separately, so the
+  // labels can never describe a different set of regions than the one on screen.
+  const regionLabels = computed(() => data.value?.regionLabels ?? {});
 
   // Re-fetch whenever the signed-in user's own profile is created, edited, or deleted,
   // so any already-mounted consumer of `people` reflects it without a manual reload.
@@ -23,5 +27,5 @@ export const usePeopleStore = defineStore("people", () => {
     return loadOnce();
   }
 
-  return { people, loadOnce, refresh };
+  return { people, regionLabels, loadOnce, refresh };
 });

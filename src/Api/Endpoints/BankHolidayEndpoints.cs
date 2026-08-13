@@ -24,14 +24,14 @@ public static class BankHolidaysEndpoints
     private static async Task<IResult> GetCatalogHolidays(
         DateOnly from,
         DateOnly to,
-        IOptions<RegionCatalogOptions> regionCatalog,
+        ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,
         CancellationToken ct)
     {
-        var regions = regionCatalog.Value
-            .SelectMany(country => country.Regions.Select(r => r.Code))
-            .Distinct()
-            .ToList();
+        // Where the team actually is, which is also exactly what got synced. Read scope and
+        // write scope come from the same place on purpose, so neither can drift into
+        // showing holidays nobody stored or storing holidays nobody sees.
+        var regions = await teamRegions.InUseAsync(ct);
 
         var result = await bankHolidays.GetForRegionsAsync(regions, from, to, ct);
         return Results.Ok(result);
@@ -40,11 +40,15 @@ public static class BankHolidaysEndpoints
     private static async Task<IResult> AddManual(
         AddManualHolidayRequest request,
         ClaimsPrincipal user,
+        ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,
         IOptions<AuthOptions> authOptions,
         CancellationToken ct)
     {
-        var created = await bankHolidays.AddManualAsync(request, user.GetUsername(authOptions.Value.ClaimTypes.UserName), ct);
+        var tracked = await teamRegions.InUseAsync(ct);
+        var created = await bankHolidays.AddManualAsync(
+            request, user.GetUsername(authOptions.Value.ClaimTypes.UserName), tracked, ct);
+
         return Results.Created($"/api/bank-holidays/{created.Id}", created);
     }
 
@@ -52,11 +56,15 @@ public static class BankHolidaysEndpoints
         int id,
         AddManualHolidayRequest request,
         ClaimsPrincipal user,
+        ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,
         IOptions<AuthOptions> authOptions,
         CancellationToken ct)
     {
-        var updated = await bankHolidays.UpdateManualAsync(id, request, user.GetUsername(authOptions.Value.ClaimTypes.UserName), ct);
+        var tracked = await teamRegions.InUseAsync(ct);
+        var updated = await bankHolidays.UpdateManualAsync(
+            id, request, user.GetUsername(authOptions.Value.ClaimTypes.UserName), tracked, ct);
+
         return Results.Ok(updated);
     }
 

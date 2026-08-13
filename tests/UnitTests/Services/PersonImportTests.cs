@@ -2,6 +2,7 @@ using Api.Configuration;
 using Api.Data.Models;
 using Api.Services;
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using Shouldly;
@@ -16,7 +17,13 @@ public sealed class PersonImportTests : SqliteTestBase
 
     private readonly PersonColorPaletteOptions palette = ["#111111", "#222222", "#333333"];
 
-    private PersonService CreateService() => new(Db, Options.Create(palette));
+    private readonly RecordingTeamRegionService teamRegions = new();
+
+    private PersonService CreateService() => new(
+        Db,
+        Options.Create(palette),
+        teamRegions,
+        new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance));
 
     private Person AddPerson(string username, string color)
     {

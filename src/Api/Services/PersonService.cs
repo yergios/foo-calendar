@@ -13,7 +13,9 @@ namespace Api.Services;
 
 public sealed class PersonService(
     AppDbContext db,
-    IOptions<PersonColorPaletteOptions> colorPalette) : IPersonService
+    IOptions<PersonColorPaletteOptions> colorPalette,
+    ITeamRegionService teamRegions,
+    RegionLabels regionLabels) : IPersonService
 {
     public async Task<PersonDto> CreateAsync(
         CreatePersonRequest request, string actorUsername, CancellationToken ct = default)
@@ -39,13 +41,30 @@ public sealed class PersonService(
 
         db.People.Add(person);
         await db.SaveChangesAsync(ct);
+
+        // Somewhere new to the team brings its holidays in with it.
+        await teamRegions.EnsureSyncedAsync(person.HomeCity, ct);
+
         return PersonDto.FromEntity(person);
     }
 
     public async Task<PeopleResponse> GetAllAsync(CancellationToken ct = default)
     {
         var people = await db.People.OrderBy(p => p.DisplayName ?? p.Username).ToListAsync(ct);
-        return new([.. people.Select(PersonDto.FromEntity)]);
+
+        // Countries as well as regions, so the region filter can group "CH-ZH" and "CH-BE"
+        // under Switzerland and offer the country itself as "everyone in it".
+        var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var region in await teamRegions.InUseAsync(ct))
+        {
+            labels[region] = regionLabels.For(region);
+
+            var country = RegionCode.CountryOf(region);
+            labels[country] = regionLabels.For(country);
+        }
+
+        return new([.. people.Select(PersonDto.FromEntity)], labels);
     }
 
     public async Task<ColorsInUseResponse> GetColorsInUseAsync(CancellationToken ct = default)
@@ -59,8 +78,14 @@ public sealed class PersonService(
         var person = await db.People.FindAsync([personId], ct)
             ?? throw new KeyNotFoundException($"Person {personId} not found.");
 
+        var vacated = person.HomeCity;
+
         db.People.Remove(person);
         await db.SaveChangesAsync(ct);
+
+        // After the delete, so "is anyone still there" is answered by the database rather
+        // than by counting this person out by hand.
+        await teamRegions.PruneIfUnusedAsync(vacated, ct);
     }
 
     private async Task<bool> IsColorAvailableAsync(string color, int? excludingPersonId, CancellationToken ct = default)
@@ -84,12 +109,23 @@ public sealed class PersonService(
         if (!await IsColorAvailableAsync(request.Color, personId, ct))
             throw new InvalidOperationException("Color is already taken by another person.");
 
+        var vacated = person.HomeCity;
+
         person.DisplayName = request.DisplayName;
         person.Color = request.Color;
         person.HomeCity = request.HomeCity;
         person.UpdatedAt = DateTime.UtcNow;
         person.UpdatedBy = actorUsername;
         await db.SaveChangesAsync(ct);
+
+        // Moving is both halves at once: the new region may be new to the team, and the
+        // old one may have just lost its last occupant.
+        if (!string.Equals(vacated, person.HomeCity, StringComparison.Ordinal))
+        {
+            await teamRegions.EnsureSyncedAsync(person.HomeCity, ct);
+            await teamRegions.PruneIfUnusedAsync(vacated, ct);
+        }
+
         return PersonDto.FromEntity(person);
     }
 
@@ -132,6 +168,9 @@ public sealed class PersonService(
         var created = new List<string>();
         var skipped = new List<ImportPersonIssue>();
         var failed = new List<ImportPersonIssue>();
+        // Deduplicated up front: an import of fifty people from three offices should cost
+        // three syncs, not fifty.
+        var arrivedIn = new HashSet<string>(StringComparer.Ordinal);
 
         for (var i = 1; i < rows.Count; i++)
         {
@@ -216,9 +255,15 @@ public sealed class PersonService(
             });
 
             created.Add(username);
+
+            if (request.HomeCity is not null)
+                arrivedIn.Add(request.HomeCity);
         }
 
         await db.SaveChangesAsync(ct);
+
+        foreach (var region in arrivedIn)
+            await teamRegions.EnsureSyncedAsync(region, ct);
 
         return new ImportPeopleResponse(created, skipped, failed);
     }

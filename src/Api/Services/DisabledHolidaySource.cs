@@ -16,4 +16,14 @@ public sealed class DisabledHolidaySource : IHolidaySource
     public Task<IReadOnlyList<SourceHoliday>> GetAsync(
         string countryCode, int year, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<SourceHoliday>>([]);
+
+    // Nothing to offer, so the region picker falls back to whatever the team already uses.
+    // Someone still has to be able to pick a region when there is no source at all, which
+    // is what the free-text entry on the profile page is for.
+    public Task<IReadOnlyList<string>> GetCountriesAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
+    public Task<IReadOnlyList<string>> GetRegionsAsync(
+        string countryCode, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
 }

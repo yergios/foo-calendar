@@ -85,21 +85,32 @@ public static class AdminEndpoints
 
     private static async Task<IResult> SyncBankHolidays(
         int year,
-        IOptions<RegionCatalogOptions> regionCatalog,
+        string region,
         IOptions<HolidayOptions> holidayOptions,
+        ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,
         CancellationToken ct)
     {
-        // Nothing to sync from, so say so rather than reporting every country as synced.
+        // Nothing to sync from, so say so rather than reporting every region as synced.
         if (holidayOptions.Value.Source == HolidayOptions.SourceNone)
             throw new InvalidOperationException(
                 "Holiday syncing is disabled (Holidays:Source=None).");
 
-        var countries = regionCatalog.Value.Select(c => c.Code).ToList();
-        var failed = await bankHolidays.SyncCountriesAsync(countries, year, ct);
+        var tracked = await teamRegions.InUseAsync(ct);
+
+        // Omitting the region retries everything. Naming one is for the case this exists
+        // for: a single country's fetch failed on the scheduled run, and re-fetching every
+        // other country to get at it would be rude to the source and slow for the admin.
+        if (region is not null && !tracked.Contains(region, StringComparer.Ordinal))
+            throw new ArgumentException(
+                $"{region} is not one of the team's regions, so there is nothing to sync for it.");
+
+        IReadOnlyCollection<string> regions = region is null ? tracked : [region];
+
+        var failed = await bankHolidays.SyncRegionsAsync(regions, year, ct);
 
         return Results.Ok(new SyncBankHolidaysResponse(
-            [.. countries.Except(failed)],
+            [.. regions.Except(failed, StringComparer.Ordinal)],
             failed));
     }
 }

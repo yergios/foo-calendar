@@ -122,7 +122,7 @@ ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
 
-The same applies to the `RegionCatalog` and `PersonColorPalette` sections below, and to `Telemetry`.
+The same applies to the `Team`, `RegionCatalog` and `PersonColorPalette` sections below, and to `Telemetry`.
 
 To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
 
@@ -210,25 +210,55 @@ SQLite is not the blocker here; both would need addressing before a second repli
 
 ---
 
-### Adding a new region or country
+### Which regions the calendar tracks
 
-No code changes are required — the region catalog is entirely config-driven.
+Nothing to configure, and no code changes: the set of tracked regions is **derived from
+where people say they are**. Whoever sets `ES-MD` on their profile is what makes Madrid a
+region this calendar knows about.
 
-Edit the `RegionCatalog` array in `src/Api/appsettings.json`:
+The only configured region is the team's own:
 
 ```json
-{
-  "Code": "ES",
-  "Name": "Spain",
-  "Regions": [
-    { "Code": "ES-MD", "Label": "Madrid" },
-    { "Code": "ES-CT", "Label": "Catalonia" }
-  ]
-}
+"Team": { "HomeRegion": "CH-ZH" }
 ```
 
-- `Code` follows ISO 3166-2 (the country code alone for a nationwide entry, `COUNTRY-SUBDIVISION` for a specific region).
-- This one list drives three things: the home-city dropdown on a person's profile, the region filter on the calendar, and which countries get synced from the holiday source (both on the background job and via `POST /api/admin/bank-holidays/sync`).
+`Team:HomeRegion` is required, ISO 3166-2, and a bare country code (`"CH"`) is valid if the
+team doesn't care about subdivisions. It is the one region synced whether or not anyone has
+picked it, and the one region never dropped when the last person in it leaves.
+
+Everything else follows from that:
+
+| Event | What happens |
+| --- | --- |
+| Someone picks a region on their profile | Its country's and its own holidays are synced immediately, for this year and next |
+| Someone changes region | The new one is synced; the old one is dropped if they were the last person in it |
+| The last person in a region leaves or is deleted | That region's holidays are **deleted, manual entries included** |
+| The last person in a country leaves | The country's nationwide holidays go too — but only once nobody is left in *any* of its regions |
+| Weekly, and on startup | Everywhere the team currently is gets re-synced, current year and next |
+
+> [!WARNING]
+> Deleting a person deletes the bank holidays of any region they were the last occupant of,
+> and that includes hand-added ones. `Team:HomeRegion` is exempt; nothing else is.
+
+**Picking a region.** The profile page offers everything the holiday source knows about —
+all 204 countries for Nager, and the subdivisions of whichever one is selected. The calendar's
+region filter and the manual-holiday form offer only the regions the team occupies, and the
+API rejects a manual holiday for anywhere else.
+
+**Region names** come from a bundled ISO 3166-1/3166-2 name table
+(`src/Api/Data/regions.json`, derived from [CLDR](https://cldr.unicode.org/), see
+`NOTICE.txt`), because the Nager API returns subdivision *codes* with no names attached. To
+override a name — CLDR calls `ES-MD` "Madrid Autonomous Community" — or to name a code the
+table is missing, use the optional `RegionCatalog` section:
+
+```json
+"RegionCatalog": [
+  { "Code": "ES", "Name": "Spain", "Regions": [{ "Code": "ES-MD", "Label": "Madrid" }] }
+]
+```
+
+It only overrides display names now; leaving it out entirely is fine. Anything with no entry
+in either place falls back to showing the raw code.
 
 ### Where holidays come from
 
@@ -249,7 +279,9 @@ Public holidays are filled in by a configurable source. Whichever one is in use,
 | `File` | Reads a JSON file. No egress, and it can express closures no public API knows about. |
 | `None` | No automatic holidays at all. Whatever admins add by hand is all there is. |
 
-Each country in `RegionCatalog` is synced on startup, then every `SyncInterval` (a `d.hh:mm:ss` span), for the current year and the next. An admin can also trigger it from `/admin`, which with `Source=None` refuses with a `409` rather than pretending to have synced.
+Every region the team occupies is synced on startup, then every `SyncInterval` (a `d.hh:mm:ss` span), for the current year and the next. An admin can also trigger it from `/admin`, which with `Source=None` refuses with a `409` rather than pretending to have synced.
+
+A source is asked for one country at a time, so a failed fetch takes every region of that country with it, and all of them come back in `failedRegions`. Re-running just those is what the region selector on the admin sync panel is for — `POST /api/admin/bank-holidays/sync?year=2026&region=ES-MD` — rather than re-fetching every other country to get at one.
 
 **Behind a proxy?** No configuration here: `HttpClient` reads the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables by itself.
 
@@ -270,7 +302,7 @@ Holidays__File__Path=/etc/foo-calendar/holidays.json
 ]
 ```
 
-- `region` is an ISO 3166-2 code, matching `RegionCatalog`. A country code applies nationwide; a subdivision code applies to that region only.
+- `region` is an ISO 3166-2 code. A country code applies nationwide; a subdivision code applies to that region only. Entries for regions nobody on the team is in are ignored on sync.
 - `recurringAnnually` ignores the year in `date` and applies its month/day to every year synced, which is what company closures usually are. (Feb 29 only lands on leap years.)
 - The file is re-read on every sync, so edits take effect on the next one without a restart. A missing or malformed file is reported as a failed country on the admin page and logged — it never silently syncs nothing.
 
@@ -307,7 +339,7 @@ asmith,Alan,Smith,alan@acme.example,CH-ZH
 | `firstName`, `lastName` | Up to 100 characters each. |
 | `displayName` | Defaults to "First Last", or the username when neither is given. |
 | `email` | Up to 255 characters. |
-| `homeCity` | ISO 3166-2, matching `RegionCatalog`, e.g. `ES-MD`. Blank is fine. |
+| `homeCity` | ISO 3166-2, e.g. `ES-MD` or just `ES`. Blank is fine. Importing someone into a region new to the team pulls its holidays in. |
 | `color` | Assigned from `PersonColorPalette` when blank, which is the usual case. |
 
 Header names are matched loosely — case, spaces and underscores are ignored, so `Home City`, `home_city` and `homeCity` are the same column — and column order doesn't matter. Quoted fields, embedded commas and a UTF-8 BOM are all handled, so a spreadsheet export works as-is.

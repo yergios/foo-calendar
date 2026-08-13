@@ -15,6 +15,10 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 {
     private const string Actor = "admin";
 
+    /// <summary>Where the team is, as the endpoints work it out before calling in. "CH"
+    /// itself is fair game without being listed, since it is the country of both.</summary>
+    private static readonly string[] Tracked = ["CH-ZH", "CH-BE"];
+
     /// <summary>Stands in for whichever IHolidaySource a deployment configures. What the
     /// service does with the holidays is the same either way, so these tests hand it a
     /// list directly instead of going through a source's own wire format.</summary>
@@ -27,6 +31,14 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         public Task<IReadOnlyList<SourceHoliday>> GetAsync(
             string countryCode, int year, CancellationToken ct = default) =>
             Task.FromResult(responder(countryCode, year));
+
+        // Enumeration only backs the region picker, which none of these tests go through.
+        public Task<IReadOnlyList<string>> GetCountriesAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> GetRegionsAsync(
+            string countryCode, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private BankHolidayService CreateService(
@@ -55,10 +67,10 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     public async Task AddManualAsync_WhenDuplicateRegionAndDate_Throws()
     {
         var sut = CreateService();
-        await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor);
+        await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
 
         await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Another Name"), Actor));
+            () => sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Another Name"), Actor, Tracked));
     }
 
     [Fact]
@@ -66,7 +78,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     {
         var sut = CreateService();
 
-        var created = await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor);
+        var created = await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
 
         created.Id.ShouldBeGreaterThan(0);
         created.Source.ShouldBe(HolidaySource.Manual);
@@ -77,7 +89,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     {
         var sut = CreateService();
 
-        var created = await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor);
+        var created = await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
 
         var holiday = Db.BankHolidays.Single(h => h.Id == created.Id);
         holiday.CreatedBy.ShouldBe(Actor);
@@ -91,7 +103,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
 
         await Should.ThrowAsync<KeyNotFoundException>(
-            () => sut.UpdateManualAsync(999, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "X"), Actor));
+            () => sut.UpdateManualAsync(999, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "X"), Actor, Tracked));
     }
 
     [Fact]
@@ -103,7 +115,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "Renamed"), Actor));
+            () => sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "Renamed"), Actor, Tracked));
     }
 
     [Fact]
@@ -116,7 +128,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "Renamed"), Actor));
+            () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "Renamed"), Actor, Tracked));
     }
 
     [Fact]
@@ -127,7 +139,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        var updated = await sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 2), "New"), Actor);
+        var updated = await sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 2), "New"), Actor, Tracked);
 
         updated.Region.ShouldBe("CH-ZH");
         updated.Date.ShouldBe(new DateOnly(2026, 5, 2));
@@ -142,7 +154,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        await sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "New"), "bob");
+        await sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "New"), "bob", Tracked);
 
         var updated = Db.BankHolidays.Single(h => h.Id == holiday.Id);
         updated.CreatedBy.ShouldBe("alice");
@@ -183,7 +195,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_AddsNationwideAndRegionalHolidaysFromTheSource()
+    public async Task SyncRegionsAsync_AddsNationwideAndRegionalHolidaysFromTheSource()
     {
         var sut = CreateService((_, _) =>
         [
@@ -192,7 +204,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
             new SourceHoliday("CH-BE", new DateOnly(2026, 4, 13), "Sechselauten"),
         ]);
 
-        var failed = await sut.SyncCountriesAsync(["CH"], 2026);
+        var failed = await sut.SyncRegionsAsync(["CH-ZH", "CH-BE"], 2026);
 
         failed.ShouldBeEmpty();
         var holidays = Db.BankHolidays.ToList();
@@ -202,7 +214,40 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_NeverOverwritesAManuallyAddedHoliday()
+    public async Task SyncRegionsAsync_SkipsSubdivisionsNobodyIsIn()
+    {
+        // The source answers for the whole country whatever is asked of it, so filtering
+        // what comes back is the only thing keeping the table to regions the team occupies.
+        var sut = CreateService((_, _) =>
+        [
+            new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day"),
+            new SourceHoliday("CH-ZH", new DateOnly(2026, 4, 13), "Sechselauten"),
+            new SourceHoliday("CH-BE", new DateOnly(2026, 4, 13), "Sechselauten"),
+        ]);
+
+        await sut.SyncRegionsAsync(["CH-ZH"], 2026);
+
+        var regions = Db.BankHolidays.Select(h => h.Region).ToList();
+        regions.ShouldBe(["CH", "CH-ZH"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task SyncRegionsAsync_FetchesOnceForSeveralRegionsOfTheSameCountry()
+    {
+        var fetches = 0;
+        var sut = CreateService((_, _) =>
+        {
+            fetches++;
+            return [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day")];
+        });
+
+        await sut.SyncRegionsAsync(["CH-ZH", "CH-BE", "CH-GE"], 2026);
+
+        fetches.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SyncRegionsAsync_NeverOverwritesAManuallyAddedHoliday()
     {
         Db.BankHolidays.Add(new BankHoliday
         {
@@ -216,7 +261,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 
         var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day")]);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         var holiday = Db.BankHolidays.Single(h => h.Region == "CH" && h.Date == new DateOnly(2026, 1, 1));
         holiday.Name.ShouldBe("Our Custom Name");
@@ -224,7 +269,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_RefreshesNameForAnExistingSyncedHoliday()
+    public async Task SyncRegionsAsync_RefreshesNameForAnExistingSyncedHoliday()
     {
         Db.BankHolidays.Add(new BankHoliday
         {
@@ -238,13 +283,13 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 
         var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Name")]);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         Db.BankHolidays.Single(h => h.Region == "CH" && h.Date == new DateOnly(2026, 1, 1)).Name.ShouldBe("New Name");
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_DedupesDuplicateEntriesWithinTheSameResponse()
+    public async Task SyncRegionsAsync_DedupesDuplicateEntriesWithinTheSameResponse()
     {
         var sut = CreateService((_, _) =>
         [
@@ -252,7 +297,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
             new SourceHoliday("CH", new DateOnly(2026, 1, 1), "Second"),
         ]);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         var matches = Db.BankHolidays.Where(h => h.Region == "CH" && h.Date == new DateOnly(2026, 1, 1)).ToList();
         var holiday = matches.ShouldHaveSingleItem();
@@ -260,13 +305,13 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_WhenOneCountryFails_StillSyncsTheOthersAndReportsTheFailure()
+    public async Task SyncRegionsAsync_WhenOneCountryFails_StillSyncsTheOthersAndReportsTheFailure()
     {
         var sut = CreateService((country, _) => country == "DE"
             ? throw new HttpRequestException("the source is unreachable")
             : [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year")]);
 
-        var failed = await sut.SyncCountriesAsync(["CH", "DE"], 2026);
+        var failed = await sut.SyncRegionsAsync(["CH", "DE"], 2026);
 
         failed.ShouldBe(["DE"]);
         Db.BankHolidays.Any(h => h.Region == "CH").ShouldBeTrue();
@@ -318,10 +363,10 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     public async Task AddManualAsync_WhenCollidingWithARecurringHolidayInADifferentYear_Throws()
     {
         var sut = CreateService();
-        await sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2020, 3, 15), "Founder's Day", IsRecurringAnnually: true), Actor);
+        await sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2020, 3, 15), "Founder's Day", IsRecurringAnnually: true), Actor, Tracked);
 
         await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Clashing Day"), Actor));
+            () => sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Clashing Day"), Actor, Tracked));
     }
 
     [Fact]
@@ -343,11 +388,11 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
 
         await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Renamed"), Actor));
+            () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Renamed"), Actor, Tracked));
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_DoesNotDuplicateARecurringManualOverrideInADifferentYear()
+    public async Task SyncRegionsAsync_DoesNotDuplicateARecurringManualOverrideInADifferentYear()
     {
         Db.BankHolidays.Add(new BankHoliday
         {
@@ -362,7 +407,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 
         var sut = CreateService((_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year's Day")]);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         var matches = Db.BankHolidays.Where(h => h.Region == "CH").ToList();
         var holiday = matches.ShouldHaveSingleItem();
@@ -371,13 +416,13 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_StampsRowsWithTheConfiguredSource()
+    public async Task SyncRegionsAsync_StampsRowsWithTheConfiguredSource()
     {
         var sut = CreateService(
             (_, _) => [new SourceHoliday("CH", new DateOnly(2026, 12, 24), "Office closed")],
             HolidaySource.File);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         var holiday = Db.BankHolidays.ToList().ShouldHaveSingleItem();
         holiday.Source.ShouldBe(HolidaySource.File);
@@ -385,7 +430,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task SyncCountriesAsync_RelabelsAnExistingRowWhenTheSourceChanges()
+    public async Task SyncRegionsAsync_RelabelsAnExistingRowWhenTheSourceChanges()
     {
         Db.BankHolidays.Add(new BankHoliday
         {
@@ -400,10 +445,90 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
             (_, _) => [new SourceHoliday("CH", new DateOnly(2026, 1, 1), "New Year")],
             HolidaySource.File);
 
-        await sut.SyncCountriesAsync(["CH"], 2026);
+        await sut.SyncRegionsAsync(["CH"], 2026);
 
         var holiday = Db.BankHolidays.ToList().ShouldHaveSingleItem();
         holiday.Source.ShouldBe(HolidaySource.File);
         holiday.UpdatedBy.ShouldBe("file-sync");
+    }
+
+    [Fact]
+    public async Task SyncRegionsAsync_WhenACountryFails_ReportsEveryRegionOfIt()
+    {
+        // A source deals in whole countries, so one failed fetch takes every region of that
+        // country with it. Reporting only the country would leave an admin no way to see
+        // which of their regions actually went unsynced.
+        var sut = CreateService((_, _) => throw new HttpRequestException("unreachable"));
+
+        var failed = await sut.SyncRegionsAsync(["CH-ZH", "CH-BE"], 2026);
+
+        failed.ShouldBe(["CH-ZH", "CH-BE"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task RemoveForRegionsAsync_DeletesManuallyAddedHolidaysToo()
+    {
+        var sut = CreateService();
+        await sut.AddManualAsync(
+            new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
+
+        var removed = await sut.RemoveForRegionsAsync(["CH-ZH"]);
+
+        removed.ShouldBe(1);
+        Db.BankHolidays.Any(h => h.Region == "CH-ZH").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RemoveForRegionsAsync_MatchesRegionsExactlyRatherThanByCountry()
+    {
+        var sut = CreateService();
+        Db.BankHolidays.AddRange(
+            new BankHoliday { Region = "ES", Date = new DateOnly(2026, 1, 1), Name = "Año Nuevo", Source = HolidaySource.Nager, CreatedBy = "nager-sync" },
+            new BankHoliday { Region = "ES-AS", Date = new DateOnly(2026, 9, 8), Name = "Día de Asturias", Source = HolidaySource.Nager, CreatedBy = "nager-sync" });
+        Db.SaveChanges();
+
+        // Dropping the country's own rows must leave a subdivision that is still occupied
+        // alone, and vice versa. Prefix matching here would take out both.
+        var removed = await sut.RemoveForRegionsAsync(["ES"]);
+
+        removed.ShouldBe(1);
+        Db.BankHolidays.Select(h => h.Region).ToList().ShouldBe(["ES-AS"]);
+    }
+
+    [Fact]
+    public async Task AddManualAsync_WhenNobodyIsInTheRegion_Throws()
+    {
+        var sut = CreateService();
+
+        await Should.ThrowAsync<ArgumentException>(
+            () => sut.AddManualAsync(
+                new AddManualHolidayRequest("ES-MD", new DateOnly(2026, 5, 2), "Dos de Mayo"), Actor, Tracked));
+    }
+
+    [Fact]
+    public async Task AddManualAsync_AllowsTheCountryOfATrackedRegion()
+    {
+        var sut = CreateService();
+
+        // Nobody is set to "CH" itself, but everyone in CH-ZH observes its nationwide days.
+        var created = await sut.AddManualAsync(
+            new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "Labour Day"), Actor, Tracked);
+
+        created.Region.ShouldBe("CH");
+    }
+
+    [Fact]
+    public async Task UpdateManualAsync_WhenMovedToAnUntrackedRegion_Throws()
+    {
+        var sut = CreateService();
+        var created = await sut.AddManualAsync(
+            new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
+
+        await Should.ThrowAsync<ArgumentException>(
+            () => sut.UpdateManualAsync(
+                created.Id,
+                new AddManualHolidayRequest("ES-MD", new DateOnly(2026, 5, 1), "Custom Day"),
+                Actor,
+                Tracked));
     }
 }

@@ -158,12 +158,14 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
 import { textColorFor } from "@/lib/contrastText";
 import { parse, toIso } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
+import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
@@ -187,6 +189,7 @@ const emit = defineEmits<{
 
 const configStore = useConfigStore();
 const personStore = usePersonStore();
+const { regionLabels: peopleRegionLabels } = storeToRefs(usePeopleStore());
 const containerRef = ref<HTMLDivElement | null>(null);
 const theadRef = ref<HTMLTableSectionElement | null>(null);
 
@@ -283,14 +286,13 @@ async function scrollToToday() {
 
 defineExpose({ scrollToToday });
 
-// region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland"
+// region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland".
+// Comes from the people payload rather than config: it covers wherever the team is now,
+// which is also the only place holidays are stored for.
 const regionLabels = computed(() => {
   const map = new Map<string, string>();
-  for (const country of configStore.config?.regions ?? []) {
-    map.set(country.code, country.name);
-    for (const region of country.regions) {
-      map.set(region.code, region.label);
-    }
+  for (const [code, label] of Object.entries(peopleRegionLabels.value)) {
+    map.set(code, label);
   }
   return map;
 });
@@ -450,7 +452,10 @@ const fillerRows = computed(() => {
 // Body rows pass their precomputed zebra-stripe background instead, to make rows
 // easier to tell apart. Weekends and holidays keep their own tint regardless of row,
 // since those already mark the column and shouldn't be muddied by the row stripe.
-function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackground = "bg-background") {
+function dayHeaderClass(
+  day: { iso: string; isWeekend: boolean },
+  plainBackground = "bg-background",
+) {
   if (holidayMap.value.has(day.iso)) return "bg-holiday";
   if (day.isWeekend) return "bg-surface";
   return plainBackground;

@@ -72,9 +72,21 @@ public sealed class BankHolidayService(
             ? existingDate.Month == date.Month && existingDate.Day == date.Day
             : existingDate == date;
 
-    private async Task SyncCountryAsync(string countryCode, int year, CancellationToken ct = default)
+    private async Task SyncCountryAsync(
+        string countryCode,
+        IReadOnlyCollection<string> regions,
+        int year,
+        CancellationToken ct = default)
     {
-        var holidays = await source.GetAsync(countryCode, year, ct);
+        var fetched = await source.GetAsync(countryCode, year, ct);
+
+        // Sources answer per country and hand back every subdivision they know of, so this
+        // is where the team's actual regions come in: keep the nationwide rows, keep the
+        // subdivisions somebody lives in, drop the rest rather than storing holidays for
+        // places the calendar will never show.
+        var holidays = fetched
+            .Where(h => h.Region == countryCode || regions.Contains(h.Region))
+            .ToList();
 
         if (holidays.Count == 0) return;
 
@@ -139,26 +151,41 @@ public sealed class BankHolidayService(
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<IReadOnlyList<string>> SyncCountriesAsync(
-        IEnumerable<string> countryCodes, int year, CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> SyncRegionsAsync(
+        IReadOnlyCollection<string> regions, int year, CancellationToken ct = default)
     {
         var failed = new List<string>();
 
-        foreach (var countryCode in countryCodes)
+        // One fetch per country, however many of its regions are in play: a source has no
+        // narrower unit than a country, so asking per region would just repeat the same
+        // request.
+        foreach (var country in regions.GroupBy(RegionCode.CountryOf, StringComparer.Ordinal))
         {
             try
             {
-                await SyncCountryAsync(countryCode, year, ct);
+                await SyncCountryAsync(country.Key, [.. country], year, ct);
             }
             catch (Exception ex)
             {
                 // one country failing shouldn't block the rest
-                logger.LogWarning(ex, "Bank holiday sync failed for {Country} {Year}", countryCode, year);
-                failed.Add(countryCode);
+                logger.LogWarning(ex, "Bank holiday sync failed for {Country} {Year}", country.Key, year);
+                failed.AddRange(country);
             }
         }
 
         return failed;
+    }
+
+    public async Task<int> RemoveForRegionsAsync(
+        IReadOnlyCollection<string> regions, CancellationToken ct = default)
+    {
+        if (regions.Count == 0) return 0;
+
+        // One DELETE rather than loading rows to delete them: nothing here needs the
+        // entities, and a region being abandoned can involve years of accumulated rows.
+        return await db.BankHolidays
+            .Where(b => regions.Contains(b.Region))
+            .ExecuteDeleteAsync(ct);
     }
 
     // Shared by both add and edit: loads only the two columns collision detection actually
@@ -175,9 +202,27 @@ public sealed class BankHolidayService(
             throw new InvalidOperationException($"A holiday already exists for {region} on {date}.");
     }
 
-    public async Task<BankHolidayDto> AddManualAsync(
-        AddManualHolidayRequest request, string actorUsername, CancellationToken ct = default)
+    // Fair game is anywhere the team is, plus the countries those places are in, since a
+    // nationwide holiday applies to everyone in the country. Anywhere else would store a
+    // row that no calendar query would ever ask for.
+    private static void EnsureTracked(IReadOnlyCollection<string> trackedRegions, string region)
     {
+        if (trackedRegions.Contains(region)) return;
+        if (trackedRegions.Any(r => RegionCode.CountryOf(r) == region)) return;
+
+        // ArgumentException, not InvalidOperationException: this is a bad request rather
+        // than a conflict with what is already stored, and the handler maps it to a 400.
+        throw new ArgumentException(
+            $"No one on the team is in {region}, so a bank holiday can't be added for it.");
+    }
+
+    public async Task<BankHolidayDto> AddManualAsync(
+        AddManualHolidayRequest request,
+        string actorUsername,
+        IReadOnlyCollection<string> trackedRegions,
+        CancellationToken ct = default)
+    {
+        EnsureTracked(trackedRegions, request.Region);
         await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: null, ct);
 
         var holiday = new BankHoliday
@@ -197,7 +242,11 @@ public sealed class BankHolidayService(
     }
 
     public async Task<BankHolidayDto> UpdateManualAsync(
-        int id, AddManualHolidayRequest request, string actorUsername, CancellationToken ct = default)
+        int id,
+        AddManualHolidayRequest request,
+        string actorUsername,
+        IReadOnlyCollection<string> trackedRegions,
+        CancellationToken ct = default)
     {
         var holiday = await db.BankHolidays.FindAsync([id], ct)
             ?? throw new KeyNotFoundException($"Bank holiday {id} not found.");
@@ -205,6 +254,7 @@ public sealed class BankHolidayService(
         if (holiday.Source != HolidaySource.Manual)
             throw new InvalidOperationException("Only manually added holidays can be edited.");
 
+        EnsureTracked(trackedRegions, request.Region);
         await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: id, ct);
 
         holiday.Region = request.Region;
