@@ -23,7 +23,8 @@ public sealed class PersonService(
         if (await db.People.AnyAsync(p => p.Username == request.Username, ct))
             throw new InvalidOperationException("A person already exists for this account.");
 
-        if (!await IsColorAvailableAsync(request.Color, excludingPersonId: null, ct))
+        var color = NormalizeColor(request.Color);
+        if (!await IsColorAvailableAsync(color, excludingPersonId: null, ct))
             throw new InvalidOperationException("Color is already taken by another person.");
 
         var person = new Person
@@ -34,7 +35,7 @@ public sealed class PersonService(
             Email = request.Email,
             DisplayName = request.DisplayName,
             HomeCity = request.HomeCity,
-            Color = request.Color,
+            Color = color,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actorUsername,
         };
@@ -88,6 +89,11 @@ public sealed class PersonService(
         await teamRegions.PruneIfUnusedAsync(vacated, ct);
     }
 
+    // Colors are free-form hex now, not just palette entries, so the same color can arrive
+    // as "#FF4500" or "#ff4500". Both the uniqueness check and the unique index compare
+    // bytes, so everything is lower-cased before it is compared or stored.
+    private static string NormalizeColor(string color) => color.ToLowerInvariant();
+
     private async Task<bool> IsColorAvailableAsync(string color, int? excludingPersonId, CancellationToken ct = default)
     {
         var query = db.People.Where(p => p.Color == color);
@@ -106,13 +112,14 @@ public sealed class PersonService(
         var person = await db.People.FindAsync([personId], ct)
             ?? throw new KeyNotFoundException($"Person {personId} not found.");
 
-        if (!await IsColorAvailableAsync(request.Color, personId, ct))
+        var color = NormalizeColor(request.Color);
+        if (!await IsColorAvailableAsync(color, personId, ct))
             throw new InvalidOperationException("Color is already taken by another person.");
 
         var vacated = person.HomeCity;
 
         person.DisplayName = request.DisplayName;
-        person.Color = request.Color;
+        person.Color = color;
         person.HomeCity = request.HomeCity;
         person.UpdatedAt = DateTime.UtcNow;
         person.UpdatedBy = actorUsername;
@@ -191,18 +198,20 @@ public sealed class PersonService(
                 continue;
             }
 
-            var color = Field(row, columns, ColorColumn);
+            var color = NormalizeColor(Field(row, columns, ColorColumn));
             if (color.Length == 0)
             {
                 // Assigned rather than demanded: an HR export has no idea what the app's
                 // palette is, and colors have to stay unique.
-                color = colorPalette.Value.Find(c => !takenColors.Contains(c));
-                if (color is null)
+                var free = colorPalette.Value.Find(c => !takenColors.Contains(c));
+                if (free is null)
                 {
                     failed.Add(new ImportPersonIssue(line, username,
                         $"Every color in PersonColorPalette is taken ({colorPalette.Value.Count} in total). Add more to import more people."));
                     continue;
                 }
+
+                color = NormalizeColor(free);
             }
             else if (takenColors.Contains(color))
             {

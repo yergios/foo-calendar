@@ -158,7 +158,7 @@ onMounted(async () => {
   }
 });
 
-async function handleSave(payload: UpdatePersonRequest, done: () => void) {
+async function handleSave(payload: UpdatePersonRequest, done: (error?: string | null) => void) {
   try {
     const updated = await updateMe(payload);
     personStore.setPerson(updated);
@@ -168,10 +168,12 @@ async function handleSave(payload: UpdatePersonRequest, done: () => void) {
     savedTimeout = setTimeout(() => {
       saved.value = false;
     }, 2500);
+    done();
   } catch (error: unknown) {
     console.error("ERROR => Failed to save profile changes:", error);
-  } finally {
-    done();
+    done(
+      error instanceof Error ? error.message : "Failed to save profile changes. Please try again.",
+    );
   }
 }
 

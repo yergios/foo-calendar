@@ -143,6 +143,14 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task ImportAsync_StoresColorsLowerCased()
+    {
+        await CreateService().ImportAsync("username,color\njdoe,#A1B2C3", Actor);
+
+        Db.People.Single().Color.ShouldBe("#a1b2c3");
+    }
+
+    [Fact]
     public async Task ImportAsync_FallsBackToTheNameThenTheUsernameForDisplayName()
     {
         await CreateService().ImportAsync(

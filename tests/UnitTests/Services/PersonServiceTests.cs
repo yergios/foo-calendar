@@ -47,6 +47,33 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task CreateAsync_WhenColorDiffersOnlyInCase_Throws()
+    {
+        await sut.CreateAsync(CreateRequest("alice", "#a1b2c3"), "alice");
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.CreateAsync(CreateRequest("bob", "#A1B2C3"), "bob"));
+    }
+
+    [Fact]
+    public async Task CreateAsync_StoresACustomColorLowerCased()
+    {
+        var created = await sut.CreateAsync(CreateRequest("alice", "#A1B2C3"), "alice");
+
+        created.Color.ShouldBe("#a1b2c3");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenTakingSomeoneElsesColorInAnotherCase_Throws()
+    {
+        var alice = await sut.CreateAsync(CreateRequest("alice", "#111111"), "alice");
+        await sut.CreateAsync(CreateRequest("bob", "#a1b2c3"), "bob");
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.UpdateAsync(alice.Id, new UpdatePersonRequest("Alice", null, "#A1B2C3"), "alice"));
+    }
+
+    [Fact]
     public async Task UpdateAsync_WhenKeepingYourOwnColor_Succeeds()
     {
         var created = await sut.CreateAsync(CreateRequest("alice", "#111111"), "alice");

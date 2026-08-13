@@ -2,7 +2,7 @@
   <RouterView />
   <OnboardingModal
     v-if="personStore.showOnboarding"
-    @submit="personStore.completeOnboarding"
+    @submit="completeOnboarding"
     @close="personStore.cancelOnboarding"
   />
 </template>
@@ -17,6 +17,21 @@ import { usePersonStore } from "@/stores/person";
 const authStore = useAuthStore();
 const personStore = usePersonStore();
 const { isAuthenticated, isLoading, user } = useAuth();
+
+// The modal stays open on failure with the reason in it: a color claimed while this person
+// was still filling the form is fixable right here.
+async function completeOnboarding(
+  payload: { displayName: string | null; homeCity: string | null; color: string },
+  done: (error?: string | null) => void,
+) {
+  try {
+    await personStore.completeOnboarding(payload);
+    done();
+  } catch (error: unknown) {
+    console.error("ERROR => Failed to create profile:", error);
+    done(error instanceof Error ? error.message : "Failed to create your profile. Try again.");
+  }
+}
 
 watchEffect(async () => {
   if (isLoading.value || !isAuthenticated.value) return;

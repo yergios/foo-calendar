@@ -70,7 +70,9 @@ const props = withDefaults(
 const emit = defineEmits<{
   submit: [
     payload: { displayName: string | null; homeCity: string | null; color: string },
-    done: () => void,
+    // The message is what the API said went wrong, most often a color someone else claimed
+    // between this form loading and being submitted.
+    done: (error?: string | null) => void,
   ];
 }>();
 
@@ -109,7 +111,11 @@ onMounted(async () => {
 // A color counts as "taken" only if it belongs to someone else. Our own current
 // color, when editing, stays selectable.
 function isTaken(c: string): boolean {
-  return colorsInUse.value.includes(c) && c !== props.initialColor;
+  const hex = c.toLowerCase();
+  return (
+    colorsInUse.value.some((used) => used.toLowerCase() === hex) &&
+    hex !== props.initialColor?.toLowerCase()
+  );
 }
 
 const canSubmit = computed(() => displayName.value.trim().length > 0 && color.value !== null);
@@ -125,8 +131,9 @@ function submit() {
       homeCity: homeCity.value,
       color: color.value,
     },
-    () => {
+    (failure?: string | null) => {
       submitting.value = false;
+      error.value = failure ?? null;
     },
   );
 }

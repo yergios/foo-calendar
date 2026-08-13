@@ -5,12 +5,7 @@
     </p>
     <ProfileForm
       submit-label="Get started"
-      @submit="
-        (payload, done) => {
-          $emit('submit', payload);
-          done();
-        }
-      "
+      @submit="(payload, done) => $emit('submit', payload, done)"
     />
   </AppModal>
 </template>
@@ -21,7 +16,10 @@ import AppModal from "@/components/AppModal.vue";
 import ProfileForm from "./ProfileForm.vue";
 
 defineEmits<{
-  submit: [payload: { displayName: string | null; homeCity: string | null; color: string }];
+  submit: [
+    payload: { displayName: string | null; homeCity: string | null; color: string },
+    done: (error?: string | null) => void,
+  ];
   close: [];
 }>();
 </script>
