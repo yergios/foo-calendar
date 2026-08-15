@@ -12,7 +12,7 @@ public static class PeopleEndpoints
 {
     public static void MapPeopleEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/people").RequireAuthorization();
+        var group = app.MapGroup("/api/people").RequireAuthorization().WithTags("People");
 
         group.MapPost("/", CreateMe);
         group.MapGet("/", GetAll);

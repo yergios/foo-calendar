@@ -46,8 +46,8 @@ public static class ConfigEndpoints
 {
     public static void MapConfigEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/config", GetConfig).RequireAuthorization();
-        app.MapGet("/api/config/bootstrap", GetBootstrapConfig).AllowAnonymous();
+        app.MapGet("/api/config", GetConfig).RequireAuthorization().WithTags("Config");
+        app.MapGet("/api/config/bootstrap", GetBootstrapConfig).AllowAnonymous().WithTags("Config");
     }
 
     private static IResult GetConfig(

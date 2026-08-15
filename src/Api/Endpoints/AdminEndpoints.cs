@@ -14,10 +14,10 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        // Gated per route rather than per group: these are three different jobs that happen
+        // Gated per route rather than per group: these are four different jobs that happen
         // to share a path prefix, and a deployment shouldn't have to hand out the ability
         // to delete people to let someone re-run a failed holiday sync.
-        var group = app.MapGroup("/api/admin");
+        var group = app.MapGroup("/api/admin").WithTags("Admin");
 
         group.MapPost("/people", CreatePerson).RequireAuthorization(Permissions.PeopleManage);
         group.MapPost("/people/import", ImportPeople).RequireAuthorization(Permissions.PeopleManage);

@@ -9,6 +9,7 @@
 - One permission per job instead of a single admin role: `PeopleManage`, `ReportsRead`, `HolidaysSync`, and `AuditRead`, each configured on its own under `Auth:Permissions` and enforced by a policy of the same name. The admin page shows only the sections you hold, and the nav item is hidden from someone who holds none of them.
 - An audit log, readable at `/admin` with `AuditRead` or from `GET /api/admin/audit`. It records profile creates/updates/deletes, bulk imports, deleted absences, every hand edit to a manual bank holiday, and hand-triggered syncs — with who did it and when. Append-only, and a person's entries outlive their profile.
 - `Auth:DevUser:GrantAllPermissions` (default on) holds every configured permission in local development, so the dev bypass never drifts as permissions are added. Set it false to browse as a plain member.
+- The API describes itself as OpenAPI at `/openapi/v1.json` and serves a [Scalar](https://scalar.com/) reference over it at `/scalar`, with a bearer scheme so calls can be made from the page. On in development, `ApiDocs:Enabled` elsewhere — both routes are anonymous, so it is off by default.
 - `Webhook:IncludeAbsenceNote` opts absence notes back into webhook payloads.
 - Regions are now tracked automatically: picking one on your profile starts syncing that region's public holidays, for the current year and the next.
 - The profile page offers every country and region the holiday source knows about, rather than a fixed list. Both fields are searchable, by name or by code, and ignore accents.

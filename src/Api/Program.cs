@@ -27,6 +27,8 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
+using Scalar.AspNetCore;
+
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
 var services = builder.Services;
@@ -83,6 +85,11 @@ services.AddOptions<WebhookOptions>()
         "Webhook:Url must be an absolute URL.")
     .Validate(o => o.MaxAttempts >= 1, "Webhook:MaxAttempts must be at least 1.")
     .Validate(o => o.Timeout > TimeSpan.Zero, "Webhook:Timeout must be positive.")
+    .ValidateOnStart();
+
+services.AddOptions<ApiDocsOptions>()
+    .Bind(config.GetSection(ApiDocsOptions.SectionName))
+    .Validate(o => o.RoutePrefix.StartsWith('/'), "ApiDocs:RoutePrefix must start with '/'.")
     .ValidateOnStart();
 
 services.AddOptions<ReverseProxyOptions>()
@@ -156,6 +163,17 @@ services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();
 services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
 services.AddScoped<IAuditLog, AuditLog>();
+
+// ---- API reference --------------------------------------------------------
+
+// Read unbound, like the auth section below: whether to generate a document at all is
+// decided before the container exists, and generating one nobody serves costs startup time
+// and hands a surprise to anyone who later opens the route expecting it to be off.
+var apiDocsEnabled = config.GetSection(ApiDocsOptions.SectionName)
+    .GetValue<bool>(nameof(ApiDocsOptions.Enabled));
+
+if (apiDocsEnabled)
+    services.AddOpenApi(o => o.AddDocumentTransformer<ApiDocumentTransformer>());
 
 // ---- Validation & Error handling ------------------------------------------
 
@@ -470,6 +488,25 @@ app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
 app.MapRegionEndpoints();
+
+// Both anonymous, and both off outside Development by default: a browser opening either
+// carries no bearer token, so requiring one would serve a 401 to the only thing that ever
+// opens them. They expose the shape of the API and never its contents, see ApiDocsOptions.
+if (apiDocsEnabled)
+{
+    var apiDocs = app.Services.GetRequiredService<IOptions<ApiDocsOptions>>().Value;
+
+    app.MapOpenApi().AllowAnonymous();
+
+    // The document URL is left at its default, which is relative: Scalar's own loader
+    // resolves it against the page's path minus the UI's prefix, so it lands on
+    // "<pathbase>/openapi/v1.json" at the root and behind a sub-path alike. Spelling it out
+    // here, with or without the path base, breaks one of those two.
+    app.MapScalarApiReference(apiDocs.RoutePrefix, options => options
+        .WithTitle($"{app.Services.GetRequiredService<IOptions<BrandingOptions>>().Value.AppName} API"))
+        .AllowAnonymous();
+}
+
 app.MapSpaFallback(proxyConfig.PathBase);
 
 await app.RunAsync();

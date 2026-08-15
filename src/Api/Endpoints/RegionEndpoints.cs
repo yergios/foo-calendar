@@ -18,7 +18,7 @@ public static class RegionEndpoints
 {
     public static void MapRegionEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/regions").RequireAuthorization();
+        var group = app.MapGroup("/api/regions").RequireAuthorization().WithTags("Regions");
 
         group.MapGet("/countries", GetCountries);
         group.MapGet("/{countryCode}", GetRegions);

@@ -46,6 +46,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 - Public holidays from a configurable source — the [Nager.Date](https://date.nager.at/) API by default, or a JSON file, or nothing at all — synced on a background job and on demand from the admin page, see [Where holidays come from](#where-holidays-come-from)
 - Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or a zero-setup dev-only bypass, see below
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
+- OpenAPI with a [Scalar](https://scalar.com/) reference UI, on in development and opt-in elsewhere, see [Browsing the API](#browsing-the-api)
 - OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
 
 ---
@@ -434,6 +435,23 @@ An absence's note is never recorded, and neither the log nor the admin page will
 > The log grows without bound. At a handful of entries a day that is a few thousand rows a year, which SQLite will not notice; if you need it pruned, it is one `DELETE` against the `AuditEntries` table.
 
 > Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`, `Auth__Permissions__PeopleManage__0=leave-admin`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__Permissions__PeopleManage__1=`). Blank entries are dropped rather than matched.
+
+### Browsing the API
+
+The API describes itself as OpenAPI at `/openapi/v1.json`, and serves [Scalar](https://scalar.com/) over it at `/scalar` — a reference you can read and call the API from, rather than a page of tables.
+
+```bash
+ApiDocs__Enabled=true       # off by default outside Development
+ApiDocs__RoutePrefix=/scalar
+```
+
+It is **on in Development** and off everywhere else, because both routes are anonymous: a browser opening them carries no bearer token, so requiring one would serve a 401 to the only thing that ever opens them. Turning it on publishes the shape of the API — paths, parameters, schemas — to anyone who can reach the app. Never its contents: every route behind it still wants a token, and the fallback policy is unchanged. On an internal deployment whose users script against the API, that trade is usually worth making; think about it on one that faces further than that.
+
+The document names a `Bearer` security scheme, so Scalar's auth panel takes an access token and sends it with every call you make from the page. Get one from your identity provider the way the SPA does, or from the browser devtools of a signed-in session.
+
+Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
+
+> Under a sub-path (`ReverseProxy:PathBase`), Scalar resolves the document URL against the page's own path, so `/calendar/scalar` reads `/calendar/openapi/v1.json` without either being configured.
 
 ### Reacting to absences
 

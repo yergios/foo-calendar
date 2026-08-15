@@ -7,7 +7,7 @@ public static class AbsencesEndpoints
 {
     public static void MapAbsencesEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/absences").RequireAuthorization();
+        var group = app.MapGroup("/api/absences").RequireAuthorization().WithTags("Absences");
 
         group.MapGet("/", GetAbsences);
         group.MapPost("/", CreateAbsence);

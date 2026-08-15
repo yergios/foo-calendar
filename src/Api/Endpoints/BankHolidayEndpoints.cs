@@ -13,7 +13,7 @@ public static class BankHolidaysEndpoints
 {
     public static void MapBankHolidaysEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/bank-holidays").RequireAuthorization();
+        var group = app.MapGroup("/api/bank-holidays").RequireAuthorization().WithTags("Bank holidays");
 
         group.MapGet("/catalog", GetCatalogHolidays);
         group.MapPost("/", AddManual);
