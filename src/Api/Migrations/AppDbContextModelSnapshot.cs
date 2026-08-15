@@ -62,6 +62,32 @@ namespace Api.Migrations
                     b.ToTable("Absences");
                 });
 
+            modelBuilder.Entity("Api.Data.Models.AuditEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Actor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuditEntries");
+                });
+
             modelBuilder.Entity("Api.Data.Models.BankHoliday", b =>
                 {
                     b.Property<int>("Id")

@@ -286,6 +286,9 @@ dotnet_style_prefer_inferred_anonymous_type_member_names = true:suggestion
 dotnet_style_namespace_match_folder = true:suggestion
 
 # Disable warnings
+# CA1724: type name matching a framework namespace. Api.Configuration.Permissions is worth
+# the collision with System.Security.Permissions, which nothing here imports.
+dotnet_diagnostic.CA1724.severity = none
 dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.CA2007.severity = none
 dotnet_diagnostic.CA1056.severity = none

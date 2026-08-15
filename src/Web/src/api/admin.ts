@@ -1,5 +1,6 @@
 import { apiFetch, apiJson } from "@/api";
 
+import type { AuditEntriesResponse } from "../types/audit";
 import type { SyncBankHolidaysResponse } from "../types/bankHoliday";
 import type {
   AllAbsenceStatsResponse,
@@ -28,6 +29,11 @@ export async function deletePerson(id: number): Promise<void> {
 
 export function getAllPeopleStats(year: number): Promise<AllAbsenceStatsResponse> {
   return apiJson(`/api/admin/people/stats?year=${year}`);
+}
+
+/** Newest first. `offset` pages further back through the same log. */
+export function getAuditLog(limit: number, offset = 0): Promise<AuditEntriesResponse> {
+  return apiJson(`/api/admin/audit?limit=${limit}&offset=${offset}`);
 }
 
 /** Omitting the region syncs every region the team occupies; naming one re-runs just that

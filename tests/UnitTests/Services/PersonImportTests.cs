@@ -19,11 +19,14 @@ public sealed class PersonImportTests : SqliteTestBase
 
     private readonly RecordingTeamRegionService teamRegions = new();
 
+    private readonly RecordingAuditLog audit = new();
+
     private PersonService CreateService() => new(
         Db,
         Options.Create(palette),
         teamRegions,
-        new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance));
+        new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance),
+        audit);
 
     private Person AddPerson(string username, string color)
     {

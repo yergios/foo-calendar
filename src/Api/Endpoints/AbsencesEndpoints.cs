@@ -18,10 +18,15 @@ public static class AbsencesEndpoints
     private static async Task<IResult> GetAbsences(
         DateOnly from,
         DateOnly to,
+        ICurrentPersonAccessor currentPerson,
         IAbsenceService absences,
         CancellationToken ct)
     {
-        var result = await absences.GetOverlappingAsync(from, to, ct);
+        // FindAsync, not GetAsync: the calendar is readable from the first sign-in, before
+        // anyone has set up a profile. Someone with none simply owns no notes.
+        var viewer = await currentPerson.FindAsync(ct);
+
+        var result = await absences.GetOverlappingAsync(from, to, viewer?.Id, ct);
         return Results.Ok(result);
     }
 

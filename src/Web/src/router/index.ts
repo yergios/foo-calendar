@@ -2,7 +2,13 @@ import { watch } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteLocationNormalized } from "vue-router";
 
-import { handleRedirectCallback, resolveAccessToken, signinRedirect, useAuth, useAuthStore } from "@/auth";
+import {
+  handleRedirectCallback,
+  resolveAccessToken,
+  signinRedirect,
+  useAuth,
+  useAuthStore,
+} from "@/auth";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { basePath } from "@/lib/appUrl";
 import AdminView from "@/views/AdminView.vue";
@@ -25,7 +31,9 @@ const router = createRouter({
       children: [
         { path: "", component: HomeView },
         { path: "profile", component: ProfileView },
-        { path: "admin", component: AdminView, meta: { requiresAdmin: true } },
+        // Nothing finer here on purpose: the page's sections gate themselves, and this
+        // only keeps out someone who would find every one of them hidden.
+        { path: "admin", component: AdminView, meta: { requiresAnyPermission: true } },
       ],
     },
     {
@@ -70,7 +78,7 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
         console.error("ERROR => Failed to resolve access token before route navigation:", error);
       }
 
-      if (to.matched.some((r) => r.meta.requiresAdmin) && !useAuthStore().isAdmin) {
+      if (to.matched.some((r) => r.meta.requiresAnyPermission) && !useAuthStore().canAnything) {
         return "/403";
       }
 

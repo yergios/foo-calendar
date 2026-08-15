@@ -21,6 +21,7 @@ Use the **Sort by** and **Region** controls above the grid to reorder or filter 
 - Click **+ Add absence**, or click any empty day in your own row to start a new absence prefilled with that date.
 - Click one of your own absence blocks to edit its dates, type, or note — or to delete it, right from that same screen.
 - You can only add, edit, or delete absences for yourself. Everyone else's absences are visible but read-only.
+- Your **note is yours**. The team sees that you're off and whether it's vacation, sick, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, not in the audit log.
 
 ### Bank holidays
 
@@ -36,7 +37,16 @@ One thing worth knowing before you delete: if you're the last person in your reg
 
 ### Admin
 
-If you have admin access, an **Admin** link appears in the header. From there you can manage anyone's profile, see everyone's absence stats side by side, and manually trigger a bank-holiday sync for a given year.
+Keeping the calendar's public holidays right is everyone's job — adding, editing, and deleting a manual holiday needs no special access at all.
+
+Beyond that, an **Admin** link appears in the header if you've been granted anything extra. The page shows only the parts you hold, so what you see there depends on what you were given:
+
+- **Manage people** — create, edit, and delete anyone's profile, and import a team from a CSV.
+- **Read reports** — everyone's vacation/sick/other totals for a year, side by side.
+- **Sync bank holidays** — re-run the automatic sync for a given year, or for a single region that failed.
+- **Read the audit log** — who changed or deleted what, kept after the thing itself is gone.
+
+Ask whoever administers your identity provider if you need one of these.
 
 ---
 
@@ -52,6 +62,12 @@ Only your own row's empty days are clickable, to start a new absence. Other peop
 
 **Can I edit or delete someone else's absence?**
 No. You can only manage your own absences. Anyone can manage manually-added bank holidays, though, since those apply to the whole team.
+
+**Who can read the note on my absence?**
+Only you. Everyone else sees the dates and the type — the note itself is never shown to anyone but its author, and it is never written to the audit log.
+
+**Something disappeared from the calendar. Can I find out who removed it?**
+Yes, if you have audit access, or ask someone who does: deleted absences, deleted profiles, and every hand edit to a bank holiday are recorded with who did it and when.
 
 **A public holiday for my region is missing. What do I do?**
 Add it manually with **+ Add bank holiday**. If your region isn't in that list at all, set it on your **Profile** first — the list only offers regions somebody on the team is in.

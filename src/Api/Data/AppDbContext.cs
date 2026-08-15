@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Person> People => Set<Person>();
     public DbSet<Absence> Absences => Set<Absence>();
     public DbSet<BankHoliday> BankHolidays => Set<BankHoliday>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

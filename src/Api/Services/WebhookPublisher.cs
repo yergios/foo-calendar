@@ -79,6 +79,13 @@ public sealed class WebhookPublisher(
     public async Task DeliverAsync(WebhookEvent webhookEvent, CancellationToken ct = default)
     {
         var config = options.Value;
+
+        // Dropped here rather than at each call site: this is the last thing before the
+        // wire, so it is the only place that has to remember. The field stays in the
+        // payload, it simply arrives null, see WebhookOptions.IncludeAbsenceNote.
+        if (!config.IncludeAbsenceNote && webhookEvent.Absence?.Note is not null)
+            webhookEvent = webhookEvent with { Absence = webhookEvent.Absence with { Note = null } };
+
         var body = JsonSerializer.Serialize(webhookEvent, JsonOptions);
 
         for (var attempt = 1; attempt <= config.MaxAttempts; attempt++)

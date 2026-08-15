@@ -15,7 +15,11 @@ public sealed class CurrentPersonAccessor(
 {
     private Person cached;
 
-    public async Task<Person> GetAsync(CancellationToken ct = default)
+    public async Task<Person> GetAsync(CancellationToken ct = default) =>
+        await FindAsync(ct)
+            ?? throw new KeyNotFoundException("No person exists for this account yet.");
+
+    public async Task<Person> FindAsync(CancellationToken ct = default)
     {
         if (cached is not null) return cached;
 
@@ -24,8 +28,7 @@ public sealed class CurrentPersonAccessor(
 
         var username = user.GetUsername(authOptions.Value.ClaimTypes.UserName);
 
-        cached = await db.People.SingleOrDefaultAsync(p => p.Username == username, ct)
-            ?? throw new KeyNotFoundException("No person exists for this account yet.");
+        cached = await db.People.SingleOrDefaultAsync(p => p.Username == username, ct);
 
         return cached;
     }

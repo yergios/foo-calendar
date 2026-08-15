@@ -20,11 +20,12 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     private readonly RecordingWebhookPublisher webhooks = new();
+    private readonly RecordingAuditLog audit = new();
     private readonly AbsenceService sut;
 
     public AbsenceServiceTests()
     {
-        sut = new AbsenceService(Db, webhooks);
+        sut = new AbsenceService(Db, webhooks, audit);
     }
 
     private Person CreatePerson(string username = "jdoe", string color = "#111111")
@@ -173,7 +174,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         await sut.DeleteAsync(person, created.Id);
 
-        var remaining = await sut.GetOverlappingAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31));
+        var remaining = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), person.Id);
         remaining.Absences.ShouldBeEmpty();
     }
 
@@ -280,7 +282,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         });
         Db.SaveChanges();
 
-        var result = await sut.GetOverlappingAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+        var result = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), person.Id);
 
         var absence = result.Absences.ShouldHaveSingleItem();
         absence.Type.ShouldBe(AbsenceType.Vacation);
@@ -355,5 +358,62 @@ public sealed class AbsenceServiceTests : SqliteTestBase
             new CreateAbsenceRequest(new DateOnly(2026, 5, 3), new DateOnly(2026, 5, 4), AbsenceType.Sick, null)));
 
         webhooks.Published.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_ReturnsTheViewersOwnNote()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        var result = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), person.Id);
+
+        result.Absences.ShouldHaveSingleItem().Note.ShouldBe("Flu");
+    }
+
+    // The team can see that someone is off and what kind of absence it is. Why is between
+    // them and the app.
+    [Fact]
+    public async Task GetOverlappingAsync_WithholdsEveryoneElsesNote()
+    {
+        var author = CreatePerson("jdoe", "#111111");
+        var viewer = CreatePerson("asmith", "#222222");
+        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        var result = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), viewer.Id);
+
+        var absence = result.Absences.ShouldHaveSingleItem();
+        absence.Note.ShouldBeNull();
+        absence.Type.ShouldBe(AbsenceType.Sick);
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_WhenTheViewerHasNoProfileYet_WithholdsEveryNote()
+    {
+        var author = CreatePerson();
+        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        var result = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), viewerPersonId: null);
+
+        result.Absences.ShouldHaveSingleItem().Note.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_LogsWhatWentWithoutTheNote()
+    {
+        var person = CreatePerson();
+        var created = await sut.CreateAsync(
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        await sut.DeleteAsync(person, created.Id);
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Action.ShouldBe(AuditActions.AbsenceDeleted);
+        entry.Target.ShouldBe(person.DisplayName);
+        entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
+        entry.Details.ShouldNotContain("Flu");
     }
 }

@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Services;
 
-public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) : IAbsenceService
+public sealed class AbsenceService(
+    AppDbContext db, IWebhookPublisher webhooks, IAuditLog audit) : IAbsenceService
 {
     // Published after the change is committed, so a receiver can never be told about an
     // absence that then failed to save.
@@ -19,13 +20,16 @@ public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) 
             person.Username,
             WebhookAbsence.FromEntity(absence, person.DisplayName)));
 
-    public async Task<AbsencesResponse> GetOverlappingAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    public async Task<AbsencesResponse> GetOverlappingAsync(
+        DateOnly from, DateOnly to, int? viewerPersonId, CancellationToken ct = default)
     {
         var absences = await ApprovedOverlapping(db.Absences, from, to)
             .OrderBy(a => a.StartDate)
             .ToListAsync(ct);
 
-        return new([.. absences.Select(AbsenceDto.FromEntity)]);
+        // Notes come back only on the viewer's own rows. Filtered here rather than in the
+        // client so a note never leaves the process, whoever is asking and however they ask.
+        return new([.. absences.Select(a => AbsenceDto.FromEntity(a, a.PersonId == viewerPersonId))]);
     }
 
     public async Task<AbsenceStatsResponse> GetStatsAsync(int personId, int year, CancellationToken ct = default)
@@ -85,7 +89,9 @@ public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) 
         await db.SaveChangesAsync(ct);
 
         PublishEvent(WebhookEvents.AbsenceCreated, absence, person);
-        return AbsenceDto.FromEntity(absence);
+
+        // Their own absence coming back to them, so the note goes with it.
+        return AbsenceDto.FromEntity(absence, includeNote: true);
     }
 
     public async Task<AbsenceDto> UpdateAsync(
@@ -115,7 +121,7 @@ public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) 
         await db.SaveChangesAsync(ct);
 
         PublishEvent(WebhookEvents.AbsenceUpdated, absence, person);
-        return AbsenceDto.FromEntity(absence);
+        return AbsenceDto.FromEntity(absence, includeNote: true);
     }
 
     public async Task DeleteAsync(Person person, int absenceId, CancellationToken ct = default)
@@ -128,6 +134,14 @@ public sealed class AbsenceService(AppDbContext db, IWebhookPublisher webhooks) 
 
         db.Absences.Remove(absence);
         await db.SaveChangesAsync(ct);
+
+        // Dates and type, never the note: the log is read by people the note was never
+        // meant for, and a deleted absence shouldn't outlive its author's privacy.
+        await audit.RecordAsync(
+            AuditActions.AbsenceDeleted,
+            person.DisplayName,
+            $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}",
+            ct);
 
         // Describes the absence as it was, since there is nothing left to look up.
         PublishEvent(WebhookEvents.AbsenceDeleted, absence, person);

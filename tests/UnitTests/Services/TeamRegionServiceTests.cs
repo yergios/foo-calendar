@@ -34,7 +34,8 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
 
     private TeamRegionService CreateService(string homeRegion = "CH-ZH") =>
         new(Db,
-            new BankHolidayService(Db, new EmptyHolidaySource(), NullLogger<BankHolidayService>.Instance),
+            new BankHolidayService(
+                Db, new EmptyHolidaySource(), new RecordingAuditLog(), NullLogger<BankHolidayService>.Instance),
             Options.Create(new TeamOptions { HomeRegion = homeRegion }),
             NullLogger<TeamRegionService>.Instance);
 

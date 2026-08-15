@@ -10,10 +10,6 @@ public sealed class AuthOptions
     /// <summary>Value of <see cref="Provider"/> that turns on the dev-only bypass.</summary>
     public const string ProviderNone = "None";
 
-    /// <summary>Authorization policy gating the admin area. Registered in Program.cs from
-    /// <see cref="AdminPermissions"/> and <see cref="ClaimTypeOptions.Permissions"/>.</summary>
-    public const string AdminPolicy = "Admin";
-
     /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" is a
     /// dev-only bypass (see DevAuthHandler) that skips SSO entirely.</summary>
     public string Provider { get; init; } = ProviderOidc;
@@ -21,11 +17,15 @@ public sealed class AuthOptions
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
 
-    /// <summary>Claim values that grant access to the admin area. Holding any one of them
-    /// is enough, which is what lets a deployment accept, say, both an app role and a
-    /// group id without the identity provider having to mint a single tidy permission.
+    /// <summary>Which claim values grant each permission in <see cref="Api.Configuration.Permissions.All"/>,
+    /// keyed by permission name. Holding any one of a permission's values is enough, which
+    /// is what lets a deployment accept, say, both an app role and a group id without the
+    /// identity provider having to mint a single tidy permission. Nothing stops two
+    /// permissions from naming the same value: that is how a deployment that wants one
+    /// undivided admin role configures one.
     /// </summary>
-    public List<string> AdminPermissions { get; init; } = [];
+    public Dictionary<string, List<string>> Permissions { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The SPA's own OIDC client id. Not used by the API itself, it is handed to
     /// the browser at runtime so the frontend doesn't have to be rebuilt per IdP.</summary>
@@ -42,14 +42,35 @@ public sealed class AuthOptions
     public ClaimTypeOptions ClaimTypes { get; init; } = new();
     public DevUserOptions DevUser { get; init; } = new();
 
+    /// <summary>The claim values granting one permission, or nothing at all when the
+    /// deployment never configured it. Never null, so a caller can't accidentally treat
+    /// "not configured" as "granted".</summary>
+    public IReadOnlyList<string> ValuesFor(string permission) =>
+        Permissions.TryGetValue(permission, out var values) ? values : [];
+
+    /// <summary>Every claim value that grants anything, deduplicated. What the dev identity
+    /// carries when it is set up to hold everything, see <see cref="DevUserOptions"/>.
+    /// </summary>
+    public List<string> AllPermissionValues() =>
+        [.. Permissions.Values.SelectMany(values => values).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>What the dev identity actually holds. Resolved here rather than at each
+    /// use so the API's DevAuthHandler and the SPA's bootstrap config can't disagree about
+    /// what the bypass is signed in as.</summary>
+    public List<string> EffectiveDevPermissions() =>
+        DevUser.GrantAllPermissions ? AllPermissionValues() : DevUser.Permissions;
+
     /// <summary>Drops blank list entries, which come from shortening a list through
     /// environment variables: the leftover indexes are set to empty rather than removed.
     /// An empty claim name would otherwise match claims that have no type, and an empty
     /// accepted value would match a claim with no value.</summary>
     public void RemoveBlankEntries()
     {
-        AdminPermissions.RemoveAll(string.IsNullOrWhiteSpace);
+        foreach (var values in Permissions.Values)
+            values.RemoveAll(string.IsNullOrWhiteSpace);
+
         ClaimTypes.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
+        DevUser.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
     }
 }
 
@@ -79,5 +100,14 @@ public sealed class DevUserOptions
     public string FirstName { get; init; } = "Dev";
     public string LastName { get; init; } = "User";
     public string Email { get; init; } = "dev@example.local";
+
+    /// <summary>Grants the dev identity every value listed under Auth:Permissions, so local
+    /// development has the whole app available without anyone maintaining a list that
+    /// drifts as permissions are added. Set false to try the app as a plain member, or as
+    /// whatever <see cref="Permissions"/> names.</summary>
+    public bool GrantAllPermissions { get; init; } = true;
+
+    /// <summary>Claim values the dev identity carries when
+    /// <see cref="GrantAllPermissions"/> is off. Ignored while it is on.</summary>
     public List<string> Permissions { get; init; } = [];
 }

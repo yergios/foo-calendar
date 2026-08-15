@@ -44,7 +44,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 - .NET 10 Minimal API with EF Core + SQLite
 - Public holidays from a configurable source — the [Nager.Date](https://date.nager.at/) API by default, or a JSON file, or nothing at all — synced on a background job and on demand from the admin page, see [Where holidays come from](#where-holidays-come-from)
-- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication and permission-based admin access — or a zero-setup dev-only bypass, see below
+- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or a zero-setup dev-only bypass, see below
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
 - OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
 
@@ -64,7 +64,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 Out of the box, `src/Api/appsettings.Development.json` sets `Auth:Provider` to `None`, which fully bypasses SSO in local development, so you can run the app with no OIDC/IdP tenant at all. Everything below is only needed once you point at a real provider (staging/production, or if you want to exercise the real auth path locally):
 
-1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `AdminPermissions`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
+1. At `src/Api/appsettings.json`, set values for `ConnectionStrings:FooCalendarDb` and the `Auth` section (`Authority`, `Audience`, `ClientId`, `Permissions`) — these come from whichever OIDC provider you use (Auth0, Okta, Keycloak, Azure AD, ...).
 2. Holidays are pulled from the public Nager.Date API by default, which needs no setup. See [Where holidays come from](#where-holidays-come-from) to point that elsewhere.
 
 The frontend needs no setup of its own: it reads branding and OIDC settings from the API at startup — see [Configuring a deployment](#configuring-a-deployment).
@@ -106,7 +106,7 @@ At startup the frontend fetches `GET /api/config/bootstrap` (the one anonymous e
 | `Auth:Audience` | Which API the access token is issued for. |
 | `Auth:Scope` | Scopes the SPA requests. |
 | `Auth:RedirectUri` | Where the IdP returns after login. Relative by default, so any hostname works. |
-| `Auth:AdminPermissions` | Claim values gating `/admin`, on both sides. Any one of them grants it. |
+| `Auth:Permissions` | Claim values granting each permission, on both sides. Any one of them grants it. |
 | `Auth:ClaimTypes:*` | Which claims carry identity and permissions, on both sides. |
 
 Every one of these is overridable per environment without touching `appsettings.json`, using the standard .NET double-underscore environment variables — which is usually how you'd configure a container:
@@ -139,7 +139,7 @@ docker compose up -d
 
 That serves the app on `http://localhost:8080` and keeps the SQLite database in the `foo-calendar-data` volume. **That volume is the entire application state** — back it up and you have backed up everything.
 
-To try the app before setting up an identity provider, run it in the Development environment, where SSO is bypassed entirely (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, admin included:
+To try the app before setting up an identity provider, run it in the Development environment, where SSO is bypassed entirely (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, holding every permission:
 
 ```bash
 docker build -t foo-calendar:1.0.0 .
@@ -153,7 +153,7 @@ If the container restarts in a loop, read the logs first: configuration is valid
 **Notes for other environments**
 
 - The container listens on `8080` and runs as the non-root `app` user from the .NET base image.
-- The image includes a `HEALTHCHECK` against `/healthchecks`. That endpoint is anonymous and runs every check, but reports only the overall status (`{"status":"Healthy"}`) — per-check detail, including exception messages, is at `/healthchecks/detail` and requires the admin permission. Kubernetes and other platforms that probe over HTTP themselves don't need the `curl` that check relies on, and can drop that layer from the runtime stage.
+- The image includes a `HEALTHCHECK` against `/healthchecks`. That endpoint is anonymous and runs every check, but reports only the overall status (`{"status":"Healthy"}`) — per-check detail, including exception messages, is at `/healthchecks/detail` and requires the `AuditRead` permission. Kubernetes and other platforms that probe over HTTP themselves don't need the `curl` that check relies on, and can drop that layer from the runtime stage.
 - A **named volume** picks up the right ownership automatically. A **bind mount** does not: `chown 1654 /your/host/path` first, or migrations will fail on first start with a read-only database error.
 - Configure everything through environment variables, as `.env.example` shows. Nothing needs to be baked into the image, which is why the same image works for every deployment.
 - Migrations are applied automatically at startup, so upgrading is a matter of pulling a newer image and restarting. This is also why more than one replica is not yet safe — see [Scaling](#scaling).
@@ -360,33 +360,80 @@ Valid rows are imported even when others fail, and the response says exactly wha
 
 ### Access levels
 
-Most of the app is available to anyone signed in. A single elevated permission gates the admin area:
+Signing in is enough to do everything a member of the team does. Four permissions gate the rest, each configured on its own and each enforced by a policy of the same name:
 
-| Who                                                                          | Can do                                                                                                                  |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Anyone signed in                                                             | View the calendar, manage their own profile and absences, add/edit/delete bank holidays                                 |
-| Holder of any `Auth:AdminPermissions` value (`src/Api/appsettings.json`) | Everything above, plus `/admin`: manage any person's profile, [import people in bulk](#importing-people-in-bulk), trigger a bank-holiday sync, view team-wide absence stats |
+| Who | Can do |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| Anyone signed in | View the calendar, manage their own profile and absences, add/edit/delete manual bank holidays |
+| `PeopleManage` | Manage any person's profile, [import people in bulk](#importing-people-in-bulk) |
+| `ReportsRead` | View team-wide absence totals |
+| `HolidaysSync` | Trigger a bank-holiday sync by hand |
+| `AuditRead` | Read the [audit log](#who-changed-what) and `/healthchecks/detail` |
 
-Grant the admin permission to a user in your OIDC provider's dashboard. Locally, the dev bypass grants whatever is listed in `Auth:DevUser:Permissions` (`src/Api/appsettings.Development.json`), which already includes the admin permission — so the admin area is reachable without an admin-permissioned account.
+Keeping the calendar's public holidays right is everyone's job, deliberately: a member can add, edit, and delete manual holidays without asking anyone. `HolidaysSync` is separate because it calls out to the holiday source and writes in bulk, not because a holiday is precious.
 
-**Matching what your provider actually emits.** Both of these are lists, because providers rarely hand you one tidy permission string:
+`/admin` is a page of sections, each behind its own permission, so it shows whatever the signed-in user is allowed to see of it. Someone holding none of them never sees the nav item at all.
+
+**Configuring who holds what.** `Auth:Permissions` maps each permission to the claim values that grant it. Values are lists because providers rarely hand you one tidy permission string:
 
 ```json
 "Auth": {
-  "AdminPermissions": [ "8f4c2f1a-0000-4c1e-9a3e-1c2d3e4f5a6b", "leave-admin" ],
+  "Permissions": {
+    "PeopleManage": [ "8f4c2f1a-0000-4c1e-9a3e-1c2d3e4f5a6b", "leave-admin" ],
+    "ReportsRead": [ "leave-admin", "people-team" ],
+    "HolidaysSync": [ "leave-admin", "office-coordinator" ],
+    "AuditRead": [ "leave-admin" ]
+  },
   "ClaimTypes": { "Permissions": [ "roles", "groups" ] }
 }
 ```
 
-- `ClaimTypes:Permissions` names the claims to look in, searched in order. Entra ID, for instance, puts app roles in `roles` and group memberships in `groups`; listing both lets either grant admin.
-- `AdminPermissions` lists the values that count. Holding **any one** is enough, so a group id and a friendlier role name can coexist while you migrate between them.
+- Every permission must name at least one value or the app refuses to start, and a name that isn't one of the four is rejected as a typo rather than silently granting nothing.
+- Holding **any one** of a permission's values is enough, so a group id and a friendlier role name can coexist while you migrate between them.
+- Nothing stops the same value appearing under all four. That is how you configure one undivided admin role, and it is what the shipped `appsettings.json` does.
+- `ClaimTypes:Permissions` names the claims to look in, searched in order. Entra ID, for instance, puts app roles in `roles` and group memberships in `groups`; listing both lets either grant a permission.
 - Claim names are matched exactly (JWT claim names are case-sensitive), values case-insensitively — group ids are often GUIDs whose casing differs between a provider's dashboard and its tokens.
 
-The API's authorization policy and the frontend's admin nav read the same two settings, so they cannot disagree.
+Grant the values to a user in your OIDC provider's dashboard. Locally, the dev bypass holds **every** value listed under `Auth:Permissions`, so the whole app is available with no identity provider at all. Set `Auth:DevUser:GrantAllPermissions` to `false` to try it as a plain member instead, or as whatever `Auth:DevUser:Permissions` lists.
 
-**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. Admin-only routes ask for the `AuthOptions.AdminPolicy` policy (`.RequireAuthorization(AuthOptions.AdminPolicy)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
+The API's policies and the SPA's gating read the same map — served to the browser at startup — so they cannot disagree.
 
-> Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__AdminPermissions__1=`). Blank entries are dropped rather than matched.
+**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
+
+**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable.
+
+### Who changed what
+
+Rows carry `CreatedBy`/`UpdatedBy` for as long as they exist. The audit log covers the rest, and deletions in particular, where there is no row left to ask:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://leave.acme.example/api/admin/audit?limit=50&offset=0"
+```
+
+```json
+{
+  "entries": [
+    {
+      "id": 412,
+      "occurredAt": "2026-08-13T09:14:02.113",
+      "actor": "jdoe",
+      "action": "person.deleted",
+      "target": "Jane D.",
+      "details": "jdoe, ES-MD; 7 absence(s) deleted with them"
+    }
+  ],
+  "total": 413
+}
+```
+
+It records profile creates, updates, and deletes; bulk imports; deleted absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
+
+An absence's note is never recorded, and neither the log nor the admin page will show you one. The same applies to the actions themselves: an entry says a Sick absence from the 2nd to the 6th was deleted, not why it was taken.
+
+> The log grows without bound. At a handful of entries a day that is a few thousand rows a year, which SQLite will not notice; if you need it pruned, it is one `DELETE` against the `AuditEntries` table.
+
+> Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`, `Auth__Permissions__PeopleManage__0=leave-admin`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__Permissions__PeopleManage__1=`). Blank entries are dropped rather than matched.
 
 ### Reacting to absences
 
@@ -412,12 +459,14 @@ Three events are sent: `absence.created`, `absence.updated` and `absence.deleted
     "startDate": "2026-05-04",
     "endDate": "2026-05-08",
     "type": "Vacation",
-    "note": "Trip"
+    "note": null
   }
 }
 ```
 
 For a deletion, `absence` describes the absence as it was.
+
+`note` is free text somebody typed about their own absence, and on a sick leave it is health information, so it is **left out by default** — the field is always there, it simply arrives `null`. Set `Webhook:IncludeAbsenceNote=true` to send it, and point the hook somewhere you control if you do.
 
 **Headers**
 
@@ -443,9 +492,7 @@ Without a secret, anyone who learns the URL can post convincing events at it. Se
 - A restart drops anything still queued, and a receiver that stays down long enough will have events dropped from a full queue.
 - Events are delivered in order, one at a time.
 
-So treat these as notifications, not as a ledger. Anything that must not miss a change should reconcile against `GET /api/absences` rather than counting on the hook.
-
-Note that `note` is free text a person typed, and it is included in the payload. If that is sensitive in your organisation, terminate the webhook somewhere you control rather than pointing it at a third-party service.
+So treat these as notifications, not as a ledger. Anything that must not miss a change should reconcile against `GET /api/absences` rather than counting on the hook. That endpoint returns everyone's absences, but a `note` only on the caller's own: it is the one field the calendar keeps between a person and the app.
 
 ### Observability
 

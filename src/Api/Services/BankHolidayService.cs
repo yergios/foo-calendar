@@ -10,8 +10,16 @@ namespace Api.Services;
 public sealed class BankHolidayService(
     AppDbContext db,
     IHolidaySource source,
+    IAuditLog audit,
     ILogger<BankHolidayService> logger) : IBankHolidayService
 {
+    // Manual holidays are everyone's to keep up to date, which is exactly why every hand
+    // edit is logged: nobody has to guess who moved a day the whole team plans around.
+    private static string Describe(BankHoliday holiday) =>
+        $"{holiday.Region}, {holiday.Date:yyyy-MM-dd}"
+        + (holiday.IsRecurringAnnually ? ", every year" : "");
+
+
     // Marks rows the sync itself created or refreshed, since there's no real username
     // behind those. Named after the source so it stays obvious which system put a row
     // there after a deployment switches sources. Spelled out rather than derived from the
@@ -238,6 +246,9 @@ public sealed class BankHolidayService(
 
         db.BankHolidays.Add(holiday);
         await db.SaveChangesAsync(ct);
+
+        await audit.RecordAsync(AuditActions.BankHolidayCreated, holiday.Name, Describe(holiday), ct);
+
         return BankHolidayDto.FromEntity(holiday);
     }
 
@@ -257,6 +268,8 @@ public sealed class BankHolidayService(
         EnsureTracked(trackedRegions, request.Region);
         await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: id, ct);
 
+        var before = $"{holiday.Name} ({Describe(holiday)})";
+
         holiday.Region = request.Region;
         holiday.Date = request.Date;
         holiday.Name = request.Name;
@@ -264,6 +277,12 @@ public sealed class BankHolidayService(
         holiday.UpdatedAt = DateTime.UtcNow;
         holiday.UpdatedBy = actorUsername;
         await db.SaveChangesAsync(ct);
+
+        await audit.RecordAsync(
+            AuditActions.BankHolidayUpdated,
+            holiday.Name,
+            $"{before} → {holiday.Name} ({Describe(holiday)})",
+            ct);
 
         return BankHolidayDto.FromEntity(holiday);
     }
@@ -278,5 +297,7 @@ public sealed class BankHolidayService(
 
         db.BankHolidays.Remove(holiday);
         await db.SaveChangesAsync(ct);
+
+        await audit.RecordAsync(AuditActions.BankHolidayDeleted, holiday.Name, Describe(holiday), ct);
     }
 }

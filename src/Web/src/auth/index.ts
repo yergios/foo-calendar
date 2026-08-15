@@ -5,6 +5,7 @@ import { computed, ref } from "vue";
 import { appUrl } from "@/lib/appUrl";
 import { runtimeConfig } from "@/lib/runtimeConfig";
 import type { RuntimeAuthConfig } from "@/types/config";
+import type { Permission } from "@/types/permission";
 
 // The API reports Auth:Provider=None when SSO is bypassed entirely, which Program.cs
 // refuses outside Development. It lets the app run with zero external IdP dependency
@@ -167,12 +168,23 @@ export const useAuthStore = defineStore("auth", () => {
 
   // Case-insensitive to match the API's own check: group identifiers are often GUIDs
   // whose casing differs between a provider's dashboard and its tokens.
-  const hasAnyPermission = (accepted: string[]): boolean =>
+  const holdsAnyOf = (accepted: string[]): boolean =>
     permissions.value.some((held) =>
       accepted.some((value) => value.toLowerCase() === held.toLowerCase()),
     );
 
-  const isAdmin = computed(() => hasAnyPermission(runtimeConfig().auth.adminPermissions));
+  /** Whether the signed-in user holds one named permission. Only ever decides what the
+   * interface offers; the API enforces the same map on every request regardless. */
+  const can = (permission: Permission): boolean =>
+    holdsAnyOf(runtimeConfig().auth.permissions[permission] ?? []);
+
+  /** Whether they hold anything at all, which is what the admin area amounts to: a page
+   * of sections, each behind its own permission. */
+  const canAnything = computed(() =>
+    Object.keys(runtimeConfig().auth.permissions).some((permission) =>
+      holdsAnyOf(runtimeConfig().auth.permissions[permission] ?? []),
+    ),
+  );
 
   /** Resets auth state back to its initial values. */
   const reset = (): void => {
@@ -187,7 +199,8 @@ export const useAuthStore = defineStore("auth", () => {
 
   return {
     isLoading,
-    isAdmin,
+    can,
+    canAnything,
     setToken,
     setUser,
     getFullName,

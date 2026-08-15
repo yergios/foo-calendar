@@ -15,8 +15,14 @@ public sealed class PersonService(
     AppDbContext db,
     IOptions<PersonColorPaletteOptions> colorPalette,
     ITeamRegionService teamRegions,
-    RegionLabels regionLabels) : IPersonService
+    RegionLabels regionLabels,
+    IAuditLog audit) : IPersonService
 {
+    // What a person was, for a log entry that still reads sensibly once they are gone.
+    private static string Describe(Person person) =>
+        person.HomeCity is null ? person.Username : $"{person.Username}, {person.HomeCity}";
+
+
     public async Task<PersonDto> CreateAsync(
         CreatePersonRequest request, string actorUsername, CancellationToken ct = default)
     {
@@ -42,6 +48,8 @@ public sealed class PersonService(
 
         db.People.Add(person);
         await db.SaveChangesAsync(ct);
+
+        await audit.RecordAsync(AuditActions.PersonCreated, person.DisplayName, Describe(person), ct);
 
         // Somewhere new to the team brings its holidays in with it.
         await teamRegions.EnsureSyncedAsync(person.HomeCity, ct);
@@ -81,8 +89,18 @@ public sealed class PersonService(
 
         var vacated = person.HomeCity;
 
+        // Counted before the cascade takes them, since the whole point of the entry is
+        // that there is nothing left to count afterwards.
+        var absences = await db.Absences.CountAsync(a => a.PersonId == personId, ct);
+
         db.People.Remove(person);
         await db.SaveChangesAsync(ct);
+
+        await audit.RecordAsync(
+            AuditActions.PersonDeleted,
+            person.DisplayName,
+            $"{Describe(person)}; {absences} absence(s) deleted with them",
+            ct);
 
         // After the delete, so "is anyone still there" is answered by the database rather
         // than by counting this person out by hand.
@@ -118,12 +136,26 @@ public sealed class PersonService(
 
         var vacated = person.HomeCity;
 
+        // Captured before the assignments below overwrite them. Nothing is logged when
+        // nothing moved, so a no-op save doesn't pad the log.
+        var changes = new List<string>();
+        if (person.DisplayName != request.DisplayName)
+            changes.Add($"name {person.DisplayName} → {request.DisplayName}");
+        if (person.Color != color)
+            changes.Add($"color {person.Color} → {color}");
+        if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
+            changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");
+
         person.DisplayName = request.DisplayName;
         person.Color = color;
         person.HomeCity = request.HomeCity;
         person.UpdatedAt = DateTime.UtcNow;
         person.UpdatedBy = actorUsername;
         await db.SaveChangesAsync(ct);
+
+        if (changes.Count > 0)
+            await audit.RecordAsync(
+                AuditActions.PersonUpdated, person.DisplayName, string.Join("; ", changes), ct);
 
         // Moving is both halves at once: the new region may be new to the team, and the
         // old one may have just lost its last occupant.
@@ -270,6 +302,15 @@ public sealed class PersonService(
         }
 
         await db.SaveChangesAsync(ct);
+
+        // One entry for the file rather than one per row: the individual people are on the
+        // people list, and what an import is worth knowing about later is that it happened,
+        // by whom, and how much of it landed.
+        await audit.RecordAsync(
+            AuditActions.PeopleImported,
+            $"{created.Count} person(s) imported",
+            $"{created.Count} created, {skipped.Count} skipped, {failed.Count} failed",
+            ct);
 
         foreach (var region in arrivedIn)
             await teamRegions.EnsureSyncedAsync(region, ct);

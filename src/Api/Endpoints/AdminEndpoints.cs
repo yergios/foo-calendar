@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 
 using Api.Configuration;
+using Api.Data.Models;
 using Api.Dtos;
 using Api.Interfaces;
 using Api.Services;
@@ -13,15 +14,18 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/admin")
-            .RequireAuthorization(AuthOptions.AdminPolicy);
+        // Gated per route rather than per group: these are three different jobs that happen
+        // to share a path prefix, and a deployment shouldn't have to hand out the ability
+        // to delete people to let someone re-run a failed holiday sync.
+        var group = app.MapGroup("/api/admin");
 
-        group.MapPost("/people", CreatePerson);
-        group.MapPost("/people/import", ImportPeople);
-        group.MapPut("/people/{id:int}", UpdatePerson);
-        group.MapDelete("/people/{id:int}", DeletePerson);
-        group.MapGet("/people/stats", GetAllPeopleStats);
-        group.MapPost("/bank-holidays/sync", SyncBankHolidays);
+        group.MapPost("/people", CreatePerson).RequireAuthorization(Permissions.PeopleManage);
+        group.MapPost("/people/import", ImportPeople).RequireAuthorization(Permissions.PeopleManage);
+        group.MapPut("/people/{id:int}", UpdatePerson).RequireAuthorization(Permissions.PeopleManage);
+        group.MapDelete("/people/{id:int}", DeletePerson).RequireAuthorization(Permissions.PeopleManage);
+        group.MapGet("/people/stats", GetAllPeopleStats).RequireAuthorization(Permissions.ReportsRead);
+        group.MapPost("/bank-holidays/sync", SyncBankHolidays).RequireAuthorization(Permissions.HolidaysSync);
+        group.MapGet("/audit", GetAuditLog).RequireAuthorization(Permissions.AuditRead);
     }
 
     private static async Task<IResult> CreatePerson(
@@ -83,12 +87,32 @@ public static class AdminEndpoints
         return Results.Ok(result);
     }
 
+    /// <summary>Newest first, paged. Deliberately not filterable: the log is small, and a
+    /// query language over it would be more app than the thing it audits.</summary>
+    private static async Task<IResult> GetAuditLog(
+        int? limit,
+        int? offset,
+        IAuditLog audit,
+        CancellationToken ct)
+    {
+        var result = await audit.ReadAsync(
+            Math.Clamp(limit ?? DefaultAuditPageSize, 1, MaxAuditPageSize),
+            Math.Max(offset ?? 0, 0),
+            ct);
+
+        return Results.Ok(result);
+    }
+
+    private const int DefaultAuditPageSize = 50;
+    private const int MaxAuditPageSize = 200;
+
     private static async Task<IResult> SyncBankHolidays(
         int year,
         string region,
         IOptions<HolidayOptions> holidayOptions,
         ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,
+        IAuditLog audit,
         CancellationToken ct)
     {
         // Nothing to sync from, so say so rather than reporting every region as synced.
@@ -108,9 +132,17 @@ public static class AdminEndpoints
         IReadOnlyCollection<string> regions = region is null ? tracked : [region];
 
         var failed = await bankHolidays.SyncRegionsAsync(regions, year, ct);
+        var synced = regions.Except(failed, StringComparer.Ordinal).ToList();
 
-        return Results.Ok(new SyncBankHolidaysResponse(
-            [.. regions.Except(failed, StringComparer.Ordinal)],
-            failed));
+        // Only the hand-triggered runs. The weekly job writing an entry every time would
+        // bury the actions someone actually took, and its rows already say "<source>-sync".
+        await audit.RecordAsync(
+            AuditActions.BankHolidaysSynced,
+            $"{year}, {(region ?? "all regions")}",
+            $"{synced.Count} region(s) synced"
+                + (failed.Count > 0 ? $", failed: {string.Join(", ", failed)}" : ""),
+            ct);
+
+        return Results.Ok(new SyncBankHolidaysResponse(synced, failed));
     }
 }

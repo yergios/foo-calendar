@@ -27,7 +27,10 @@ public sealed record BootstrapAuthConfig(
     string Audience,
     string Scope,
     string RedirectUri,
-    List<string> AdminPermissions,
+    // Which claim values grant each permission, so the SPA can hide what the API would
+    // refuse anyway. The API enforces the same map independently: this is for the
+    // interface, not for the gate.
+    Dictionary<string, List<string>> Permissions,
     List<string> PermissionsClaims,
     BootstrapDevUser DevUser);
 
@@ -75,14 +78,16 @@ public static class ConfigEndpoints
                 auth.Audience,
                 auth.Scope,
                 auth.RedirectUri,
-                auth.AdminPermissions,
+                auth.Permissions,
                 auth.ClaimTypes.Permissions,
                 auth.Provider == AuthOptions.ProviderNone
                     ? new BootstrapDevUser(
                         auth.DevUser.FirstName,
                         auth.DevUser.LastName,
                         auth.DevUser.Email,
-                        auth.DevUser.Permissions)
+                        // Resolved rather than copied, so the SPA holds exactly what
+                        // DevAuthHandler is authenticating the requests as.
+                        auth.EffectiveDevPermissions())
                     : null)));
     }
 }

@@ -32,10 +32,10 @@ public sealed class DevAuthHandler(
             new(claimTypes.LastName, auth.DevUser.LastName),
             new(claimTypes.Email, auth.DevUser.Email),
         };
-        // Under the first configured claim name; the policy accepts any of them, so one is
+        // Under the first configured claim name; the policies accept any of them, so one is
         // enough to stand in for whatever a real provider would have emitted.
         var permissionClaim = claimTypes.Permissions.FirstOrDefault() ?? "permissions";
-        claims.AddRange(auth.DevUser.Permissions.Select(p => new Claim(permissionClaim, p)));
+        claims.AddRange(auth.EffectiveDevPermissions().Select(p => new Claim(permissionClaim, p)));
 
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);

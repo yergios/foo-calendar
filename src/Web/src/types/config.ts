@@ -31,8 +31,10 @@ export interface RuntimeAuthConfig {
   audience: string;
   scope: string;
   redirectUri: string;
-  /** Holding any one of these grants the admin area. */
-  adminPermissions: string[];
+  /** Which claim values grant each permission, keyed by permission name. Holding any one
+   * of a permission's values is enough. Mirrors the API's Auth:Permissions, which is what
+   * actually enforces it: this only decides what the interface offers. */
+  permissions: Record<string, string[]>;
   /** Claims that carry permissions, searched in order. */
   permissionsClaims: string[];
   devUser: RuntimeDevUser | null;

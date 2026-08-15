@@ -193,4 +193,33 @@ public sealed class WebhookPublisherTests
 
         handler.Requests.ShouldBeEmpty();
     }
+
+    // A note on a sick leave is health information, and a webhook is usually pointed at a
+    // chat channel far wider than the people it was written for.
+    [Fact]
+    public async Task DeliverAsync_LeavesTheAbsenceNoteOutByDefault()
+    {
+        var (publisher, handler) = CreatePublisher();
+
+        await publisher.DeliverAsync(SampleEvent());
+
+        using var body = JsonDocument.Parse(handler.Requests.Single().Body);
+        var absence = body.RootElement.GetProperty("absence");
+
+        // Still in the payload, so a receiver reading it doesn't break; simply null.
+        absence.GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+        absence.GetProperty("type").GetString().ShouldBe("Vacation");
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenNotesAreOptedIn_SendsTheNote()
+    {
+        var (publisher, handler) = CreatePublisher(
+            new WebhookOptions { Url = Url, IncludeAbsenceNote = true });
+
+        await publisher.DeliverAsync(SampleEvent());
+
+        using var body = JsonDocument.Parse(handler.Requests.Single().Body);
+        body.RootElement.GetProperty("absence").GetProperty("note").GetString().ShouldBe("Trip");
+    }
 }

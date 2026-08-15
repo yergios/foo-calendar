@@ -11,12 +11,17 @@ public sealed record AbsenceDto(
     string Note,
     DateTime CreatedAt)
 {
-    public static AbsenceDto FromEntity(Absence absence) => new(
+    /// <summary>The team can see that someone is off and what kind of absence it is, which
+    /// is what the calendar is for. Why is nobody else's business: a note on a sick leave
+    /// is health information, so <paramref name="includeNote"/> is false for everyone but
+    /// the person it belongs to. Deliberately has no default, so the decision is made at
+    /// every call site rather than inherited from one.</summary>
+    public static AbsenceDto FromEntity(Absence absence, bool includeNote) => new(
         absence.Id,
         absence.PersonId,
         absence.StartDate,
         absence.EndDate,
         absence.Type,
-        absence.Note,
+        includeNote ? absence.Note : null,
         absence.CreatedAt);
 }

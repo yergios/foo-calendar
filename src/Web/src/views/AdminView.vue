@@ -1,9 +1,9 @@
 <template>
   <div class="max-w-3xl mx-auto py-8 flex flex-col gap-10">
-    <section>
+    <section v-if="canManagePeople || canReadReports">
       <div class="flex items-center justify-between">
         <h4>People</h4>
-        <YearPicker v-model="statsYear">
+        <YearPicker v-if="canReadReports" v-model="statsYear">
           <span class="text-sm text-secondary">Stats for {{ statsYear }}</span>
         </YearPicker>
       </div>
@@ -16,9 +16,9 @@
             <th class="py-2 pr-2">Person</th>
             <th class="py-2 pr-2">Username</th>
             <th class="py-2 pr-2">Home city</th>
-            <th class="py-2 pr-2 text-center">Vacation</th>
-            <th class="py-2 pr-2 text-center">Sick</th>
-            <th class="py-2 pr-2 text-center">Other</th>
+            <th v-if="canReadReports" class="py-2 pr-2 text-center">Vacation</th>
+            <th v-if="canReadReports" class="py-2 pr-2 text-center">Sick</th>
+            <th v-if="canReadReports" class="py-2 pr-2 text-center">Other</th>
             <th class="py-2 pr-2"></th>
           </tr>
         </thead>
@@ -35,16 +35,16 @@
             </td>
             <td class="py-2 pr-2 text-secondary">{{ person.username }}</td>
             <td class="py-2 pr-2 text-secondary">{{ person.homeCity ?? "—" }}</td>
-            <td class="py-2 pr-2 text-center text-secondary">
+            <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
               {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.vacationDays ?? 0) }}
             </td>
-            <td class="py-2 pr-2 text-center text-secondary">
+            <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
               {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.sickDays ?? 0) }}
             </td>
-            <td class="py-2 pr-2 text-center text-secondary">
+            <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
               {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.otherDays ?? 0) }}
             </td>
-            <td class="py-2 pr-2 text-right whitespace-nowrap">
+            <td v-if="canManagePeople" class="py-2 pr-2 text-right whitespace-nowrap">
               <button
                 type="button"
                 class="text-xs font-semibold text-primary-text hover:text-accent transition-colors"
@@ -66,7 +66,7 @@
       </table>
       <p v-else class="text-sm text-secondary mt-3">No people yet.</p>
 
-      <div class="mt-6 border border-border rounded-12 p-4">
+      <div v-if="canManagePeople" class="mt-6 border border-border rounded-12 p-4">
         <h5>{{ editingId ? "Edit person" : "Add person" }}</h5>
         <div class="grid grid-cols-2 gap-3 mt-3">
           <div v-if="!editingId" class="flex flex-col gap-1.5">
@@ -156,7 +156,7 @@
       </div>
     </section>
 
-    <section>
+    <section v-if="canSyncHolidays">
       <h4>Bank holidays</h4>
       <p class="text-sm text-secondary mt-1">
         Pulls public holidays for the regions the team occupies. Picking a single region re-runs
@@ -201,6 +201,54 @@
         </p>
       </div>
     </section>
+
+    <section v-if="canReadAudit">
+      <h4>Audit log</h4>
+      <p class="text-sm text-secondary mt-1">
+        Every change to a profile, a manually added bank holiday, or a deleted absence, kept after
+        the thing it happened to is gone. Notes are never recorded.
+      </p>
+
+      <p v-if="auditLoading && auditEntries.length === 0" class="text-sm text-secondary mt-3">
+        Loading…
+      </p>
+
+      <table v-else-if="auditEntries.length > 0" class="w-full mt-3 text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold text-secondary border-b border-border">
+            <th class="py-2 pr-2 whitespace-nowrap">When</th>
+            <th class="py-2 pr-2">Who</th>
+            <th class="py-2 pr-2">Action</th>
+            <th class="py-2 pr-2">What</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in auditEntries" :key="entry.id" class="border-b border-border">
+            <td class="py-2 pr-2 text-secondary whitespace-nowrap">
+              {{ formatOccurredAt(entry.occurredAt) }}
+            </td>
+            <td class="py-2 pr-2">{{ entry.actor }}</td>
+            <td class="py-2 pr-2 text-secondary">{{ entry.action }}</td>
+            <td class="py-2 pr-2">
+              {{ entry.target }}
+              <span v-if="entry.details" class="text-secondary">— {{ entry.details }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="text-sm text-secondary mt-3">Nothing has happened yet.</p>
+
+      <div v-if="auditEntries.length < auditTotal" class="mt-4">
+        <button
+          type="button"
+          class="text-sm text-secondary hover:text-ink transition-colors disabled:opacity-40"
+          :disabled="auditLoading"
+          @click="loadAudit(true)"
+        >
+          {{ auditLoading ? "Loading…" : `Show older (${auditTotal - auditEntries.length} more)` }}
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -212,18 +260,30 @@ import {
   createPerson,
   deletePerson,
   getAllPeopleStats,
+  getAuditLog,
   syncBankHolidays,
   updatePerson,
 } from "@/api/admin";
 import { getColorsInUse } from "@/api/people";
+import { useAuthStore } from "@/auth";
 import ColorPicker from "@/components/ColorPicker.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
+import type { AuditEntryDto } from "@/types/audit";
 import type { SyncBankHolidaysResponse } from "@/types/bankHoliday";
+import { Permission } from "@/types/permission";
 import type { PersonAbsenceStatsDto, PersonDto } from "@/types/person";
+
+// Each section stands on its own permission, so this page is whatever the signed-in user
+// is allowed to see of it. The router only keeps out someone who would see none of it.
+const authStore = useAuthStore();
+const canManagePeople = computed(() => authStore.can(Permission.peopleManage));
+const canReadReports = computed(() => authStore.can(Permission.reportsRead));
+const canSyncHolidays = computed(() => authStore.can(Permission.holidaysSync));
+const canReadAudit = computed(() => authStore.can(Permission.auditRead));
 
 const configStore = useConfigStore();
 const palette = computed(() => configStore.config?.colorPalette ?? []);
@@ -294,9 +354,46 @@ async function loadStats() {
 
 watch(statsYear, loadStats);
 
+const AUDIT_PAGE_SIZE = 50;
+const auditEntries = ref<AuditEntryDto[]>([]);
+const auditTotal = ref(0);
+const auditLoading = ref(false);
+
+// Paged by offset from the newest, so "show older" keeps walking back through one log
+// rather than re-reading it. Anything written while the page is open shows up on a reload,
+// which is soon enough for a log nobody watches live.
+async function loadAudit(older = false) {
+  auditLoading.value = true;
+  try {
+    const { entries, total } = await getAuditLog(
+      AUDIT_PAGE_SIZE,
+      older ? auditEntries.value.length : 0,
+    );
+    auditEntries.value = older ? [...auditEntries.value, ...entries] : entries;
+    auditTotal.value = total;
+  } catch (error: unknown) {
+    console.error("ERROR => Failed to load the audit log:", error);
+  } finally {
+    auditLoading.value = false;
+  }
+}
+
+const occurredAtFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+// The API stores UTC and serializes it without an offset, which the browser would read as
+// local time. Marked as UTC before parsing, so the log renders wherever the reader is.
+function formatOccurredAt(occurredAt: string): string {
+  const utc = /(Z|[+-]\d{2}:\d{2})$/.test(occurredAt) ? occurredAt : `${occurredAt}Z`;
+  return occurredAtFormat.format(new Date(utc));
+}
+
 onMounted(() => {
   loadPeople();
-  loadStats();
+  if (canReadReports.value) loadStats();
+  if (canReadAudit.value) loadAudit();
   configStore
     .loadOnce()
     .catch((error: unknown) => {

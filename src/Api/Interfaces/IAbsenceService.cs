@@ -5,7 +5,11 @@ namespace Api.Interfaces;
 
 public interface IAbsenceService
 {
-    Task<AbsencesResponse> GetOverlappingAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+    /// <summary><paramref name="viewerPersonId"/> is whose notes come back with the
+    /// absences: their own and nobody else's. Null for someone with no profile yet, who
+    /// can read the calendar but owns nothing on it.</summary>
+    Task<AbsencesResponse> GetOverlappingAsync(
+        DateOnly from, DateOnly to, int? viewerPersonId, CancellationToken ct = default);
     Task<AbsenceStatsResponse> GetStatsAsync(int personId, int year, CancellationToken ct = default);
     Task<AllAbsenceStatsResponse> GetAllStatsAsync(int year, CancellationToken ct = default);
     Task<AbsenceDto> CreateAsync(Person person, CreateAbsenceRequest request, CancellationToken ct = default);

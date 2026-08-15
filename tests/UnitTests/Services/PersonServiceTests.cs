@@ -1,4 +1,5 @@
 using Api.Configuration;
+using Api.Data.Models;
 using Api.Dtos;
 using Api.Services;
 
@@ -15,6 +16,7 @@ public sealed class PersonServiceTests : SqliteTestBase
 {
     private readonly PersonService sut;
     private readonly RecordingTeamRegionService teamRegions = new();
+    private readonly RecordingAuditLog audit = new();
 
     public PersonServiceTests()
     {
@@ -22,7 +24,8 @@ public sealed class PersonServiceTests : SqliteTestBase
             Db,
             Options.Create<PersonColorPaletteOptions>([]),
             teamRegions,
-            new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance));
+            new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance),
+            audit);
     }
 
     private static CreatePersonRequest CreateRequest(string username, string color) =>
@@ -184,5 +187,52 @@ public sealed class PersonServiceTests : SqliteTestBase
         // No name table on disk in the test output, so labels fall back to the raw codes.
         // What matters here is that the country turns up alongside the region.
         result.RegionLabels.Keys.ShouldBe(["ES", "ES-MD"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_LogsWhoTheyWereAndHowMuchWentWithThem()
+    {
+        var person = await sut.CreateAsync(CreateRequestIn("jdoe", "#111111", "ES-MD"), "jdoe");
+        Db.Absences.Add(new Absence
+        {
+            PersonId = person.Id,
+            StartDate = new DateOnly(2026, 3, 2),
+            EndDate = new DateOnly(2026, 3, 6),
+            Type = AbsenceType.Vacation,
+            CreatedBy = "jdoe",
+        });
+        await Db.SaveChangesAsync();
+        audit.Entries.Clear();
+
+        await sut.DeleteAsync(person.Id);
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Action.ShouldBe(AuditActions.PersonDeleted);
+        entry.Details.ShouldBe("jdoe, ES-MD; 1 absence(s) deleted with them");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LogsWhatMoved()
+    {
+        var person = await sut.CreateAsync(CreateRequestIn("jdoe", "#111111", "ES-MD"), "jdoe");
+        audit.Entries.Clear();
+
+        await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane R.", "ES-MD", "#111111"), "jdoe");
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Action.ShouldBe(AuditActions.PersonUpdated);
+        entry.Details.ShouldBe("name Jane D. → Jane R.");
+    }
+
+    // A save that changed nothing is still a save. Logging it would bury the ones that did.
+    [Fact]
+    public async Task UpdateAsync_WhenNothingChanged_LogsNothing()
+    {
+        var person = await sut.CreateAsync(CreateRequestIn("jdoe", "#111111", "ES-MD"), "jdoe");
+        audit.Entries.Clear();
+
+        await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane D.", "ES-MD", "#111111"), "jdoe");
+
+        audit.Entries.ShouldBeEmpty();
     }
 }

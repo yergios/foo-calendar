@@ -155,6 +155,7 @@ if (!string.IsNullOrWhiteSpace(config[$"{WebhookOptions.SectionName}:{nameof(Web
 services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();
 services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
+services.AddScoped<IAuditLog, AuditLog>();
 
 // ---- Validation & Error handling ------------------------------------------
 
@@ -170,13 +171,17 @@ services.AddHealthChecks()
 
 // ---- Auth -----------------------------------------------------------------
 
-// Both settings became lists. Binding would otherwise quietly ignore the old scalar form
-// and leave the admin area gated on nothing, so say exactly what to change instead. This
-// check can go once deployments have moved over.
-if (config[$"{AuthOptions.SectionName}:AdminPermission"] is not null)
+// Settings that changed shape. Binding would otherwise quietly ignore the old form and
+// leave a permission gated on nothing, so say exactly what to change instead. These checks
+// can go once deployments have moved over.
+if (config[$"{AuthOptions.SectionName}:AdminPermission"] is not null
+    || config.GetSection($"{AuthOptions.SectionName}:AdminPermissions").Exists())
     throw new InvalidOperationException(
-        "Auth:AdminPermission is now the list Auth:AdminPermissions, e.g. " +
-        "[\"APP_FOO_CALENDAR_ADMIN\"] or Auth__AdminPermissions__0=APP_FOO_CALENDAR_ADMIN.");
+        "Auth:AdminPermissions is now the per-permission map Auth:Permissions, e.g. " +
+        $"{{ \"{Permissions.PeopleManage}\": [\"APP_FOO_CALENDAR_ADMIN\"] }} or " +
+        $"Auth__Permissions__{Permissions.PeopleManage}__0=APP_FOO_CALENDAR_ADMIN. Listing the " +
+        $"same value under every permission ({string.Join(", ", Permissions.All)}) reproduces " +
+        "the single admin role it replaced.");
 
 if (config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"] is not null)
     throw new InvalidOperationException(
@@ -200,10 +205,16 @@ services.AddOptions<AuthOptions>()
     // failing at startup beats a frontend that only breaks once someone tries to sign in.
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.ClientId),
         "Auth:ClientId must be configured.")
-    // Fail closed: an empty list would leave every /admin request to be rejected with no
-    // indication why, and an accidental "grant everyone" is worse still.
-    .Validate(o => o.AdminPermissions.Count > 0,
-        "Auth:AdminPermissions must list at least one value.")
+    // Fail closed: a permission nobody can hold rejects every request against it with no
+    // indication why, and an accidental "grant everyone" is worse still. Requiring all of
+    // them also means adding a permission is a deliberate deployment decision rather than
+    // something that silently starts out unreachable after an upgrade.
+    .Validate(o => Permissions.All.All(p => o.ValuesFor(p).Count > 0),
+        $"Auth:Permissions must list at least one claim value for each of: {string.Join(", ", Permissions.All)}.")
+    // A typo would otherwise sit there granting nothing, which reads exactly like a
+    // provider that isn't sending the claim.
+    .Validate(o => o.Permissions.Keys.All(name => Permissions.All.Contains(name, StringComparer.OrdinalIgnoreCase)),
+        $"Auth:Permissions names a permission that doesn't exist. The permissions are: {string.Join(", ", Permissions.All)}.")
     .Validate(o => o.ClaimTypes.Permissions.Count > 0,
         "Auth:ClaimTypes:Permissions must list at least one claim name.")
     .ValidateOnStart();
@@ -224,12 +235,20 @@ services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 
-    // Not RequireClaim: that pairs one claim name with its accepted values, and this has
-    // to hold across several of each.
-    options.AddPolicy(AuthOptions.AdminPolicy, policy => policy
-        .RequireAuthenticatedUser()
-        .RequireAssertion(ctx => ctx.User.HasAnyPermission(
-            authConfig.ClaimTypes.Permissions, authConfig.AdminPermissions)));
+    // One policy per permission, named after it, so an endpoint asks for the permission it
+    // needs by name and nothing here has to be touched to add another one.
+    //
+    // Not RequireClaim: that pairs one claim name with its accepted values, and this has to
+    // hold across several of each.
+    foreach (var permission in Permissions.All)
+    {
+        var accepted = authConfig.ValuesFor(permission);
+
+        options.AddPolicy(permission, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(ctx => ctx.User.HasAnyPermission(
+                authConfig.ClaimTypes.Permissions, accepted)));
+    }
 });
 
 if (authConfig.Provider == AuthOptions.ProviderNone)
@@ -418,7 +437,9 @@ app.MapHealthChecks("/healthchecks", new HealthCheckOptions
 .AllowAnonymous();
 
 // The per-check detail an operator needs to tell *why* the summary above went red, behind
-// the admin permission for the same reason the summary omits it.
+// a permission for the same reason the summary omits it. AuditRead rather than a
+// permission of its own: both are the same read-only window into what the deployment is
+// doing, held by whoever is expected to look into it when something is off.
 app.MapHealthChecks("/healthchecks/detail", new HealthCheckOptions
 {
     Predicate = _ => true,
@@ -442,7 +463,7 @@ app.MapHealthChecks("/healthchecks/detail", new HealthCheckOptions
         await ctx.Response.WriteAsJsonAsync(result);
     }
 })
-.RequireAuthorization(AuthOptions.AdminPolicy);
+.RequireAuthorization(Permissions.AuditRead);
 app.MapPeopleEndpoints();
 app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();

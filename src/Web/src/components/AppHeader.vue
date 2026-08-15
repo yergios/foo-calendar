@@ -54,7 +54,7 @@ const navItems = computed(() => {
     { to: "/", label: "Home" },
     { to: "/profile", label: "Profile" },
   ];
-  if (authStore.isAdmin) items.push({ to: "/admin", label: "Admin" });
+  if (authStore.canAnything) items.push({ to: "/admin", label: "Admin" });
   return items;
 });
 
