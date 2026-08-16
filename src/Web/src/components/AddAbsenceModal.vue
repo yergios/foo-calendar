@@ -54,6 +54,9 @@
     </div>
 
     <template #footer>
+      <p v-if="resubmitsForApproval" class="text-sm text-secondary bg-surface rounded-8 px-3 py-2 mb-3">
+        This was already approved. Saving changes sends it back for approval.
+      </p>
       <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mb-3">
         {{ error }}
       </p>
@@ -87,6 +90,7 @@ import { computed, ref, watch } from "vue";
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
 import AppModal from "@/components/AppModal.vue";
 import { today } from "@/lib/dates";
+import { useConfigStore } from "@/stores/config";
 import type { AbsenceDto, AbsenceType } from "@/types/absence";
 
 const props = withDefaults(
@@ -107,6 +111,14 @@ const emit = defineEmits<{
 }>();
 
 const isEditing = computed(() => props.absence !== null);
+
+const configStore = useConfigStore();
+const resubmitsForApproval = computed(
+  () =>
+    isEditing.value &&
+    props.absence?.status === "Approved" &&
+    configStore.config?.absenceApprovalsEnabled === true,
+);
 
 const startDate = ref(props.absence?.startDate ?? props.initialDate ?? today());
 const endDate = ref(props.absence?.endDate ?? props.initialDate ?? today());

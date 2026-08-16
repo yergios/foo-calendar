@@ -26,8 +26,25 @@ public static class Permissions
     /// <summary>Read the audit log, which records who changed or deleted what.</summary>
     public const string AuditRead = "AuditRead";
 
+    /// <summary>Approve or reject pending absence requests. Only meaningful when
+    /// AbsenceApprovals:Enabled turns the review workflow on at all, so unlike every
+    /// permission above, a deployment is allowed to leave this one unconfigured, see
+    /// <see cref="Optional"/>.</summary>
+    public const string AbsencesApprove = "AbsencesApprove";
+
     /// <summary>Every permission there is, in the order the admin page presents them.
     /// Program.cs registers one policy per entry, and the configuration must name them all.
     /// </summary>
     public static readonly string[] All = [PeopleManage, ReportsRead, HolidaysSync, AuditRead];
+
+    /// <summary>Permissions that opt out of the "must be configured" rule above, because
+    /// the feature they gate is itself opt-in: leaving one unconfigured just means nobody
+    /// can do that thing, which is exactly what an unused opt-in feature should look like.
+    /// </summary>
+    public static readonly string[] Optional = [AbsencesApprove];
+
+    /// <summary>Every permission there is, mandatory and optional alike. What Program.cs
+    /// registers an authorization policy for, and what an Auth:Permissions key is checked
+    /// against when catching a typo.</summary>
+    public static readonly string[] Known = [.. All, .. Optional];
 }

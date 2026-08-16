@@ -9,6 +9,8 @@ public static class AuditActions
     public const string PersonDeleted = "person.deleted";
     public const string PeopleImported = "people.imported";
     public const string AbsenceDeleted = "absence.deleted";
+    public const string AbsenceApproved = "absence.approved";
+    public const string AbsenceRejected = "absence.rejected";
     public const string BankHolidayCreated = "bank-holiday.created";
     public const string BankHolidayUpdated = "bank-holiday.updated";
     public const string BankHolidayDeleted = "bank-holiday.deleted";

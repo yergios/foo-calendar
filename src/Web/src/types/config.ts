@@ -13,6 +13,9 @@ export interface AppConfig {
   /** The team's own region. Synced and shown whether or not anyone is in it. */
   homeRegion: string;
   colorPalette: string[];
+  /** Whether an absence needs approval before it counts. Off by default: everything is
+   * approved the instant it's created, same as always. */
+  absenceApprovalsEnabled: boolean;
 }
 
 /** Mirrors the API's BootstrapDevUser. Only sent when the dev auth bypass is on. */

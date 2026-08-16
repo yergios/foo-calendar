@@ -9,7 +9,8 @@ namespace Api.Endpoints;
 /// fixed until a redeploy, which is what lets the client cache it outright. Which regions
 /// the team occupies deliberately isn't here: that changes as people come and go, so it is
 /// derived from the people list instead.</summary>
-public sealed record AppConfigResponse(string HomeRegion, List<string> ColorPalette);
+public sealed record AppConfigResponse(
+    string HomeRegion, List<string> ColorPalette, bool AbsenceApprovalsEnabled);
 
 /// <summary>Everything the SPA needs before anyone has signed in, including how to sign in
 /// at all. Fetched once at startup so branding and IdP settings are deployment config
@@ -52,8 +53,10 @@ public static class ConfigEndpoints
 
     private static IResult GetConfig(
         IOptions<TeamOptions> team,
-        IOptions<PersonColorPaletteOptions> palette) =>
-        Results.Ok(new AppConfigResponse(team.Value.HomeRegion, palette.Value));
+        IOptions<PersonColorPaletteOptions> palette,
+        IOptions<AbsenceApprovalOptions> absenceApprovals) =>
+        Results.Ok(new AppConfigResponse(
+            team.Value.HomeRegion, palette.Value, absenceApprovals.Value.Enabled));
 
     private static IResult GetBootstrapConfig(
         HttpContext http,

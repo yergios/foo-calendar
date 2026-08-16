@@ -8,21 +8,24 @@
         {{ appName }}
       </RouterLink>
 
-      <nav v-if="personStore.person" class="flex items-center gap-1">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="font-display text-sm w-24 text-center py-1.5 rounded-pill transition-colors"
-          :class="
-            isActive(item.to)
-              ? 'bg-surface text-ink font-semibold'
-              : 'text-secondary hover:text-ink hover:bg-surface/60'
-          "
-        >
-          {{ item.label }}
-        </RouterLink>
-      </nav>
+      <div v-if="personStore.person" class="flex items-center gap-3">
+        <nav class="flex items-center gap-1">
+          <RouterLink
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="font-display text-sm w-24 text-center py-1.5 rounded-pill transition-colors"
+            :class="
+              isActive(item.to)
+                ? 'bg-surface text-ink font-semibold'
+                : 'text-secondary hover:text-ink hover:bg-surface/60'
+            "
+          >
+            {{ item.label }}
+          </RouterLink>
+        </nav>
+        <NotificationBell />
+      </div>
 
       <button
         v-else
@@ -41,6 +44,7 @@ import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/auth";
+import NotificationBell from "@/components/NotificationBell.vue";
 import { runtimeConfig } from "@/lib/runtimeConfig";
 import { usePersonStore } from "@/stores/person";
 

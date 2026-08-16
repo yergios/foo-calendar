@@ -7,6 +7,8 @@ public static class WebhookEvents
     public const string AbsenceCreated = "absence.created";
     public const string AbsenceUpdated = "absence.updated";
     public const string AbsenceDeleted = "absence.deleted";
+    public const string AbsenceApproved = "absence.approved";
+    public const string AbsenceRejected = "absence.rejected";
 }
 
 /// <summary>The body POSTed to the configured webhook. This is a published contract that
@@ -27,7 +29,11 @@ public sealed record WebhookAbsence(
     DateOnly StartDate,
     DateOnly EndDate,
     AbsenceType Type,
-    string Note)
+    AbsenceStatus Status,
+    string Note,
+    /// <summary>The reviewer's reason. Only ever set on an absence.rejected event, and
+    /// subject to the same Webhook:IncludeAbsenceNote toggle as <see cref="Note"/>.</summary>
+    string ReviewNote)
 {
     public static WebhookAbsence FromEntity(Absence absence, string personName) => new(
         absence.Id,
@@ -36,5 +42,7 @@ public sealed record WebhookAbsence(
         absence.StartDate,
         absence.EndDate,
         absence.Type,
-        absence.Note);
+        absence.Status,
+        absence.Note,
+        absence.ReviewNote);
 }

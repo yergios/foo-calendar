@@ -127,7 +127,7 @@
               :title="cellTitle(row.person, cell.absence)"
               @click="handleAbsenceClick(cell.absence)"
             >
-              {{ cell.isLabelCell ? ABSENCE_TYPE_INITIALS[cell.absence.type] : "" }}
+              {{ cell.isLabelCell ? absenceLabel(cell.absence) : "" }}
             </div>
           </td>
         </tr>
@@ -531,11 +531,20 @@ function handleHeaderClick(day: { iso: string }) {
   }
 }
 
+// The letter the legend shows, with a trailing "?" for anything still awaiting review, so
+// a pending absence reads as "color, but unconfirmed" without needing a second visual
+// language on top of the one the calendar already has.
+function absenceLabel(absence: AbsenceDto): string {
+  const initial = ABSENCE_TYPE_INITIALS[absence.type];
+  return absence.status === "Pending" ? `${initial}?` : initial;
+}
+
 function cellTitle(person: PersonDto, absence: AbsenceDto): string {
   const name = person.displayName ?? person.username;
+  const status = absence.status === "Pending" ? " (pending approval)" : "";
   const base = absence.note
-    ? `${name} — ${absence.type}: ${absence.note}`
-    : `${name} — ${absence.type}`;
+    ? `${name} — ${absence.type}: ${absence.note}${status}`
+    : `${name} — ${absence.type}${status}`;
   return isMine(absence) ? `${base} (click to edit)` : base;
 }
 

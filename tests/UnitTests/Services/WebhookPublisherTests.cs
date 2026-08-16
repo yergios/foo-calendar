@@ -51,12 +51,14 @@ public sealed class WebhookPublisherTests
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
-    private static WebhookEvent SampleEvent() => new(
+    private static WebhookEvent SampleEvent(string reviewNote = null) => new(
         "11111111-1111-1111-1111-111111111111",
         WebhookEvents.AbsenceCreated,
         new DateTime(2026, 5, 1, 9, 0, 0, DateTimeKind.Utc),
         "jdoe",
-        new WebhookAbsence(7, 3, "Jane Doe", new DateOnly(2026, 5, 4), new DateOnly(2026, 5, 8), AbsenceType.Vacation, "Trip"));
+        new WebhookAbsence(
+            7, 3, "Jane Doe", new DateOnly(2026, 5, 4), new DateOnly(2026, 5, 8),
+            AbsenceType.Vacation, AbsenceStatus.Approved, "Trip", reviewNote));
 
     private static (WebhookPublisher Publisher, StubHttpMessageHandler Handler) CreatePublisher(
         WebhookOptions options = null,
@@ -221,5 +223,32 @@ public sealed class WebhookPublisherTests
 
         using var body = JsonDocument.Parse(handler.Requests.Single().Body);
         body.RootElement.GetProperty("absence").GetProperty("note").GetString().ShouldBe("Trip");
+    }
+
+    // Same reasoning as the requester's own note: a reviewer's reason can reference the
+    // same private circumstances back, so it rides on the same toggle.
+    [Fact]
+    public async Task DeliverAsync_LeavesTheReviewNoteOutByDefault()
+    {
+        var (publisher, handler) = CreatePublisher();
+
+        await publisher.DeliverAsync(SampleEvent(reviewNote: "Not enough coverage."));
+
+        using var body = JsonDocument.Parse(handler.Requests.Single().Body);
+        body.RootElement.GetProperty("absence").GetProperty("reviewNote").ValueKind
+            .ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenNotesAreOptedIn_SendsTheReviewNote()
+    {
+        var (publisher, handler) = CreatePublisher(
+            new WebhookOptions { Url = Url, IncludeAbsenceNote = true });
+
+        await publisher.DeliverAsync(SampleEvent(reviewNote: "Not enough coverage."));
+
+        using var body = JsonDocument.Parse(handler.Requests.Single().Body);
+        body.RootElement.GetProperty("absence").GetProperty("reviewNote").GetString()
+            .ShouldBe("Not enough coverage.");
     }
 }

@@ -100,6 +100,16 @@
           >
           <span>{{ label }}</span>
         </div>
+        <div
+          v-if="configStore.config?.absenceApprovalsEnabled"
+          class="flex items-center gap-1.5"
+        >
+          <span
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
+            >?</span
+          >
+          <span>Pending approval</span>
+        </div>
       </div>
 
       <button

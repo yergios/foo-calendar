@@ -8,6 +8,7 @@ public sealed record AbsenceDto(
     DateOnly StartDate,
     DateOnly EndDate,
     AbsenceType Type,
+    AbsenceStatus Status,
     string Note,
     DateTime CreatedAt)
 {
@@ -22,6 +23,7 @@ public sealed record AbsenceDto(
         absence.StartDate,
         absence.EndDate,
         absence.Type,
+        absence.Status,
         includeNote ? absence.Note : null,
         absence.CreatedAt);
 }

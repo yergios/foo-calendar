@@ -87,6 +87,10 @@ services.AddOptions<WebhookOptions>()
     .Validate(o => o.Timeout > TimeSpan.Zero, "Webhook:Timeout must be positive.")
     .ValidateOnStart();
 
+services.AddOptions<AbsenceApprovalOptions>()
+    .Bind(config.GetSection(AbsenceApprovalOptions.SectionName))
+    .ValidateOnStart();
+
 services.AddOptions<ApiDocsOptions>()
     .Bind(config.GetSection(ApiDocsOptions.SectionName))
     .Validate(o => o.RoutePrefix.StartsWith('/'), "ApiDocs:RoutePrefix must start with '/'.")
@@ -163,6 +167,7 @@ services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();
 services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
 services.AddScoped<IAuditLog, AuditLog>();
+services.AddScoped<INotificationService, NotificationService>();
 
 // ---- API reference --------------------------------------------------------
 
@@ -231,8 +236,8 @@ services.AddOptions<AuthOptions>()
         $"Auth:Permissions must list at least one claim value for each of: {string.Join(", ", Permissions.All)}.")
     // A typo would otherwise sit there granting nothing, which reads exactly like a
     // provider that isn't sending the claim.
-    .Validate(o => o.Permissions.Keys.All(name => Permissions.All.Contains(name, StringComparer.OrdinalIgnoreCase)),
-        $"Auth:Permissions names a permission that doesn't exist. The permissions are: {string.Join(", ", Permissions.All)}.")
+    .Validate(o => o.Permissions.Keys.All(name => Permissions.Known.Contains(name, StringComparer.OrdinalIgnoreCase)),
+        $"Auth:Permissions names a permission that doesn't exist. The permissions are: {string.Join(", ", Permissions.Known)}.")
     .Validate(o => o.ClaimTypes.Permissions.Count > 0,
         "Auth:ClaimTypes:Permissions must list at least one claim name.")
     .ValidateOnStart();
@@ -254,11 +259,14 @@ services.AddAuthorization(options =>
         .Build();
 
     // One policy per permission, named after it, so an endpoint asks for the permission it
-    // needs by name and nothing here has to be touched to add another one.
+    // needs by name and nothing here has to be touched to add another one. Known, not All:
+    // an optional permission left unconfigured still gets a policy, just one nobody's
+    // claims satisfy, which is exactly the "nobody can do this yet" an opt-in feature
+    // should start in.
     //
     // Not RequireClaim: that pairs one claim name with its accepted values, and this has to
     // hold across several of each.
-    foreach (var permission in Permissions.All)
+    foreach (var permission in Permissions.Known)
     {
         var accepted = authConfig.ValuesFor(permission);
 
@@ -488,6 +496,7 @@ app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
 app.MapRegionEndpoints();
+app.MapNotificationsEndpoints();
 
 // Both anonymous, and both off outside Development by default: a browser opening either
 // carries no bearer token, so requiring one would serve a 401 to the only thing that ever

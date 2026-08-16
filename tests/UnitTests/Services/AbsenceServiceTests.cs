@@ -1,7 +1,10 @@
+using Api.Configuration;
 using Api.Data.Models;
 using Api.Dtos;
 using Api.Interfaces;
 using Api.Services;
+
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -21,12 +24,20 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
     private readonly RecordingWebhookPublisher webhooks = new();
     private readonly RecordingAuditLog audit = new();
+    private readonly RecordingNotificationService notifications = new();
+
+    // Approvals off by default, matching every deployment until it opts in: the bulk of
+    // this file exercises today's behavior. Tests for the approval workflow itself build
+    // their own service with approvals turned on, see ApprovalsEnabledSut().
     private readonly AbsenceService sut;
 
     public AbsenceServiceTests()
     {
-        sut = new AbsenceService(Db, webhooks, audit);
+        sut = ApprovalsEnabledSut(enabled: false);
     }
+
+    private AbsenceService ApprovalsEnabledSut(bool enabled) => new(
+        Db, webhooks, audit, notifications, Options.Create(new AbsenceApprovalOptions { Enabled = enabled }));
 
     private Person CreatePerson(string username = "jdoe", string color = "#111111")
     {
@@ -267,15 +278,15 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task GetOverlappingAsync_ReturnsOnlyApprovedAbsencesWithinRange()
+    public async Task GetOverlappingAsync_ReturnsApprovedAndPendingAbsencesWithinRange()
     {
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-07-06", "2026-07-10"));
         Db.Absences.Add(new Absence
         {
             PersonId = person.Id,
-            StartDate = new DateOnly(2026, 7, 6),
-            EndDate = new DateOnly(2026, 7, 10),
+            StartDate = new DateOnly(2026, 8, 6),
+            EndDate = new DateOnly(2026, 8, 10),
             Type = AbsenceType.Sick,
             Status = AbsenceStatus.Pending,
             CreatedBy = person.Username,
@@ -283,10 +294,32 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         Db.SaveChanges();
 
         var result = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 7, 1), new DateOnly(2026, 8, 31), person.Id);
+
+        result.Absences.Count.ShouldBe(2);
+        result.Absences.ShouldContain(a => a.Type == AbsenceType.Vacation && a.Status == AbsenceStatus.Approved);
+        result.Absences.ShouldContain(a => a.Type == AbsenceType.Sick && a.Status == AbsenceStatus.Pending);
+    }
+
+    [Fact]
+    public async Task GetOverlappingAsync_ExcludesRejectedAbsences()
+    {
+        var person = CreatePerson();
+        Db.Absences.Add(new Absence
+        {
+            PersonId = person.Id,
+            StartDate = new DateOnly(2026, 7, 6),
+            EndDate = new DateOnly(2026, 7, 10),
+            Type = AbsenceType.Sick,
+            Status = AbsenceStatus.Rejected,
+            CreatedBy = person.Username,
+        });
+        Db.SaveChanges();
+
+        var result = await sut.GetOverlappingAsync(
             new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), person.Id);
 
-        var absence = result.Absences.ShouldHaveSingleItem();
-        absence.Type.ShouldBe(AbsenceType.Vacation);
+        result.Absences.ShouldBeEmpty();
     }
 
     [Fact]
@@ -415,5 +448,203 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         entry.Target.ShouldBe(person.DisplayName);
         entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
         entry.Details.ShouldNotContain("Flu");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenApprovalsAreOff_IsApprovedImmediately()
+    {
+        var person = CreatePerson();
+
+        var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        created.Status.ShouldBe(AbsenceStatus.Approved);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenApprovalsAreOn_StartsPending()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        created.Status.ShouldBe(AbsenceStatus.Pending);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenApprovalsAreOn_StillConflictsWithAPendingAbsence()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => approvalSut.CreateAsync(person, Request("2026-03-05", "2026-03-10")));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenApprovalsAreOnAndTheAbsenceWasApproved_ResetsItToPending()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        await approvalSut.ApproveAsync(CreatePerson("reviewer", "#333333"), created.Id);
+
+        var updated = await approvalSut.UpdateAsync(
+            person, created.Id, Request("2026-04-01", "2026-04-05"));
+
+        updated.Status.ShouldBe(AbsenceStatus.Pending);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenApprovalsAreOnAndTheAbsenceIsStillPending_StaysPending()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        var updated = await approvalSut.UpdateAsync(
+            person, created.Id, Request("2026-04-01", "2026-04-05"));
+
+        updated.Status.ShouldBe(AbsenceStatus.Pending);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenTheAbsenceWasRejected_Throws()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        await approvalSut.RejectAsync(CreatePerson("reviewer", "#333333"), created.Id, note: null);
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => approvalSut.UpdateAsync(person, created.Id, Request("2026-04-01", "2026-04-05")));
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenApprovalsAreOff_Throws()
+    {
+        var person = CreatePerson();
+        var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.ApproveAsync(person, created.Id));
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenTheAbsenceIsNotPending_Throws()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        await approvalSut.ApproveAsync(reviewer, created.Id);
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => approvalSut.ApproveAsync(reviewer, created.Id));
+    }
+
+    [Fact]
+    public async Task ApproveAsync_ApprovesLogsNotifiesAndPublishes()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        webhooks.Published.Clear();
+
+        var approved = await approvalSut.ApproveAsync(reviewer, created.Id);
+
+        approved.Status.ShouldBe(AbsenceStatus.Approved);
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Action.ShouldBe(AuditActions.AbsenceApproved);
+        entry.Target.ShouldBe(person.DisplayName);
+
+        var notified = notifications.Notified.ShouldHaveSingleItem();
+        notified.PersonId.ShouldBe(person.Id);
+        notified.Type.ShouldBe(NotificationType.AbsenceApproved);
+
+        var published = webhooks.Published.ShouldHaveSingleItem();
+        published.Event.ShouldBe(WebhookEvents.AbsenceApproved);
+        published.Absence.Status.ShouldBe(AbsenceStatus.Approved);
+    }
+
+    [Fact]
+    public async Task RejectAsync_WhenTheAbsenceIsNotPending_Throws()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        await approvalSut.RejectAsync(reviewer, created.Id, note: null);
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => approvalSut.RejectAsync(reviewer, created.Id, note: null));
+    }
+
+    [Fact]
+    public async Task RejectAsync_RejectsLogsNotifiesAndPublishesWithoutTheReviewNoteInTheAudit()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        webhooks.Published.Clear();
+
+        var rejected = await approvalSut.RejectAsync(reviewer, created.Id, "Not enough coverage that week.");
+
+        rejected.Status.ShouldBe(AbsenceStatus.Rejected);
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Action.ShouldBe(AuditActions.AbsenceRejected);
+        entry.Details.ShouldNotContain("Not enough coverage");
+
+        var notified = notifications.Notified.ShouldHaveSingleItem();
+        notified.Type.ShouldBe(NotificationType.AbsenceRejected);
+        notified.Note.ShouldBe("Not enough coverage that week.");
+
+        var published = webhooks.Published.ShouldHaveSingleItem();
+        published.Event.ShouldBe(WebhookEvents.AbsenceRejected);
+        published.Absence.ReviewNote.ShouldBe("Not enough coverage that week.");
+    }
+
+    [Fact]
+    public async Task RejectAsync_RemovesTheAbsenceFromTheCalendar()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await approvalSut.RejectAsync(reviewer, created.Id, note: null);
+
+        var result = await approvalSut.GetOverlappingAsync(
+            new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), person.Id);
+        result.Absences.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_WhenApprovalsAreOff_Throws()
+    {
+        await Should.ThrowAsync<InvalidOperationException>(() => sut.GetPendingAsync());
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_ReturnsOnlyPendingAbsencesWithTheirNote()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var pending = await approvalSut.CreateAsync(
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+        var approved = await approvalSut.CreateAsync(person, Request("2026-05-01", "2026-05-05"));
+        await approvalSut.ApproveAsync(reviewer, approved.Id);
+
+        var result = await approvalSut.GetPendingAsync();
+
+        var absence = result.Absences.ShouldHaveSingleItem();
+        absence.Id.ShouldBe(pending.Id);
+        absence.Note.ShouldBe("Flu");
     }
 }

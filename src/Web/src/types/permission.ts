@@ -9,6 +9,7 @@ export const Permission = {
   reportsRead: "ReportsRead",
   holidaysSync: "HolidaysSync",
   auditRead: "AuditRead",
+  absencesApprove: "AbsencesApprove",
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];

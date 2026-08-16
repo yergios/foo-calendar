@@ -1,5 +1,6 @@
 import { apiFetch, apiJson } from "@/api";
 
+import type { AbsenceDto, PendingAbsencesResponse } from "../types/absence";
 import type { AuditEntriesResponse } from "../types/audit";
 import type { SyncBankHolidaysResponse } from "../types/bankHoliday";
 import type {
@@ -45,5 +46,22 @@ export function syncBankHolidays(
   const regionQuery = region ? `&region=${encodeURIComponent(region)}` : "";
   return apiJson(`/api/admin/bank-holidays/sync?year=${year}${regionQuery}`, {
     method: "POST",
+  });
+}
+
+/** Oldest first: whoever is reviewing works the queue in the order it built up. */
+export function getPendingAbsences(): Promise<PendingAbsencesResponse> {
+  return apiJson(`/api/admin/absences/pending`);
+}
+
+export function approveAbsence(id: number): Promise<AbsenceDto> {
+  return apiJson(`/api/admin/absences/${id}/approve`, { method: "POST" });
+}
+
+/** `note` is the reviewer's own reason, optional. */
+export function rejectAbsence(id: number, note: string | null): Promise<AbsenceDto> {
+  return apiJson(`/api/admin/absences/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
   });
 }

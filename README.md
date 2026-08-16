@@ -361,7 +361,7 @@ Valid rows are imported even when others fail, and the response says exactly wha
 
 ### Access levels
 
-Signing in is enough to do everything a member of the team does. Four permissions gate the rest, each configured on its own and each enforced by a policy of the same name:
+Signing in is enough to do everything a member of the team does. Five permissions gate the rest, each configured on its own and each enforced by a policy of the same name:
 
 | Who | Can do |
 | --------------------------- | ------------------------------------------------------------------------------------------ |
@@ -370,8 +370,11 @@ Signing in is enough to do everything a member of the team does. Four permission
 | `ReportsRead` | View team-wide absence totals |
 | `HolidaysSync` | Trigger a bank-holiday sync by hand |
 | `AuditRead` | Read the [audit log](#who-changed-what) and `/healthchecks/detail` |
+| `AbsencesApprove` | Approve or reject pending absence requests, see [Absence approvals](#absence-approvals) |
 
 Keeping the calendar's public holidays right is everyone's job, deliberately: a member can add, edit, and delete manual holidays without asking anyone. `HolidaysSync` is separate because it calls out to the holiday source and writes in bulk, not because a holiday is precious.
+
+`AbsencesApprove` is the one exception to "every permission must be configured": it only does anything once `AbsenceApprovals:Enabled` turns the review workflow on, so a deployment that never asked for it is free to leave it unconfigured, see [Absence approvals](#absence-approvals).
 
 `/admin` is a page of sections, each behind its own permission, so it shows whatever the signed-in user is allowed to see of it. Someone holding none of them never sees the nav item at all.
 
@@ -389,9 +392,9 @@ Keeping the calendar's public holidays right is everyone's job, deliberately: a 
 }
 ```
 
-- Every permission must name at least one value or the app refuses to start, and a name that isn't one of the four is rejected as a typo rather than silently granting nothing.
+- Every permission except `AbsencesApprove` must name at least one value or the app refuses to start; a name that isn't one of the five is rejected as a typo rather than silently granting nothing.
 - Holding **any one** of a permission's values is enough, so a group id and a friendlier role name can coexist while you migrate between them.
-- Nothing stops the same value appearing under all four. That is how you configure one undivided admin role, and it is what the shipped `appsettings.json` does.
+- Nothing stops the same value appearing under all of them. That is how you configure one undivided admin role, and it is what the shipped `appsettings.json` does.
 - `ClaimTypes:Permissions` names the claims to look in, searched in order. Entra ID, for instance, puts app roles in `roles` and group memberships in `groups`; listing both lets either grant a permission.
 - Claim names are matched exactly (JWT claim names are case-sensitive), values case-insensitively — group ids are often GUIDs whose casing differs between a provider's dashboard and its tokens.
 
@@ -401,7 +404,7 @@ The API's policies and the SPA's gating read the same map — served to the brow
 
 **Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
 
-**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable.
+**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable. Put it in `Permissions.Optional` instead if it gates a feature that is itself off by default (`AbsencesApprove` is the example): it still gets a policy and still has to be one of the recognized names, it just isn't required to be configured.
 
 ### Who changed what
 
@@ -428,13 +431,31 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-It records profile creates, updates, and deletes; bulk imports; deleted absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
+It records profile creates, updates, and deletes; bulk imports; deleted, approved, and rejected absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
 
-An absence's note is never recorded, and neither the log nor the admin page will show you one. The same applies to the actions themselves: an entry says a Sick absence from the 2nd to the 6th was deleted, not why it was taken.
+An absence's note is never recorded, and neither is a reviewer's reason for rejecting one — neither the log nor the admin page will show you either. The same applies to the actions themselves: an entry says a Sick absence from the 2nd to the 6th was rejected, not why.
 
 > The log grows without bound. At a handful of entries a day that is a few thousand rows a year, which SQLite will not notice; if you need it pruned, it is one `DELETE` against the `AuditEntries` table.
 
 > Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`, `Auth__Permissions__PeopleManage__0=leave-admin`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__Permissions__PeopleManage__1=`). Blank entries are dropped rather than matched.
+
+### Absence approvals
+
+Off by default: an absence is approved the instant it's created, same as always. Turn it on and every new absence waits for a review instead:
+
+```bash
+AbsenceApprovals__Enabled=true
+Auth__Permissions__AbsencesApprove__0=leave-admin
+```
+
+- A pending absence still shows on the calendar, color-rendered like any other, with a `?` marking it unreviewed. A rejected one disappears from the calendar entirely; the only way back onto it is a new request.
+- Whoever holds `AbsencesApprove` sees a "Absence approvals" section on `/admin`, listing every pending request — including its note, the one place someone other than its author is shown it, since deciding whether to approve needs the reason. Approving needs nothing further; rejecting takes an optional note explaining why.
+- Editing a still-pending request just edits it. Editing one that was already approved sends it through review again, since what was approved was those specific dates, type, and note. A rejected request can't be edited at all — file a new one.
+- The requester is told the outcome twice, independently: an [in-app notification](#getting-notified) always, and `absence.approved` / `absence.rejected` on the [webhook](#reacting-to-absences) if one is configured.
+
+### Getting notified
+
+Whoever a pending request belongs to finds out what happened to it from the bell icon in the header — no email or push setup required. It lists their own recent approvals and rejections (with the reviewer's note, when there is one), badges the unread count, and marks everything read once opened. `GET /api/notifications` and `POST /api/notifications/read` are what it calls; there's nothing to configure.
 
 ### Browsing the API
 
@@ -449,7 +470,7 @@ It is **on in Development** and off everywhere else, because both routes are ano
 
 The document names a `Bearer` security scheme, so Scalar's auth panel takes an access token and sends it with every call you make from the page. Get one from your identity provider the way the SPA does, or from the browser devtools of a signed-in session.
 
-Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
+Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config, Notifications — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
 
 > Under a sub-path (`ReverseProxy:PathBase`), Scalar resolves the document URL against the page's own path, so `/calendar/scalar` reads `/calendar/openapi/v1.json` without either being configured.
 
@@ -462,7 +483,7 @@ Webhook__Url=https://hooks.example.internal/foo-calendar
 Webhook__Secret=a-long-random-string
 ```
 
-Three events are sent: `absence.created`, `absence.updated` and `absence.deleted`. Each one carries the absence in full, so a receiver rarely needs to call back:
+Five events are sent: `absence.created`, `absence.updated`, `absence.deleted`, `absence.approved` and `absence.rejected`. The last two only happen once [absence approvals](#absence-approvals) are turned on. Each one carries the absence in full, so a receiver rarely needs to call back:
 
 ```json
 {
@@ -477,14 +498,16 @@ Three events are sent: `absence.created`, `absence.updated` and `absence.deleted
     "startDate": "2026-05-04",
     "endDate": "2026-05-08",
     "type": "Vacation",
-    "note": null
+    "status": "Pending",
+    "note": null,
+    "reviewNote": null
   }
 }
 ```
 
-For a deletion, `absence` describes the absence as it was.
+For a deletion, `absence` describes the absence as it was. `status` is `Pending` on `absence.created` only when approvals are turned on (`Approved` otherwise, same as before); it's what lets a receiver tell a request that needs a look from one that's already settled.
 
-`note` is free text somebody typed about their own absence, and on a sick leave it is health information, so it is **left out by default** — the field is always there, it simply arrives `null`. Set `Webhook:IncludeAbsenceNote=true` to send it, and point the hook somewhere you control if you do.
+`note` is free text somebody typed about their own absence, and on a sick leave it is health information, so it is **left out by default** — the field is always there, it simply arrives `null`. `reviewNote` is a reviewer's reason for a rejection, and is left out under the same setting, for the same reason. Set `Webhook:IncludeAbsenceNote=true` to send both, and point the hook somewhere you control if you do.
 
 **Headers**
 
