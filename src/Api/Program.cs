@@ -91,6 +91,19 @@ services.AddOptions<AbsenceApprovalOptions>()
     .Bind(config.GetSection(AbsenceApprovalOptions.SectionName))
     .ValidateOnStart();
 
+services.AddOptions<EmailOptions>()
+    .Bind(config.GetSection(EmailOptions.SectionName))
+    .Validate(
+        o => string.IsNullOrWhiteSpace(o.Host) || !string.IsNullOrWhiteSpace(o.FromAddress),
+        "Email:FromAddress must be configured when Email:Host is set.")
+    .Validate(o => o.Port is > 0 and <= 65535, "Email:Port must be a valid port number.")
+    .Validate(o => o.MaxAttempts >= 1, "Email:MaxAttempts must be at least 1.")
+    .Validate(o => o.Timeout > TimeSpan.Zero, "Email:Timeout must be positive.")
+    .Validate(
+        o => o.WeeklyDigest.TimeOfDay >= TimeSpan.Zero && o.WeeklyDigest.TimeOfDay < TimeSpan.FromDays(1),
+        "Email:WeeklyDigest:TimeOfDay must be between 00:00:00 and 23:59:59.")
+    .ValidateOnStart();
+
 services.AddOptions<ApiDocsOptions>()
     .Bind(config.GetSection(ApiDocsOptions.SectionName))
     .Validate(o => o.RoutePrefix.StartsWith('/'), "ApiDocs:RoutePrefix must start with '/'.")
@@ -168,6 +181,25 @@ services.AddScoped<IPersonService, PersonService>();
 services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
 services.AddScoped<IAuditLog, AuditLog>();
 services.AddScoped<INotificationService, NotificationService>();
+
+// ---- Email --------------------------------------------------------------
+
+// Same shape as the webhook above: always registered so callers have something to queue
+// into, and it drops emails on the floor until a host is configured. The delivery loop and
+// the weekly-digest scheduler are only started when there is one.
+services.AddSingleton<ISmtpTransportFactory, SmtpTransportFactory>();
+services.AddSingleton<EmailSender>();
+services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<EmailSender>());
+services.AddScoped<IWeeklyDigestService, WeeklyDigestService>();
+
+var emailHostConfigured = !string.IsNullOrWhiteSpace(
+    config[$"{EmailOptions.SectionName}:{nameof(EmailOptions.Host)}"]);
+
+if (emailHostConfigured)
+{
+    services.AddHostedService(sp => sp.GetRequiredService<EmailSender>());
+    services.AddHostedService<WeeklyDigestBackgroundService>();
+}
 
 // ---- API reference --------------------------------------------------------
 

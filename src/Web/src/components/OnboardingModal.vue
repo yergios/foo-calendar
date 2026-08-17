@@ -17,7 +17,14 @@ import ProfileForm from "./ProfileForm.vue";
 
 defineEmits<{
   submit: [
-    payload: { displayName: string | null; homeCity: string | null; color: string },
+    payload: {
+      displayName: string | null;
+      homeCity: string | null;
+      color: string;
+      emailOnAbsenceReviewed: boolean;
+      emailOnNewAbsenceRequest: boolean;
+      emailOnWeeklyDigest: boolean;
+    },
     done: (error?: string | null) => void,
   ];
   close: [];

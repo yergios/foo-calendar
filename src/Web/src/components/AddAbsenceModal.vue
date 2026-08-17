@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
 import AppModal from "@/components/AppModal.vue";
@@ -119,6 +119,15 @@ const resubmitsForApproval = computed(
     props.absence?.status === "Approved" &&
     configStore.config?.absenceApprovalsEnabled === true,
 );
+
+// Callers already tend to load this on mount too, but nothing guarantees this modal isn't
+// the first thing on screen to need it, so it fetches its own copy. loadOnce() dedupes
+// against any already-in-flight or cached request, so this never costs a second round trip.
+onMounted(() => {
+  configStore.loadOnce().catch((error: unknown) => {
+    console.error("ERROR => Failed to load app config:", error);
+  });
+});
 
 const startDate = ref(props.absence?.startDate ?? props.initialDate ?? today());
 const endDate = ref(props.absence?.endDate ?? props.initialDate ?? today());

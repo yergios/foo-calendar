@@ -38,7 +38,10 @@ public static class PeopleEndpoints
             request.DisplayName,
             request.HomeCity,
             request.Color,
-            user.FindFirstValue(claimTypes.Email));
+            user.FindFirstValue(claimTypes.Email),
+            request.EmailOnAbsenceReviewed,
+            request.EmailOnNewAbsenceRequest,
+            request.EmailOnWeeklyDigest);
 
         var created = await people.CreateAsync(create, create.Username, ct);
         return Results.Created("/api/people/me", created);

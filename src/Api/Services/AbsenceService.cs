@@ -14,17 +14,62 @@ public sealed class AbsenceService(
     IWebhookPublisher webhooks,
     IAuditLog audit,
     INotificationService notifications,
-    IOptions<AbsenceApprovalOptions> approvalOptions) : IAbsenceService
+    IEmailSender emailSender,
+    IOptions<AbsenceApprovalOptions> approvalOptions,
+    IOptions<BrandingOptions> branding,
+    IOptions<EmailOptions> emailOptions) : IAbsenceService
 {
     // Published after the change is committed, so a receiver can never be told about an
-    // absence that then failed to save.
+    // absence that then failed to save. person is who the absence belongs to and, for
+    // Create/Update/Delete, also who acted; a review acts on someone else's absence, so
+    // ApproveAsync/RejectAsync use the other overload to keep those two apart.
     private void PublishEvent(string name, Absence absence, Person person) =>
+        PublishEvent(name, absence, owner: person, actorUsername: person.Username);
+
+    private void PublishEvent(string name, Absence absence, Person owner, string actorUsername) =>
         webhooks.Publish(new WebhookEvent(
             Guid.NewGuid().ToString(),
             name,
             DateTime.UtcNow,
-            person.Username,
-            WebhookAbsence.FromEntity(absence, person.DisplayName)));
+            actorUsername,
+            WebhookAbsence.FromEntity(absence, owner.DisplayName)));
+
+    // What an absence was, for an audit entry that still reads sensibly. Named to match
+    // PersonService.Describe / BankHolidayService.Describe.
+    private static string Describe(Absence absence) =>
+        $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}";
+
+    // Same "after the fact, never inside the transaction" placement as PublishEvent: an
+    // email is exactly as best-effort as the webhook, so it never gets a say in whether the
+    // review itself succeeds.
+    private void SendReviewedEmail(Absence absence)
+    {
+        if (!absence.Person.EmailOnAbsenceReviewed || string.IsNullOrWhiteSpace(absence.Person.Email))
+            return;
+
+        var (subject, html, text) = EmailTemplates.BuildAbsenceReviewed(
+            absence, branding.Value.AppName, emailOptions.Value.AppUrl);
+        emailSender.Send(new EmailMessage(absence.Person.Email, absence.Person.DisplayName, subject, html, text));
+    }
+
+    // Just the stored opt-in flag, not cross-checked against who currently holds
+    // AbsencesApprove: Person carries no permission information, so this is "everyone who
+    // has asked to hear about it", full stop. See EmailOnNewAbsenceRequest's doc comment.
+    private async Task SendNewRequestEmailsAsync(Absence absence, Person owner, CancellationToken ct)
+    {
+        var approvers = await db.People
+            .Where(p => p.EmailOnNewAbsenceRequest && p.Email != null && p.Email != "")
+            .Select(p => new { p.Email, p.DisplayName })
+            .ToListAsync(ct);
+
+        if (approvers.Count == 0) return;
+
+        var (subject, html, text) = EmailTemplates.BuildNewAbsenceRequest(
+            absence, owner.DisplayName, branding.Value.AppName, emailOptions.Value.AppUrl);
+
+        foreach (var approver in approvers)
+            emailSender.Send(new EmailMessage(approver.Email, approver.DisplayName, subject, html, text));
+    }
 
     public async Task<AbsencesResponse> GetOverlappingAsync(
         DateOnly from, DateOnly to, int? viewerPersonId, CancellationToken ct = default)
@@ -98,6 +143,11 @@ public sealed class AbsenceService(
 
         PublishEvent(WebhookEvents.AbsenceCreated, absence, person);
 
+        // Only when it actually landed Pending: approvals off means nothing is ever waiting
+        // on anyone, so there is nothing for an approver to be emailed about.
+        if (absence.Status == AbsenceStatus.Pending)
+            await SendNewRequestEmailsAsync(absence, person, ct);
+
         // Their own absence coming back to them, so the note goes with it.
         return AbsenceDto.FromEntity(absence, includeNote: true);
     }
@@ -130,7 +180,8 @@ public sealed class AbsenceService(
         // Editing an absence that was already approved sends it through review again: what
         // was approved was these specific dates, type and note, and any of the three could
         // have just changed. A still-Pending one simply stays Pending, nothing to reset.
-        if (approvalOptions.Value.Enabled && absence.Status == AbsenceStatus.Approved)
+        var justBecamePending = approvalOptions.Value.Enabled && absence.Status == AbsenceStatus.Approved;
+        if (justBecamePending)
         {
             absence.Status = AbsenceStatus.Pending;
             absence.ReviewedBy = null;
@@ -147,6 +198,13 @@ public sealed class AbsenceService(
         await db.SaveChangesAsync(ct);
 
         PublishEvent(WebhookEvents.AbsenceUpdated, absence, person);
+
+        // Only the Approved→Pending transition, not every edit of an already-Pending
+        // request: otherwise re-saving a still-pending request would re-notify approvers
+        // on every keystroke's worth of change instead of once, when it actually arrived.
+        if (justBecamePending)
+            await SendNewRequestEmailsAsync(absence, person, ct);
+
         return AbsenceDto.FromEntity(absence, includeNote: true);
     }
 
@@ -163,23 +221,28 @@ public sealed class AbsenceService(
 
         // Dates and type, never the note: the log is read by people the note was never
         // meant for, and a deleted absence shouldn't outlive its author's privacy.
-        await audit.RecordAsync(
-            AuditActions.AbsenceDeleted,
-            person.DisplayName,
-            $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}",
-            ct);
+        await audit.RecordAsync(AuditActions.AbsenceDeleted, person.DisplayName, Describe(absence), ct);
 
         // Describes the absence as it was, since there is nothing left to look up.
         PublishEvent(WebhookEvents.AbsenceDeleted, absence, person);
     }
 
+    // A generous cap on the review queue, not real pagination: this is meant to be worked
+    // down to zero, not browsed like the audit log, so a healthy deployment never gets
+    // near it. It exists only so a backlog can't make the admin page fetch and render an
+    // unbounded response.
+    private const int MaxPendingItems = 200;
+
+    // Deliberately not gated on AbsenceApprovals:Enabled, unlike CreateAsync/UpdateAsync:
+    // disabling the feature stops new absences from becoming Pending, but a Pending row
+    // left over from before that still needs a way to be resolved. Access is gated by the
+    // AbsencesApprove permission instead.
     public async Task<PendingAbsencesResponse> GetPendingAsync(CancellationToken ct = default)
     {
-        EnsureApprovalsEnabled();
-
         var absences = await db.Absences
             .Where(a => a.Status == AbsenceStatus.Pending)
             .OrderBy(a => a.CreatedAt)
+            .Take(MaxPendingItems)
             .ToListAsync(ct);
 
         // Deciding whether to approve is the one situation this app asks someone other
@@ -190,11 +253,12 @@ public sealed class AbsenceService(
 
     public async Task<AbsenceDto> ApproveAsync(Person reviewer, int absenceId, CancellationToken ct = default)
     {
-        EnsureApprovalsEnabled();
-
         var absence = await db.Absences.Include(a => a.Person)
             .FirstOrDefaultAsync(a => a.Id == absenceId, ct)
             ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
+
+        if (absence.PersonId == reviewer.Id)
+            throw new UnauthorizedAccessException("Cannot approve your own absence.");
 
         if (absence.Status != AbsenceStatus.Pending)
             throw new InvalidOperationException("Only a pending request can be approved.");
@@ -202,17 +266,21 @@ public sealed class AbsenceService(
         absence.Status = AbsenceStatus.Approved;
         absence.ReviewedBy = reviewer.Username;
         absence.ReviewedAt = DateTime.UtcNow;
+
+        // One transaction for the whole review: audit and notifications share this same
+        // context, so if either write fails, the status flip rolls back with them instead
+        // of leaving the absence Approved with no audit entry, notification, or webhook,
+        // and no way back in since a retry would then fail the Pending check above.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         await db.SaveChangesAsync(ct);
-
-        await audit.RecordAsync(
-            AuditActions.AbsenceApproved,
-            absence.Person.DisplayName,
-            $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}",
-            ct);
-
+        await audit.RecordAsync(AuditActions.AbsenceApproved, absence.Person.DisplayName, Describe(absence), ct);
         await notifications.NotifyAsync(absence, NotificationType.AbsenceApproved, note: null, ct);
 
-        PublishEvent(WebhookEvents.AbsenceApproved, absence, absence.Person);
+        await transaction.CommitAsync(ct);
+
+        PublishEvent(WebhookEvents.AbsenceApproved, absence, owner: absence.Person, actorUsername: reviewer.Username);
+        SendReviewedEmail(absence);
 
         return AbsenceDto.FromEntity(absence, includeNote: absence.PersonId == reviewer.Id);
     }
@@ -220,11 +288,12 @@ public sealed class AbsenceService(
     public async Task<AbsenceDto> RejectAsync(
         Person reviewer, int absenceId, string note, CancellationToken ct = default)
     {
-        EnsureApprovalsEnabled();
-
         var absence = await db.Absences.Include(a => a.Person)
             .FirstOrDefaultAsync(a => a.Id == absenceId, ct)
             ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
+
+        if (absence.PersonId == reviewer.Id)
+            throw new UnauthorizedAccessException("Cannot reject your own absence.");
 
         if (absence.Status != AbsenceStatus.Pending)
             throw new InvalidOperationException("Only a pending request can be rejected.");
@@ -233,29 +302,26 @@ public sealed class AbsenceService(
         absence.ReviewedBy = reviewer.Username;
         absence.ReviewedAt = DateTime.UtcNow;
         absence.ReviewNote = note;
+
+        // Same reasoning as ApproveAsync: one transaction for the status flip plus its
+        // audit entry and notification, so a failure partway through rolls all of it back
+        // instead of stranding the absence Rejected with nothing recorded about it.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         await db.SaveChangesAsync(ct);
 
         // Dates and type, same as a deletion: never the reviewer's reason either, which
         // reaches the requester through their notification instead, not through a log
         // other people can read.
-        await audit.RecordAsync(
-            AuditActions.AbsenceRejected,
-            absence.Person.DisplayName,
-            $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}",
-            ct);
-
+        await audit.RecordAsync(AuditActions.AbsenceRejected, absence.Person.DisplayName, Describe(absence), ct);
         await notifications.NotifyAsync(absence, NotificationType.AbsenceRejected, note, ct);
 
-        PublishEvent(WebhookEvents.AbsenceRejected, absence, absence.Person);
+        await transaction.CommitAsync(ct);
+
+        PublishEvent(WebhookEvents.AbsenceRejected, absence, owner: absence.Person, actorUsername: reviewer.Username);
+        SendReviewedEmail(absence);
 
         return AbsenceDto.FromEntity(absence, includeNote: absence.PersonId == reviewer.Id);
-    }
-
-    private void EnsureApprovalsEnabled()
-    {
-        if (!approvalOptions.Value.Enabled)
-            throw new InvalidOperationException(
-                "Absence approvals are not enabled for this deployment (AbsenceApprovals:Enabled=false).");
     }
 
     // Approved and Pending both belong on the calendar and both block a new request over
@@ -264,7 +330,10 @@ public sealed class AbsenceService(
     private static IQueryable<Absence> VisibleOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
         query.Where(a => a.Status != AbsenceStatus.Rejected && a.StartDate <= to && a.EndDate >= from);
 
-    private static IQueryable<Absence> ApprovedOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
+    // Internal rather than private: WeeklyDigestService reuses this exact "Approved and
+    // overlapping this range" filter for the digest's absence list, instead of redefining
+    // it a second time.
+    internal static IQueryable<Absence> ApprovedOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
         query.Where(a => a.Status == AbsenceStatus.Approved && a.StartDate <= to && a.EndDate >= from);
 
     private static (DateOnly Start, DateOnly End) YearRange(int year) =>

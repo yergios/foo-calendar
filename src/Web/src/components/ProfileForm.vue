@@ -29,6 +29,25 @@
       />
     </div>
 
+    <div class="flex flex-col gap-2.5">
+      <label class="text-xs font-semibold text-secondary">Email notifications</label>
+
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="emailOnAbsenceReviewed" type="checkbox" />
+        Email me when my absence request is approved or rejected
+      </label>
+
+      <label v-if="canApproveAbsences" class="flex items-center gap-2 text-sm">
+        <input v-model="emailOnNewAbsenceRequest" type="checkbox" />
+        Email me when a new absence request needs review
+      </label>
+
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="emailOnWeeklyDigest" type="checkbox" />
+        Email me a weekly digest of who's off
+      </label>
+    </div>
+
     <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2">{{ error }}</p>
 
     <button
@@ -51,25 +70,39 @@ import { useAuthStore } from "@/auth";
 import ColorPicker from "@/components/ColorPicker.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
 import { useConfigStore } from "@/stores/config";
+import { Permission } from "@/types/permission";
 
 const props = withDefaults(
   defineProps<{
     initialDisplayName?: string | null;
     initialHomeCity?: string | null;
     initialColor?: string | null;
+    initialEmailOnAbsenceReviewed?: boolean;
+    initialEmailOnNewAbsenceRequest?: boolean;
+    initialEmailOnWeeklyDigest?: boolean;
     submitLabel?: string;
   }>(),
   {
     initialDisplayName: null,
     initialHomeCity: null,
     initialColor: null,
+    initialEmailOnAbsenceReviewed: false,
+    initialEmailOnNewAbsenceRequest: false,
+    initialEmailOnWeeklyDigest: false,
     submitLabel: "Save",
   },
 );
 
 const emit = defineEmits<{
   submit: [
-    payload: { displayName: string | null; homeCity: string | null; color: string },
+    payload: {
+      displayName: string | null;
+      homeCity: string | null;
+      color: string;
+      emailOnAbsenceReviewed: boolean;
+      emailOnNewAbsenceRequest: boolean;
+      emailOnWeeklyDigest: boolean;
+    },
     // The message is what the API said went wrong, most often a color someone else claimed
     // between this form loading and being submitted.
     done: (error?: string | null) => void,
@@ -89,6 +122,11 @@ const submitting = ref(false);
 const configLoading = ref(true);
 
 const homeCity = ref<string | null>(props.initialHomeCity);
+
+const emailOnAbsenceReviewed = ref(props.initialEmailOnAbsenceReviewed);
+const emailOnNewAbsenceRequest = ref(props.initialEmailOnNewAbsenceRequest);
+const emailOnWeeklyDigest = ref(props.initialEmailOnWeeklyDigest);
+const canApproveAbsences = computed(() => authStore.can(Permission.absencesApprove));
 
 onMounted(async () => {
   try {
@@ -130,6 +168,9 @@ function submit() {
       displayName: displayName.value.trim() || null,
       homeCity: homeCity.value,
       color: color.value,
+      emailOnAbsenceReviewed: emailOnAbsenceReviewed.value,
+      emailOnNewAbsenceRequest: emailOnNewAbsenceRequest.value,
+      emailOnWeeklyDigest: emailOnWeeklyDigest.value,
     },
     (failure?: string | null) => {
       submitting.value = false;

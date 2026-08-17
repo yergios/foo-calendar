@@ -42,6 +42,9 @@ public sealed class PersonService(
             DisplayName = request.DisplayName,
             HomeCity = request.HomeCity,
             Color = color,
+            EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed,
+            EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest,
+            EmailOnWeeklyDigest = request.EmailOnWeeklyDigest,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actorUsername,
         };
@@ -149,6 +152,9 @@ public sealed class PersonService(
         person.DisplayName = request.DisplayName;
         person.Color = color;
         person.HomeCity = request.HomeCity;
+        person.EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed;
+        person.EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest;
+        person.EmailOnWeeklyDigest = request.EmailOnWeeklyDigest;
         person.UpdatedAt = DateTime.UtcNow;
         person.UpdatedBy = actorUsername;
         await db.SaveChangesAsync(ct);

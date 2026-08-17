@@ -18,5 +18,13 @@ public sealed class Person
     public required string CreatedBy { get; set; }
     public string UpdatedBy { get; set; }
 
+    // Opt-in email preferences, off by default. EmailOnNewAbsenceRequest is only ever
+    // acted on for whoever has it set, with no re-check against AbsencesApprove: it's a
+    // stored preference, not a live permission lookup, so it can lag a revoked permission
+    // until the person next saves their profile.
+    public bool EmailOnAbsenceReviewed { get; set; }
+    public bool EmailOnNewAbsenceRequest { get; set; }
+    public bool EmailOnWeeklyDigest { get; set; }
+
     public ICollection<Absence> Absences { get; set; } = [];
 }

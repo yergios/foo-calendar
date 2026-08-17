@@ -11,6 +11,12 @@ export interface PersonDto {
   displayName: string;
   homeCity: string | null;
   color: string;
+  // Only present on the /me responses (GetMe/CreateMe/UpdateMe serialize the raw entity);
+  // the colleagues list from getAllPeople() never carries these, same as it never carries
+  // email itself.
+  emailOnAbsenceReviewed?: boolean;
+  emailOnNewAbsenceRequest?: boolean;
+  emailOnWeeklyDigest?: boolean;
 }
 
 export interface CreatePersonRequest {
@@ -26,6 +32,9 @@ export interface UpdatePersonRequest {
   displayName?: string | null;
   homeCity?: string | null;
   color: string;
+  emailOnAbsenceReviewed?: boolean;
+  emailOnNewAbsenceRequest?: boolean;
+  emailOnWeeklyDigest?: boolean;
 }
 
 export interface AbsenceStatsResponse {

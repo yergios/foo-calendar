@@ -25,6 +25,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     private readonly RecordingWebhookPublisher webhooks = new();
     private readonly RecordingAuditLog audit = new();
     private readonly RecordingNotificationService notifications = new();
+    private readonly RecordingEmailSender emails = new();
 
     // Approvals off by default, matching every deployment until it opts in: the bulk of
     // this file exercises today's behavior. Tests for the approval workflow itself build
@@ -37,15 +38,30 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     private AbsenceService ApprovalsEnabledSut(bool enabled) => new(
-        Db, webhooks, audit, notifications, Options.Create(new AbsenceApprovalOptions { Enabled = enabled }));
+        Db,
+        webhooks,
+        audit,
+        notifications,
+        emails,
+        Options.Create(new AbsenceApprovalOptions { Enabled = enabled }),
+        Options.Create(new BrandingOptions { AppName = "Foo Calendar" }),
+        Options.Create(new EmailOptions()));
 
-    private Person CreatePerson(string username = "jdoe", string color = "#111111")
+    private Person CreatePerson(
+        string username = "jdoe",
+        string color = "#111111",
+        string email = null,
+        bool emailOnAbsenceReviewed = false,
+        bool emailOnNewAbsenceRequest = false)
     {
         var person = new Person
         {
             Username = username,
             DisplayName = username,
             Color = color,
+            Email = email,
+            EmailOnAbsenceReviewed = emailOnAbsenceReviewed,
+            EmailOnNewAbsenceRequest = emailOnNewAbsenceRequest,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = username,
         };
@@ -522,13 +538,27 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task ApproveAsync_WhenApprovalsAreOff_Throws()
+    public async Task ApproveAsync_WhenTheReviewerIsTheAbsencesOwner_Throws()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await Should.ThrowAsync<UnauthorizedAccessException>(
+            () => approvalSut.ApproveAsync(person, created.Id));
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenApprovalsAreLaterDisabled_StillResolvesALeftoverPendingRequest()
     {
         var person = CreatePerson();
-        var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await ApprovalsEnabledSut(enabled: true).CreateAsync(
+            person, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => sut.ApproveAsync(person, created.Id));
+        var approved = await ApprovalsEnabledSut(enabled: false).ApproveAsync(reviewer, created.Id);
+
+        approved.Status.ShouldBe(AbsenceStatus.Approved);
     }
 
     [Fact]
@@ -568,6 +598,19 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var published = webhooks.Published.ShouldHaveSingleItem();
         published.Event.ShouldBe(WebhookEvents.AbsenceApproved);
         published.Absence.Status.ShouldBe(AbsenceStatus.Approved);
+        // The reviewer approved it, not the requester whose name is on the absence itself.
+        published.Actor.ShouldBe(reviewer.Username);
+    }
+
+    [Fact]
+    public async Task RejectAsync_WhenTheReviewerIsTheAbsencesOwner_Throws()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson();
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await Should.ThrowAsync<UnauthorizedAccessException>(
+            () => approvalSut.RejectAsync(person, created.Id, note: null));
     }
 
     [Fact]
@@ -607,6 +650,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var published = webhooks.Published.ShouldHaveSingleItem();
         published.Event.ShouldBe(WebhookEvents.AbsenceRejected);
         published.Absence.ReviewNote.ShouldBe("Not enough coverage that week.");
+        published.Actor.ShouldBe(reviewer.Username);
     }
 
     [Fact]
@@ -625,9 +669,23 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task GetPendingAsync_WhenApprovalsAreOff_Throws()
+    public async Task GetPendingAsync_WhenApprovalsAreOff_ReturnsNothingByDefault()
     {
-        await Should.ThrowAsync<InvalidOperationException>(() => sut.GetPendingAsync());
+        // Approvals off means nothing is ever created Pending, not that the queue is
+        // unreachable: a leftover from before is still returned, see the test below.
+        (await sut.GetPendingAsync()).Absences.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_WhenApprovalsAreLaterDisabled_StillReturnsALeftoverPendingRequest()
+    {
+        var person = CreatePerson();
+        var created = await ApprovalsEnabledSut(enabled: true).CreateAsync(
+            person, Request("2026-03-02", "2026-03-06"));
+
+        var result = await ApprovalsEnabledSut(enabled: false).GetPendingAsync();
+
+        result.Absences.ShouldHaveSingleItem().Id.ShouldBe(created.Id);
     }
 
     [Fact]
@@ -646,5 +704,120 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var absence = result.Absences.ShouldHaveSingleItem();
         absence.Id.ShouldBe(pending.Id);
         absence.Note.ShouldBe("Flu");
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenTheOwnerOptedIn_EmailsThem()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: true);
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await approvalSut.ApproveAsync(reviewer, created.Id);
+
+        var sent = emails.Sent.ShouldHaveSingleItem();
+        sent.ToAddress.ShouldBe("jdoe@example.test");
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenTheOwnerDidNotOptIn_SendsNoEmail()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: false);
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await approvalSut.ApproveAsync(reviewer, created.Id);
+
+        emails.Sent.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ApproveAsync_WhenTheOwnerOptedInButHasNoEmailAddress_SendsNoEmail()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson(email: null, emailOnAbsenceReviewed: true);
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await approvalSut.ApproveAsync(reviewer, created.Id);
+
+        emails.Sent.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task RejectAsync_WhenTheOwnerOptedIn_EmailsThemWithTheReviewNote()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: true);
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        await approvalSut.RejectAsync(reviewer, created.Id, "Not enough coverage that week.");
+
+        var sent = emails.Sent.ShouldHaveSingleItem();
+        sent.ToAddress.ShouldBe("jdoe@example.test");
+        sent.HtmlBody.ShouldContain("Not enough coverage that week.");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenApprovalsAreOnAndAnAbsenceLandsPending_EmailsEveryOptedInApprover()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var uninterested = CreatePerson("bystander", "#444444", email: "bystander@example.test");
+        var person = CreatePerson("jdoe", "#111111");
+
+        await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        var sent = emails.Sent.ShouldHaveSingleItem();
+        sent.ToAddress.ShouldBe(approver.Email);
+        uninterested.Email.ShouldNotBeNull(); // sanity: they had an address, just didn't opt in
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenApprovalsAreOff_NeverEmailsApprovers()
+    {
+        // Off means the absence is Approved on arrival, so there is nothing pending for an
+        // approver to be told about, opted in or not.
+        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe", "#111111");
+
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+
+        emails.Sent.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenAnApprovedAbsenceIsResetToPending_EmailsOptedInApprovers()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe", "#111111");
+        var reviewer = CreatePerson("reviewer", "#333333");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        await approvalSut.ApproveAsync(reviewer, created.Id);
+        emails.Sent.Clear();
+
+        await approvalSut.UpdateAsync(person, created.Id, Request("2026-04-01", "2026-04-05"));
+
+        var sent = emails.Sent.ShouldHaveSingleItem();
+        sent.ToAddress.ShouldBe(approver.Email);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenAlreadyPendingAndEditedAgain_DoesNotReEmailApprovers()
+    {
+        var approvalSut = ApprovalsEnabledSut(enabled: true);
+        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe", "#111111");
+        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        emails.Sent.Clear();
+
+        await approvalSut.UpdateAsync(person, created.Id, Request("2026-04-01", "2026-04-05"));
+
+        emails.Sent.ShouldBeEmpty();
+        approver.Email.ShouldNotBeNull(); // sanity: they were still a valid recipient, just not re-notified
     }
 }

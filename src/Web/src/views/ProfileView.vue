@@ -27,6 +27,9 @@
           :initial-display-name="person.displayName"
           :initial-home-city="person.homeCity"
           :initial-color="person.color"
+          :initial-email-on-absence-reviewed="person.emailOnAbsenceReviewed"
+          :initial-email-on-new-absence-request="person.emailOnNewAbsenceRequest"
+          :initial-email-on-weekly-digest="person.emailOnWeeklyDigest"
           submit-label="Save changes"
           @submit="handleSave"
         />

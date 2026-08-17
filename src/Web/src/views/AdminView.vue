@@ -202,7 +202,7 @@
       </div>
     </section>
 
-    <section v-if="canApproveAbsences && configStore.config?.absenceApprovalsEnabled">
+    <section v-if="canApproveAbsences">
       <h4>Absence approvals</h4>
       <p class="text-sm text-secondary mt-1">
         Requests waiting for a decision, oldest first. Approving needs nothing further;
@@ -506,48 +506,55 @@ function toggleReject(absenceId: number) {
   rejectNote.value = "";
 }
 
-async function approve(absence: AbsenceDto) {
+// approve() and reject() are the same shape (set the loading id, call the API, drop the
+// absence from the queue on success, report the error on failure); this runs that shape
+// once with whichever call and fallback message differs between the two.
+async function review(
+  absence: AbsenceDto,
+  action: (id: number) => Promise<AbsenceDto>,
+  fallbackMessage: string,
+  onSuccess?: () => void,
+) {
   reviewingId.value = absence.id;
   reviewError.value = null;
   try {
-    await approveAbsence(absence.id);
+    await action(absence.id);
     pendingAbsences.value = pendingAbsences.value.filter((a) => a.id !== absence.id);
+    onSuccess?.();
   } catch (error: unknown) {
-    console.error("ERROR => Failed to approve absence:", error);
+    console.error("ERROR => Failed to review absence:", error);
     reviewError.value = absence.id;
-    reviewErrorMessage.value =
-      error instanceof Error ? error.message : "Failed to approve absence.";
+    reviewErrorMessage.value = error instanceof Error ? error.message : fallbackMessage;
   } finally {
     reviewingId.value = null;
   }
 }
 
-async function reject(absence: AbsenceDto) {
-  reviewingId.value = absence.id;
-  reviewError.value = null;
-  try {
-    await rejectAbsence(absence.id, rejectNote.value.trim() || null);
-    pendingAbsences.value = pendingAbsences.value.filter((a) => a.id !== absence.id);
-    rejectingId.value = null;
-  } catch (error: unknown) {
-    console.error("ERROR => Failed to reject absence:", error);
-    reviewError.value = absence.id;
-    reviewErrorMessage.value =
-      error instanceof Error ? error.message : "Failed to reject absence.";
-  } finally {
-    reviewingId.value = null;
-  }
+function approve(absence: AbsenceDto) {
+  return review(absence, approveAbsence, "Failed to approve absence.");
+}
+
+function reject(absence: AbsenceDto) {
+  return review(
+    absence,
+    (id) => rejectAbsence(id, rejectNote.value.trim() || null),
+    "Failed to reject absence.",
+    () => {
+      rejectingId.value = null;
+    },
+  );
 }
 
 onMounted(() => {
   loadPeople();
   if (canReadReports.value) loadStats();
   if (canReadAudit.value) loadAudit();
+  // Not gated on absenceApprovalsEnabled: a request filed while approvals were on can
+  // still be sitting there after they're turned back off, and this is the only place to
+  // resolve it.
+  if (canApproveAbsences.value) loadPending();
   configStore
     .loadOnce()
-    .then(() => {
-      if (canApproveAbsences.value && configStore.config?.absenceApprovalsEnabled) loadPending();
-    })
     .catch((error: unknown) => {
       console.error("ERROR => Failed to load app config:", error);
     })
