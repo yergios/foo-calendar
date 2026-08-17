@@ -29,7 +29,7 @@
       />
     </div>
 
-    <div class="flex flex-col gap-2.5">
+    <div v-if="configStore.config?.emailEnabled === true" class="flex flex-col gap-2.5">
       <label class="text-xs font-semibold text-secondary">Email notifications</label>
 
       <label class="flex items-center gap-2 text-sm">
