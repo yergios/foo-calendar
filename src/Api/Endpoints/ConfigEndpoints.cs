@@ -10,7 +10,16 @@ namespace Api.Endpoints;
 /// the team occupies deliberately isn't here: that changes as people come and go, so it is
 /// derived from the people list instead.</summary>
 public sealed record AppConfigResponse(
-    string HomeRegion, List<string> ColorPalette, bool AbsenceApprovalsEnabled);
+    string HomeRegion,
+    List<string> ColorPalette,
+    bool AbsenceApprovalsEnabled,
+    // Whether the deployment can send email at all, i.e. Email:Host is configured. Same
+    // reasoning as AbsenceApprovalsEnabled: the SPA uses this to hide the opt-in checkboxes
+    // rather than showing toggles that would save fine but never actually do anything.
+    bool EmailEnabled,
+    // The raw IANA id, e.g. "Europe/Zurich". Always set: Team:HomeTimeZone is required.
+    // Printed verbatim next to a time-based absence's time inputs, no formatting.
+    string HomeTimeZone);
 
 /// <summary>Everything the SPA needs before anyone has signed in, including how to sign in
 /// at all. Fetched once at startup so branding and IdP settings are deployment config
@@ -54,9 +63,14 @@ public static class ConfigEndpoints
     private static IResult GetConfig(
         IOptions<TeamOptions> team,
         IOptions<PersonColorPaletteOptions> palette,
-        IOptions<AbsenceApprovalOptions> absenceApprovals) =>
+        IOptions<AbsenceApprovalOptions> absenceApprovals,
+        IOptions<EmailOptions> email) =>
         Results.Ok(new AppConfigResponse(
-            team.Value.HomeRegion, palette.Value, absenceApprovals.Value.Enabled));
+            team.Value.HomeRegion,
+            palette.Value,
+            absenceApprovals.Value.Enabled,
+            !string.IsNullOrWhiteSpace(email.Value.Host),
+            team.Value.HomeTimeZone));
 
     private static IResult GetBootstrapConfig(
         HttpContext http,

@@ -48,6 +48,11 @@ services.AddOptions<TeamOptions>()
     .Validate(o => string.IsNullOrWhiteSpace(o.HomeRegion)
             || Regex.IsMatch(o.HomeRegion, ValidationPatterns.RegionCode),
         "Team:HomeRegion must be an ISO 3166-2 code, e.g. \"CH\" or \"CH-ZH\".")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.HomeTimeZone),
+        "Team:HomeTimeZone must be configured, e.g. \"Europe/Zurich\".")
+    .Validate(o => string.IsNullOrWhiteSpace(o.HomeTimeZone)
+            || TimeZoneInfo.TryFindSystemTimeZoneById(o.HomeTimeZone, out _),
+        "Team:HomeTimeZone must be a valid IANA timezone id, e.g. \"Europe/Zurich\".")
     .ValidateOnStart();
 
 services.AddOptions<PersonColorPaletteOptions>()

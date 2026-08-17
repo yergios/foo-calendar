@@ -71,8 +71,12 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     private static CreateAbsenceRequest Request(
-        string start, string end, AbsenceType type = AbsenceType.Vacation, string note = null) =>
-        new(DateOnly.Parse(start), DateOnly.Parse(end), type, note);
+        string start, string end, AbsenceType type = AbsenceType.Vacation, string note = null,
+        string startTime = null, string endTime = null) =>
+        new(
+            DateOnly.Parse(start), DateOnly.Parse(end), type, note,
+            startTime is null ? null : TimeOnly.Parse(startTime),
+            endTime is null ? null : TimeOnly.Parse(endTime));
 
     [Fact]
     public async Task CreateAsync_WhenNoOverlap_CreatesAbsence()
@@ -781,7 +785,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         // Off means the absence is Approved on arrival, so there is nothing pending for an
         // approver to be told about, opted in or not.
-        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
         var person = CreatePerson("jdoe", "#111111");
 
         await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
@@ -819,5 +823,127 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         emails.Sent.ShouldBeEmpty();
         approver.Email.ShouldNotBeNull(); // sanity: they were still a valid recipient, just not re-notified
+    }
+
+    [Fact]
+    public async Task CreateAsync_TwoAppointmentsSameDayWithOverlappingTimes_BothSucceed()
+    {
+        var person = CreatePerson();
+
+        var first = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "11:00"));
+        var second = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "10:00", endTime: "12:00"));
+
+        first.Id.ShouldNotBe(second.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_AppointmentOnADayWithAnExistingVacation_Throws()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(person, Request("2026-08-20", "2026-08-20"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00")));
+    }
+
+    [Fact]
+    public async Task CreateAsync_VacationOnADayWithAnExistingAppointment_Throws()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.CreateAsync(person, Request("2026-08-20", "2026-08-20")));
+    }
+
+    [Fact]
+    public async Task CreateAsync_AppointmentsOnDifferentDays_BothSucceed()
+    {
+        var person = CreatePerson();
+
+        var first = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+        var second = await sut.CreateAsync(
+            person, Request("2026-08-21", "2026-08-21", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+
+        first.Id.ShouldNotBe(second.Id);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AppointmentOnADayWithAnExistingVacation_Throws()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(person, Request("2026-08-20", "2026-08-20"));
+        var toEdit = await sut.CreateAsync(
+            person, Request("2026-08-25", "2026-08-25", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => sut.UpdateAsync(
+            person, toEdit.Id,
+            Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00")));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_TwoAppointmentsSameDay_DoesNotConflictWithItself()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+        var toEdit = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "13:00", endTime: "14:00"));
+
+        var updated = await sut.UpdateAsync(
+            person, toEdit.Id,
+            Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:30", endTime: "10:30"));
+
+        updated.Type.ShouldBe(AbsenceType.Appointment);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TimeBasedOtherAndAppointmentSameDay_BothSucceed()
+    {
+        var person = CreatePerson();
+
+        var appointment = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
+        var timeBasedOther = await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "13:00", endTime: "14:00"));
+
+        appointment.Id.ShouldNotBe(timeBasedOther.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TimeBasedOtherOnADayWithAnExistingVacation_Throws()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(person, Request("2026-08-20", "2026-08-20"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00")));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WholeDayOtherOnADayWithAnExistingTimeBasedOther_Throws()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00"));
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.CreateAsync(person, Request("2026-08-20", "2026-08-20", AbsenceType.Other)));
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_TimeBasedOther_DoesNotCountTowardOtherDays()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(
+            person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00"));
+
+        var stats = await sut.GetStatsAsync(person.Id, 2026);
+
+        stats.OtherDays.ShouldBe(0);
     }
 }

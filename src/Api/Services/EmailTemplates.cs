@@ -17,6 +17,13 @@ public static class EmailTemplates
     private static string Range(DateOnly start, DateOnly end) =>
         $"{start:MMM d, yyyy} – {end:MMM d, yyyy}";
 
+    // A time-based absence is a single day, so its own date range would just repeat the
+    // same date twice; its time range says more and reads better.
+    private static string When(Absence absence) =>
+        absence.StartTime is not null
+            ? $"{absence.StartDate:MMM d, yyyy}, {absence.StartTime:h\\:mm tt}–{absence.EndTime:h\\:mm tt}"
+            : Range(absence.StartDate, absence.EndDate);
+
     private static string Wrap(string appName, string bodyHtml) => $"""
         <div style="font-family: sans-serif; font-size: 14px; color: #1a1a1a; line-height: 1.5;">
           {bodyHtml}
@@ -35,7 +42,7 @@ public static class EmailTemplates
     {
         var approved = absence.Status == AbsenceStatus.Approved;
         var verb = approved ? "approved" : "rejected";
-        var range = Range(absence.StartDate, absence.EndDate);
+        var range = When(absence);
 
         var subject = $"Your {absence.Type} request was {verb}";
 
@@ -58,7 +65,7 @@ public static class EmailTemplates
     public static (string Subject, string Html, string Text) BuildNewAbsenceRequest(
         Absence absence, string ownerDisplayName, string appName, string appUrl)
     {
-        var range = Range(absence.StartDate, absence.EndDate);
+        var range = When(absence);
         var subject = "New absence request waiting for review";
 
         // Deliberately never includes absence.Note: a note can be health information, and

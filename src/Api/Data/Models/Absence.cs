@@ -1,6 +1,6 @@
 ﻿namespace Api.Data.Models;
 
-public enum AbsenceType { Vacation, Sick, Other }
+public enum AbsenceType { Vacation, Sick, Other, Appointment }
 public enum AbsenceStatus { Pending, Approved, Rejected }
 
 public sealed class Absence
@@ -13,6 +13,14 @@ public sealed class Absence
     public required DateOnly EndDate { get; set; }
     public required AbsenceType Type { get; set; }
     public AbsenceStatus Status { get; set; } = AbsenceStatus.Approved;
+
+    // Set when this absence is time-based rather than whole-day: always for
+    // AbsenceType.Appointment, optionally for AbsenceType.Other. Plain wall-clock time,
+    // never UTC and never converted per viewer: there's no zone attached, so there's
+    // nothing to convert.
+    public TimeOnly? StartTime { get; set; }
+    public TimeOnly? EndTime { get; set; }
+
     public string Note { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

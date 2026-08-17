@@ -124,7 +124,7 @@
     <AddAbsenceModal
       v-if="showAbsenceModal"
       :initial-date="prefillDate"
-      :absence="editingAbsence"
+      :day-absences="dayAbsences"
       @close="showAbsenceModal = false"
       @saved="closeAbsenceModal"
       @deleted="closeAbsenceModal"
@@ -180,7 +180,7 @@ const showAbsenceModal = ref(false);
 const showHolidayModal = ref(false);
 const prefillDate = ref<string | null>(null);
 const prefillHolidayDate = ref<string | null>(null);
-const editingAbsence = ref<AbsenceDto | null>(null);
+const dayAbsences = ref<AbsenceDto[]>([]);
 const editingHoliday = ref<BankHolidayDto | null>(null);
 
 const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "name");
@@ -197,14 +197,16 @@ const yearRange = computed(() => {
 });
 
 function openAddAbsence(date: string | null = null) {
-  editingAbsence.value = null;
+  dayAbsences.value = [];
   prefillDate.value = date;
   showAbsenceModal.value = true;
 }
 
-function openEditAbsence(absence: AbsenceDto) {
-  editingAbsence.value = absence;
-  prefillDate.value = null;
+function openEditAbsence(absences: AbsenceDto[], date: string) {
+  dayAbsences.value = absences;
+  // Kept, unlike before: it's what "add another appointment for this day" inside the
+  // modal's list view falls back to when it opens a fresh add form.
+  prefillDate.value = date;
   showAbsenceModal.value = true;
 }
 
@@ -313,7 +315,7 @@ onMounted(() => {
 // year. The reloaded data is what tells the grid which of the two actually happened.
 function closeAbsenceModal() {
   showAbsenceModal.value = false;
-  editingAbsence.value = null;
+  dayAbsences.value = [];
   prefillDate.value = null;
   loadYear();
 }

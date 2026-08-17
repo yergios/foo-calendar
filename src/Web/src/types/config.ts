@@ -19,6 +19,9 @@ export interface AppConfig {
   /** Whether the deployment can send email at all. Off by default: no SMTP host is
    * configured until an admin sets one. */
   emailEnabled: boolean;
+  /** The raw IANA timezone id (e.g. "Europe/Zurich"). Always set: Team:HomeTimeZone is
+   * required. Display verbatim next to a time-based absence's time inputs, no formatting. */
+  homeTimeZone: string;
 }
 
 /** Mirrors the API's BootstrapDevUser. Only sent when the dev auth bypass is on. */

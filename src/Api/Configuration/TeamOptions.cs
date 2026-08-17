@@ -11,4 +11,10 @@ public sealed class TeamOptions
     /// pins only the nationwide holidays. Its holidays are synced whether or not anyone
     /// has picked it, and are never removed when the last person in it leaves.</summary>
     public string HomeRegion { get; init; } = "";
+
+    /// <summary>An IANA timezone id, e.g. "Europe/Zurich". Required: every time-based
+    /// absence's start/end time is wall-clock time in this one zone, for every viewer,
+    /// with no per-viewer conversion, so there must always be exactly one to attach that
+    /// meaning to.</summary>
+    public string HomeTimeZone { get; init; } = "";
 }

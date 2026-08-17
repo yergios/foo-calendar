@@ -33,7 +33,11 @@ public sealed record WebhookAbsence(
     string Note,
     /// <summary>The reviewer's reason. Only ever set on an absence.rejected event, and
     /// subject to the same Webhook:IncludeAbsenceNote toggle as <see cref="Note"/>.</summary>
-    string ReviewNote)
+    string ReviewNote,
+    /// <summary>Set when the absence is time-based: always on Appointment, optionally on
+    /// Other. Plain wall-clock time, no zone attached.</summary>
+    TimeOnly? StartTime,
+    TimeOnly? EndTime)
 {
     public static WebhookAbsence FromEntity(Absence absence, string personName) => new(
         absence.Id,
@@ -44,5 +48,7 @@ public sealed record WebhookAbsence(
         absence.Type,
         absence.Status,
         absence.Note,
-        absence.ReviewNote);
+        absence.ReviewNote,
+        absence.StartTime,
+        absence.EndTime);
 }

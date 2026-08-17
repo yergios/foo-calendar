@@ -109,25 +109,29 @@
                 cell.day.isToday,
                 rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
               ),
-              !cell.absence && isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
+              isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
             ]"
-            :title="cell.absence ? undefined : emptyCellTitle(row.person, cell.day)"
+            :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
             :data-iso="cell.day.iso"
             @click="handleCellClick(row.person, cell)"
           >
             <div
-              v-if="cell.absence"
+              v-if="cell.absences.length > 0"
               class="w-full h-full flex items-center justify-center text-[10px] font-bold"
-              :class="{ 'cursor-pointer hover:opacity-70': isMine(cell.absence) }"
               :style="
                 cell.painted
                   ? { backgroundColor: row.person.color, color: textColorFor(row.person.color) }
                   : undefined
               "
-              :title="cellTitle(row.person, cell.absence)"
-              @click="handleAbsenceClick(cell.absence)"
+              :title="cellTitle(row.person, cell.absences)"
             >
-              {{ cell.isLabelCell ? absenceLabel(cell.absence) : "" }}
+              {{
+                cell.isLabelCell
+                  ? cell.wholeDay
+                    ? absenceLabel(cell.wholeDay)
+                    : timeBasedCellLabel(cell.timeBased)
+                  : ""
+              }}
             </div>
           </td>
         </tr>
@@ -181,7 +185,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "add-absence": [date: string];
-  "edit-absence": [absence: AbsenceDto];
+  "edit-absence": [absences: AbsenceDto[], date: string];
   "edit-holiday": [holiday: BankHolidayDto];
   "add-holiday": [date: string];
   reorder: [personId: number, targetPersonId: number];
@@ -193,22 +197,18 @@ const { regionLabels: peopleRegionLabels } = storeToRefs(usePeopleStore());
 const containerRef = ref<HTMLDivElement | null>(null);
 const theadRef = ref<HTMLTableSectionElement | null>(null);
 
-function isMine(absence: AbsenceDto): boolean {
-  return absence.personId === personStore.person?.id;
-}
-
 function isMyRow(person: PersonDto): boolean {
   return person.id === personStore.person?.id;
 }
 
-function handleAbsenceClick(absence: AbsenceDto) {
-  if (!isMine(absence)) return;
-  emit("edit-absence", absence);
-}
-
-function handleCellClick(person: PersonDto, cell: { day: { iso: string }; absence?: AbsenceDto }) {
-  if (cell.absence || !isMyRow(person)) return;
-  emit("add-absence", cell.day.iso);
+// One handler for the whole cell, not a separate one on the absence's own label div: a
+// day stacking several time-based absences needs one unambiguous click target rather than
+// "click the one letter currently shown", so the cell is clickable for the viewer's own
+// row regardless of what it holds. Non-owned rows stay non-clickable (tooltip only).
+function handleCellClick(person: PersonDto, cell: { day: { iso: string }; absences: AbsenceDto[] }) {
+  if (!isMyRow(person)) return;
+  if (cell.absences.length === 0) emit("add-absence", cell.day.iso);
+  else emit("edit-absence", cell.absences, cell.day.iso);
 }
 
 // Native HTML5 drag-and-drop rather than a library: reordering a handful of rows
@@ -348,9 +348,12 @@ const holidayMap = computed(() => {
   return map;
 });
 
-// personId -> iso date -> absence covering that day
+// personId -> iso date -> every absence touching that day. An array rather than a single
+// absence: a whole-day absence and a time-based one are mutually exclusive server-side, so
+// a day holds at most one whole-day absence, but any number of same-day time-based ones
+// can stack (see AbsenceService.OverlapCandidates).
 const absenceMap = computed(() => {
-  const map = new Map<number, Map<string, AbsenceDto>>();
+  const map = new Map<number, Map<string, AbsenceDto[]>>();
   for (const a of props.absences) {
     let byDate = map.get(a.personId);
     if (!byDate) {
@@ -358,7 +361,10 @@ const absenceMap = computed(() => {
       map.set(a.personId, byDate);
     }
     for (let d = parse(a.startDate); toIso(d) <= a.endDate; d.setDate(d.getDate() + 1)) {
-      byDate.set(toIso(d), a);
+      const iso = toIso(d);
+      const list = byDate.get(iso);
+      if (list) list.push(a);
+      else byDate.set(iso, [a]);
     }
   }
   return map;
@@ -370,27 +376,34 @@ function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
   return !day.isWeekend && !holidayMap.value.has(day.iso);
 }
 
-// This precomputes each row's per-day absence once. Otherwise the template would look
+// This precomputes each row's per-day absences once. Otherwise the template would look
 // it up up to four times per cell (v-if, opacity, title, label). Now it's resolved a
 // single time per cell, and only recalculated when people, absences, or days change.
 //
-// isLabelCell marks only the first day of each contiguous run of *painted* days for the
-// same absence, so a 5-day vacation shows its "V" once instead of once per day. Since a
-// weekend or holiday in the middle isn't painted, it breaks the run, so a 2-week vacation
-// spanning one weekend shows two "V"s, one per painted stretch. Comparing by object
-// identity (rather than by id) means it also resets correctly across two different,
-// back-to-back absences of the same type.
+// wholeDay is the at-most-one whole-day absence a day can hold (mutual exclusivity is
+// enforced server-side); timeBased is everything else. isLabelCell marks only the first
+// day of each contiguous run of *painted* days for the same wholeDay absence, so a 5-day
+// vacation shows its "V" once instead of once per day (a weekend or holiday in the middle
+// breaks the run, same as before). A time-based absence never joins a multi-day run -
+// each is inherently single-day, so a cell holding one always shows its own label
+// independently of its neighbors.
 const rows = computed(() =>
   props.people.map((person, rowIndex) => {
     const byDate = absenceMap.value.get(person.id);
     let previousPaintedAbsence: AbsenceDto | undefined;
 
     const cells = days.value.map((day) => {
-      const absence = byDate?.get(day.iso);
-      const painted = absence !== undefined && isPaintDay(day);
-      const isLabelCell = painted && absence !== previousPaintedAbsence;
-      previousPaintedAbsence = painted ? absence : undefined;
-      return { day, absence, painted, isLabelCell };
+      const absences = byDate?.get(day.iso) ?? [];
+      const wholeDay = absences.find((a) => !a.startTime);
+      const timeBased = absences.filter((a) => a.startTime);
+
+      const hasContent = wholeDay !== undefined || timeBased.length > 0;
+      const painted = hasContent && isPaintDay(day);
+      const isLabelCell =
+        wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : timeBased.length > 0;
+      previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
+
+      return { day, absences, wholeDay, timeBased, painted, isLabelCell };
     });
 
     // Resolved once per row rather than once per cell, same reasoning as `cells` above.
@@ -539,13 +552,28 @@ function absenceLabel(absence: AbsenceDto): string {
   return absence.status === "Pending" ? `${initial}?` : initial;
 }
 
-function cellTitle(person: PersonDto, absence: AbsenceDto): string {
+// Same "?" reasoning as absenceLabel, but for the whole day's stack of time-based absences
+// at once: pending if any one of them is. Letter comes from the first entry's own type -
+// the stack is usually one type, and on the rare day it isn't (e.g. an Appointment and a
+// time-based Other), the tooltip is what disambiguates the rest.
+function timeBasedCellLabel(entries: AbsenceDto[]): string {
+  const initial = ABSENCE_TYPE_INITIALS[entries[0].type];
+  return entries.some((a) => a.status === "Pending") ? `${initial}?` : initial;
+}
+
+// Every absence on the cell, own or not - tooltips are visible for everyone, only editing
+// is restricted (see handleCellClick's isMyRow guard). Appended one per line so several
+// same-day time-based absences each get their own line, as requested.
+function cellTitle(person: PersonDto, absences: AbsenceDto[]): string {
   const name = person.displayName ?? person.username;
-  const status = absence.status === "Pending" ? " (pending approval)" : "";
-  const base = absence.note
-    ? `${name} — ${absence.type}: ${absence.note}${status}`
-    : `${name} — ${absence.type}${status}`;
-  return isMine(absence) ? `${base} (click to edit)` : base;
+  const lines = absences.map((a) => {
+    const status = a.status === "Pending" ? " (pending approval)" : "";
+    const timeRange = a.startTime ? ` ${a.startTime.slice(0, 5)}–${a.endTime?.slice(0, 5)}` : "";
+    const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
+    return `${name} — ${body}${status}`;
+  });
+  if (isMyRow(person)) lines.push("(click to edit)");
+  return lines.join("\n");
 }
 
 function emptyCellTitle(person: PersonDto, day: { iso: string }): string {

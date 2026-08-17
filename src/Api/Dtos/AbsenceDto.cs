@@ -10,7 +10,9 @@ public sealed record AbsenceDto(
     AbsenceType Type,
     AbsenceStatus Status,
     string Note,
-    DateTime CreatedAt)
+    DateTime CreatedAt,
+    TimeOnly? StartTime,
+    TimeOnly? EndTime)
 {
     /// <summary>The team can see that someone is off and what kind of absence it is, which
     /// is what the calendar is for. Why is nobody else's business: a note on a sick leave
@@ -25,5 +27,7 @@ public sealed record AbsenceDto(
         absence.Type,
         absence.Status,
         includeNote ? absence.Note : null,
-        absence.CreatedAt);
+        absence.CreatedAt,
+        absence.StartTime,
+        absence.EndTime);
 }

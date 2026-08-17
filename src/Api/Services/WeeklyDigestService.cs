@@ -33,8 +33,12 @@ public sealed class WeeklyDigestService(
         var weekStart = DateOnly.FromDateTime(DateTime.Now);
         var weekEnd = weekStart.AddDays(6);
 
+        // Time-based absences are excluded: a few hours isn't "off this week" in the sense
+        // this digest means, and listing every one of them alongside week-long vacations
+        // would bury the signal this digest exists to surface.
         var absences = await AbsenceService.ApprovedOverlapping(
                 db.Absences.Include(a => a.Person), weekStart, weekEnd)
+            .Where(a => a.StartTime == null)
             .OrderBy(a => a.StartDate)
             .ToListAsync(ct);
 

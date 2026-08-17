@@ -58,7 +58,7 @@ public sealed class WebhookPublisherTests
         "jdoe",
         new WebhookAbsence(
             7, 3, "Jane Doe", new DateOnly(2026, 5, 4), new DateOnly(2026, 5, 8),
-            AbsenceType.Vacation, AbsenceStatus.Approved, "Trip", reviewNote));
+            AbsenceType.Vacation, AbsenceStatus.Approved, "Trip", reviewNote, null, null));
 
     private static (WebhookPublisher Publisher, StubHttpMessageHandler Handler) CreatePublisher(
         WebhookOptions options = null,

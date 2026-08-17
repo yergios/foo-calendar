@@ -34,6 +34,9 @@ namespace Api.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<TimeOnly?>("EndTime")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Note")
                         .HasColumnType("TEXT");
 
@@ -50,6 +53,9 @@ namespace Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeOnly?>("StartTime")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Status")

@@ -35,9 +35,13 @@ public sealed class AbsenceService(
             WebhookAbsence.FromEntity(absence, owner.DisplayName)));
 
     // What an absence was, for an audit entry that still reads sensibly. Named to match
-    // PersonService.Describe / BankHolidayService.Describe.
+    // PersonService.Describe / BankHolidayService.Describe. A time-based absence is a
+    // single day, so a date range reads oddly for it; its time range takes that spot
+    // instead.
     private static string Describe(Absence absence) =>
-        $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}";
+        absence.StartTime is not null
+            ? $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} {absence.StartTime:HH\\:mm}-{absence.EndTime:HH\\:mm}"
+            : $"{absence.Type}, {absence.StartDate:yyyy-MM-dd} → {absence.EndDate:yyyy-MM-dd}";
 
     // Same "after the fact, never inside the transaction" placement as PublishEvent: an
     // email is exactly as best-effort as the webhook, so it never gets a say in whether the
@@ -115,8 +119,9 @@ public sealed class AbsenceService(
 
     public async Task<AbsenceDto> CreateAsync(Person person, CreateAbsenceRequest request, CancellationToken ct = default)
     {
-        var overlaps = await VisibleOverlapping(
+        var overlaps = await OverlapCandidates(
             db.Absences.Where(a => a.PersonId == person.Id),
+            request.StartTime is not null,
             request.StartDate,
             request.EndDate)
             .AnyAsync(ct);
@@ -130,6 +135,8 @@ public sealed class AbsenceService(
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             Type = request.Type,
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
             // Approvals off (the default) keeps today's behavior: everything lands
             // Approved the instant it's created. On, it waits for a reviewer.
             Status = approvalOptions.Value.Enabled ? AbsenceStatus.Pending : AbsenceStatus.Approved,
@@ -168,8 +175,9 @@ public sealed class AbsenceService(
             throw new InvalidOperationException(
                 "This request was rejected and can no longer be edited. Submit a new one instead.");
 
-        var overlaps = await VisibleOverlapping(
+        var overlaps = await OverlapCandidates(
             db.Absences.Where(a => a.PersonId == person.Id && a.Id != absenceId),
+            request.StartTime is not null,
             request.StartDate,
             request.EndDate)
             .AnyAsync(ct);
@@ -192,6 +200,8 @@ public sealed class AbsenceService(
         absence.StartDate = request.StartDate;
         absence.EndDate = request.EndDate;
         absence.Type = request.Type;
+        absence.StartTime = request.StartTime;
+        absence.EndTime = request.EndTime;
         absence.Note = request.Note;
         absence.UpdatedAt = DateTime.UtcNow;
         absence.UpdatedBy = person.Username;
@@ -330,6 +340,21 @@ public sealed class AbsenceService(
     private static IQueryable<Absence> VisibleOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
         query.Where(a => a.Status != AbsenceStatus.Rejected && a.StartDate <= to && a.EndDate >= from);
 
+    // A time-based request's own overlap check ignores other time-based absences,
+    // regardless of type: any number may coexist on the same day, their times unchecked
+    // against each other, while a whole-day absence still blocks it. A whole-day request
+    // needs no equivalent carve-out here: its own VisibleOverlapping call already sees a
+    // same-day time-based absence (StartDate == EndDate) and correctly blocks on it
+    // without any change.
+    private static IQueryable<Absence> OverlapCandidates(
+        IQueryable<Absence> query, bool requestIsTimeBased, DateOnly from, DateOnly to)
+    {
+        var overlapping = VisibleOverlapping(query, from, to);
+        return requestIsTimeBased
+            ? overlapping.Where(a => a.StartTime == null)
+            : overlapping;
+    }
+
     // Internal rather than private: WeeklyDigestService reuses this exact "Approved and
     // overlapping this range" filter for the digest's absence list, instead of redefining
     // it a second time.
@@ -348,6 +373,10 @@ public sealed class AbsenceService(
 
         foreach (var absence in absences)
         {
+            // A time-based absence is hours, not a day off, so it never adds to a day
+            // count here, whatever its type.
+            if (absence.StartTime is not null) continue;
+
             var days = CountWorkingDays(Max(absence.StartDate, yearStart), Min(absence.EndDate, yearEnd));
             switch (absence.Type)
             {
