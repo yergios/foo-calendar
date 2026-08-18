@@ -1,6 +1,6 @@
 <template>
   <div
-    class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] px-6 h-full flex flex-col gap-4 min-h-0"
+    class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] h-full flex flex-col gap-4 min-h-0"
   >
     <header class="flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-2">
@@ -91,10 +91,7 @@
           >
           <span>{{ label }}</span>
         </div>
-        <div
-          v-if="configStore.config?.absenceApprovalsEnabled"
-          class="flex items-center gap-1.5"
-        >
+        <div v-if="configStore.config?.absenceApprovalsEnabled" class="flex items-center gap-1.5">
           <span
             class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
             >?</span
