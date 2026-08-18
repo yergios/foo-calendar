@@ -5,7 +5,7 @@
       class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
       aria-label="Scroll left"
       :disabled="!canScrollLeft"
-      @click="scrollByPage(-1)"
+      @click="handlePageClick(-1)"
       @mousedown="startHold(-1)"
       @mouseup="stopHold"
       @mouseleave="stopHold"
@@ -193,7 +193,7 @@
       class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
       aria-label="Scroll right"
       :disabled="!canScrollRight"
-      @click="scrollByPage(1)"
+      @click="handlePageClick(1)"
       @mousedown="startHold(1)"
       @mouseup="stopHold"
       @mouseleave="stopHold"
@@ -395,10 +395,17 @@ const HOLD_DELAY_MS = 350;
 const HOLD_SPEED_PX_PER_FRAME = 14;
 let holdTimeout: ReturnType<typeof setTimeout> | null = null;
 let holdFrame: number | null = null;
+// Set once a hold actually starts scrolling, so the click that follows releasing the
+// button - mouseup fires stopHold first, then the browser dispatches its own click event
+// after - can tell it's just the tail end of that hold, not a fresh press, and skip
+// paging a second time.
+let holdEngaged = false;
 
 function startHold(direction: 1 | -1) {
   stopHold();
+  holdEngaged = false;
   holdTimeout = setTimeout(() => {
+    holdEngaged = true;
     const step = () => {
       const container = containerRef.value;
       // Stops itself at either end rather than spinning uselessly against the clamped
@@ -420,6 +427,14 @@ function stopHold() {
     cancelAnimationFrame(holdFrame);
     holdFrame = null;
   }
+}
+
+function handlePageClick(direction: 1 | -1) {
+  if (holdEngaged) {
+    holdEngaged = false;
+    return;
+  }
+  scrollByPage(direction);
 }
 
 // region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland".
