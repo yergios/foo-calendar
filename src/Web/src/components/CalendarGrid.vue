@@ -54,8 +54,10 @@
             :data-iso="day.iso"
             @click="handleHeaderClick(day)"
           >
-            <div class="font-semibold text-ink">{{ day.dayNum }}</div>
-            <div class="text-[10px] text-secondary">{{ day.weekdayLabel }}</div>
+            <div class="font-semibold" :class="day.isToday ? 'text-today' : 'text-ink'">{{ day.dayNum }}</div>
+            <div class="text-[10px]" :class="day.isToday ? 'text-today font-semibold' : 'text-secondary'">
+              {{ day.weekdayLabel }}
+            </div>
           </th>
         </tr>
       </thead>
@@ -75,11 +77,14 @@
       </tbody>
 
       <tbody v-else>
-        <tr v-for="(row, rowIndex) in rows" :key="row.person.id">
+        <tr v-for="(row, rowIndex) in rows" :key="row.person.id" :data-person-id="row.person.id">
           <th
             scope="row"
             class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
-            :class="row.background"
+            :class="[
+              row.background,
+              row.isMine ? 'border-l-[3px] border-l-primary-text' : 'border-l-[3px] border-l-transparent',
+            ]"
             draggable="true"
             title="Drag to reorder"
             @dragstart="handleDragStart(row.person.id)"
@@ -92,9 +97,10 @@
                 class="inline-block w-2.5 h-2.5 rounded-pill shrink-0"
                 :style="{ backgroundColor: row.person.color }"
               />
-              <span class="truncate text-ink">{{
+              <span class="truncate" :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'">{{
                 row.person.displayName ?? row.person.username
               }}</span>
+              <span v-if="row.isMine" class="text-[10px] text-primary-text font-semibold shrink-0">You</span>
             </div>
           </th>
 
@@ -109,7 +115,7 @@
                 cell.day.isToday,
                 rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
               ),
-              isMyRow(row.person) ? 'cursor-pointer hover:bg-accent/10' : '',
+              row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
             ]"
             :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
             :data-iso="cell.day.iso"
@@ -118,11 +124,7 @@
             <div
               v-if="cell.absences.length > 0"
               class="w-full h-full flex items-center justify-center text-[10px] font-bold"
-              :style="
-                cell.painted
-                  ? { backgroundColor: row.person.color, color: textColorFor(row.person.color) }
-                  : undefined
-              "
+              :class="cell.painted ? 'bg-accent-solid text-on-accent' : ''"
               :title="cellTitle(row.person, cell.absences)"
             >
               {{
@@ -166,7 +168,6 @@ import { storeToRefs } from "pinia";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
-import { textColorFor } from "@/lib/contrastText";
 import { parse, toDisplayTime, toIso } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
@@ -229,33 +230,57 @@ function handleDrop(targetPersonId: number) {
 // This listener sits on the container, not on each cell: a full year is thousands of
 // cells, and one listener here covers any team size or date range. The highlight itself
 // is applied imperatively, not through a reactive ref, so hovering only touches the DOM
-// nodes for the column you're entering or leaving. With a year's worth of cells, routing
-// this through Vue's reactivity would force a re-render of every cell on every crossing.
+// nodes for the column and row you're entering or leaving. With a year's worth of cells,
+// routing this through Vue's reactivity would force a re-render of every cell on every
+// crossing.
+//
+// Column and row are marked with plain boolean attributes rather than each writing its
+// own inline box-shadow: the hovered cell sits in both at once, and two independent
+// inline styles can only ever show the one written last. The two-attribute selector
+// below in <style> gives that cell its own (stronger) look via CSS specificity instead.
 let hoveredIso: string | null = null;
+let hoveredPersonId: string | null = null;
 
 function handleGridHover(event: MouseEvent) {
-  const iso = (event.target as HTMLElement).closest<HTMLElement>("[data-iso]")?.dataset.iso ?? null;
+  const cell = (event.target as HTMLElement).closest<HTMLElement>("[data-iso]");
+  const iso = cell?.dataset.iso ?? null;
+  const personId = cell?.closest<HTMLElement>("tr[data-person-id]")?.dataset.personId ?? null;
+
   if (iso !== hoveredIso) setHoverColumn(iso);
+  if (personId !== hoveredPersonId) setHoverRow(personId);
 }
 
 function clearHoverColumn() {
   setHoverColumn(null);
+  setHoverRow(null);
 }
 
 function setHoverColumn(iso: string | null) {
   const container = containerRef.value;
   if (container && hoveredIso) {
     for (const el of container.querySelectorAll<HTMLElement>(`[data-iso="${hoveredIso}"]`)) {
-      el.style.boxShadow = "";
+      el.removeAttribute("data-col-hover");
     }
   }
   if (container && iso) {
     for (const el of container.querySelectorAll<HTMLElement>(`[data-iso="${iso}"]`)) {
-      el.style.boxShadow =
-        "inset 0 0 0 9999px color-mix(in srgb, var(--color-accent) 10%, transparent)";
+      el.setAttribute("data-col-hover", "");
     }
   }
   hoveredIso = iso;
+}
+
+function setHoverRow(personId: string | null) {
+  const container = containerRef.value;
+  if (container && hoveredPersonId) {
+    const row = container.querySelector<HTMLTableRowElement>(`tr[data-person-id="${hoveredPersonId}"]`);
+    for (const cell of row?.children ?? []) cell.removeAttribute("data-row-hover");
+  }
+  if (container && personId) {
+    const row = container.querySelector<HTMLTableRowElement>(`tr[data-person-id="${personId}"]`);
+    for (const cell of row?.children ?? []) cell.setAttribute("data-row-hover", "");
+  }
+  hoveredPersonId = personId;
 }
 
 onMounted(() => {
@@ -408,7 +433,11 @@ const rows = computed(() =>
     });
 
     // Resolved once per row rather than once per cell, same reasoning as `cells` above.
-    return { person, cells, background: rowBackgroundClass(rowIndex) };
+    // bg-row-mine, not a translucent bg-primary-text/N: this backs the sticky name cell
+    // too (see --color-row-mine), which needs to stay fully opaque to occlude day columns
+    // scrolling underneath it rather than letting them show through.
+    const isMine = isMyRow(person);
+    return { person, cells, isMine, background: isMine ? "bg-row-mine" : rowBackgroundClass(rowIndex) };
   }),
 );
 
@@ -481,13 +510,14 @@ function rowBackgroundClass(rowIndex: number): string {
   return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-background";
 }
 
-// Today's column is outlined by an overlay pseudo-element rather than by a border on the
-// cell itself. A real border takes up space in the cell's box, which pushed the day number
-// off-centre and made today's column wider than its neighbours. The overlay is absolutely
-// positioned, so it costs no layout and still paints above a filled-in absence block
-// instead of being hidden underneath it.
+// Today's column is outlined (and tinted) by an overlay pseudo-element rather than by a
+// border/background on the cell itself. A real border takes up space in the cell's box,
+// which pushed the day number off-centre and made today's column wider than its
+// neighbours. The overlay is absolutely positioned, so it costs no layout and still
+// paints above a filled-in absence block instead of being hidden underneath it.
 const TODAY_OUTLINE =
-  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:border-l-2 after:border-r-2 after:border-today";
+  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none "
+  + "after:border-l-2 after:border-r-2 after:border-today after:bg-today/10";
 
 // The header row is always the top of the outline; only the last row has to close it off.
 function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): string {
@@ -497,11 +527,22 @@ function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): 
   return TODAY_OUTLINE;
 }
 
-// Month boundaries stay a real border. Every 1st-of-month column carries it, so the
-// extra width is uniform. On the rare day the 1st *is* today, today's outline reads as
-// the divider and the border only holds its place, keeping the column widths equal.
+// Every day gets a real left border, not just the bottom one: this is the column-axis
+// equivalent of border-b, and using left rather than right avoids doubling up with the
+// month-boundary border below (each divider has exactly one owner, the column to its
+// right, same as border-b's "the row above owns it" rule). Month starts get a thicker,
+// stronger-colored version of the same border so the grouping still stands out from the
+// day-to-day grid lines.
+//
+// On the rare day the 1st *is* today, or any day is today, the border is left transparent
+// and today's own outline (see TODAY_OUTLINE) reads as the divider instead - drawn as an
+// overlay so it never nudges the day number off-centre the way a colored real border
+// would. The transparent border still reserves the same width, so column widths stay
+// uniform whether or not today happens to fall on a month boundary.
 function columnSideBorderClass(day: { isToday: boolean; dayNum: number }): string {
-  if (day.dayNum !== 1) return "";
+  if (day.dayNum !== 1) {
+    return day.isToday ? "border-l border-l-transparent" : "border-l border-border";
+  }
   return day.isToday ? "border-l-2 border-l-transparent" : "border-l-2 border-l-border";
 }
 
@@ -585,3 +626,19 @@ function emptyCellTitle(person: PersonDto, day: { iso: string }): string {
 
 const tableMinWidth = computed(() => `${120 + days.value.length * 28}px`);
 </script>
+
+<style scoped>
+/* [data-col-hover] and [data-row-hover] are toggled imperatively in handleGridHover
+   rather than reactively, see the comment there. The cell where the hovered row and
+   column intersect carries both attributes, and the two-attribute selector below wins
+   over either single-attribute rule on specificity alone, so that one cell reads as more
+   highlighted without any extra bookkeeping in JS. */
+[data-col-hover],
+[data-row-hover] {
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-primary-text) 10%, transparent);
+}
+
+[data-col-hover][data-row-hover] {
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-primary-text) 20%, transparent);
+}
+</style>

@@ -24,13 +24,18 @@
 
   /* Semantic: derived so they automatically track the brand palette and light/dark mode */
   --color-row-alt: color-mix(in srgb, var(--color-surface) 45%, var(--color-background));
+  /* Mixed against the opaque page background rather than toward transparent: this backs
+     the calendar's sticky, always-visible "your row" name cell, which needs to fully
+     occlude day columns scrolling underneath it. A translucent utility class with an
+     opacity modifier would let those columns show through instead. */
+  --color-row-mine: color-mix(in srgb, var(--color-primary) 8%, var(--color-background));
   --color-border: var(--brand-border); /* grid lines, dividers */
   --color-border-strong: var(--brand-border-strong); /* input/select outlines (WCAG 1.4.11) */
   --color-holiday: light-dark(#f9e3b0, #5a4118);
   --color-error: light-dark(#c8232c, #f87171);
   --color-error-bg: light-dark(#fdf1f2, #3c1518);
   --color-green: light-dark(#047857, #34d399);
-  --color-today: var(--color-accent);
+  --color-today: var(--color-primary-text);
 
   /* Shadows */
   --shadow-card: 0 1px 3px var(--brand-shadow), 0 1px 2px var(--brand-shadow-soft);
