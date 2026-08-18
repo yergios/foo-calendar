@@ -39,13 +39,12 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
             Options.Create(new TeamOptions { HomeRegion = homeRegion }),
             NullLogger<TeamRegionService>.Instance);
 
-    private void AddPerson(string username, string homeCity, string color) =>
+    private void AddPerson(string username, string homeCity) =>
         Db.People.Add(new Person
         {
             Username = username,
             DisplayName = username,
             HomeCity = homeCity,
-            Color = color,
             CreatedBy = "admin",
         });
 
@@ -72,9 +71,9 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     [Fact]
     public async Task InUseAsync_ReturnsEachOccupiedRegionOnce()
     {
-        AddPerson("ana", "ES-MD", "#111111");
-        AddPerson("ben", "ES-MD", "#222222");
-        AddPerson("cleo", "RO-B", "#333333");
+        AddPerson("ana", "ES-MD");
+        AddPerson("ben", "ES-MD");
+        AddPerson("cleo", "RO-B");
         Db.SaveChanges();
         var sut = CreateService();
 
@@ -86,7 +85,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     [Fact]
     public async Task InUseAsync_IgnoresPeopleWithNoRegionSet()
     {
-        AddPerson("ana", null, "#111111");
+        AddPerson("ana", null);
         Db.SaveChanges();
         var sut = CreateService();
 
@@ -125,7 +124,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     {
         // The last person in Madrid leaving doesn't take Spain's national holidays with
         // them: everyone still in Asturias observes those.
-        AddPerson("ana", "ES-AS", "#111111");
+        AddPerson("ana", "ES-AS");
         AddHoliday("ES", new DateOnly(2026, 1, 1), HolidaySource.Nager);
         AddHoliday("ES-MD", new DateOnly(2026, 5, 2), HolidaySource.Nager);
         AddHoliday("ES-AS", new DateOnly(2026, 9, 8), HolidaySource.Nager);
@@ -140,7 +139,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     [Fact]
     public async Task PruneIfUnusedAsync_KeepsTheRegionWhileSomeoneIsStillInIt()
     {
-        AddPerson("ana", "ES-MD", "#111111");
+        AddPerson("ana", "ES-MD");
         AddHoliday("ES-MD", new DateOnly(2026, 5, 2), HolidaySource.Nager);
         Db.SaveChanges();
         var sut = CreateService();

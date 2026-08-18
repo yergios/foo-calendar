@@ -37,15 +37,12 @@ public sealed class WeeklyDigestServiceTests : SqliteTestBase
         return (start, start.AddDays(6));
     }
 
-    private int nextColor = 0x111111;
-
     private Person CreatePerson(string username, bool emailOnWeeklyDigest, string email = "person@example.test")
     {
         var person = new Person
         {
             Username = username,
             DisplayName = username,
-            Color = $"#{(nextColor += 0x111111):X6}",
             Email = email,
             EmailOnWeeklyDigest = emailOnWeeklyDigest,
             CreatedAt = DateTime.UtcNow,

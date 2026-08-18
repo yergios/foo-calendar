@@ -49,7 +49,6 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
     private Person CreatePerson(
         string username = "jdoe",
-        string color = "#111111",
         string email = null,
         bool emailOnAbsenceReviewed = false,
         bool emailOnNewAbsenceRequest = false)
@@ -58,7 +57,6 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         {
             Username = username,
             DisplayName = username,
-            Color = color,
             Email = email,
             EmailOnAbsenceReviewed = emailOnAbsenceReviewed,
             EmailOnNewAbsenceRequest = emailOnNewAbsenceRequest,
@@ -125,8 +123,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     public async Task CreateAsync_DoesNotConflictWithAnotherPersonsOverlappingAbsence()
     {
-        var alice = CreatePerson("alice", "#111111");
-        var bob = CreatePerson("bob", "#222222");
+        var alice = CreatePerson("alice");
+        var bob = CreatePerson("bob");
         await sut.CreateAsync(alice, Request("2026-03-02", "2026-03-06"));
 
         var result = await sut.CreateAsync(bob, Request("2026-03-02", "2026-03-06"));
@@ -150,8 +148,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     public async Task UpdateAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
     {
-        var owner = CreatePerson("alice", "#111111");
-        var intruder = CreatePerson("bob", "#222222");
+        var owner = CreatePerson("alice");
+        var intruder = CreatePerson("bob");
         var created = await sut.CreateAsync(owner, Request("2026-03-02", "2026-03-06"));
 
         await Should.ThrowAsync<UnauthorizedAccessException>(
@@ -181,8 +179,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     public async Task DeleteAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
     {
-        var owner = CreatePerson("alice", "#111111");
-        var intruder = CreatePerson("bob", "#222222");
+        var owner = CreatePerson("alice");
+        var intruder = CreatePerson("bob");
         var created = await sut.CreateAsync(owner, Request("2026-03-02", "2026-03-06"));
 
         await Should.ThrowAsync<UnauthorizedAccessException>(
@@ -286,8 +284,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     public async Task GetAllStatsAsync_ComputesEachPersonIndependently()
     {
-        var alice = CreatePerson("alice", "#111111");
-        var bob = CreatePerson("bob", "#222222");
+        var alice = CreatePerson("alice");
+        var bob = CreatePerson("bob");
         // Mon 2026-06-01 through Fri 2026-06-05: 5 consecutive working days.
         await sut.CreateAsync(alice, Request("2026-06-01", "2026-06-05"));
 
@@ -430,8 +428,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     public async Task GetOverlappingAsync_WithholdsEveryoneElsesNote()
     {
-        var author = CreatePerson("jdoe", "#111111");
-        var viewer = CreatePerson("asmith", "#222222");
+        var author = CreatePerson("jdoe");
+        var viewer = CreatePerson("asmith");
         await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
 
         var result = await sut.GetOverlappingAsync(
@@ -508,7 +506,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.ApproveAsync(CreatePerson("reviewer", "#333333"), created.Id);
+        await approvalSut.ApproveAsync(CreatePerson("reviewer"), created.Id);
 
         var updated = await approvalSut.UpdateAsync(
             person, created.Id, Request("2026-04-01", "2026-04-05"));
@@ -535,7 +533,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.RejectAsync(CreatePerson("reviewer", "#333333"), created.Id, note: null);
+        await approvalSut.RejectAsync(CreatePerson("reviewer"), created.Id, note: null);
 
         await Should.ThrowAsync<InvalidOperationException>(
             () => approvalSut.UpdateAsync(person, created.Id, Request("2026-04-01", "2026-04-05")));
@@ -556,7 +554,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     public async Task ApproveAsync_WhenApprovalsAreLaterDisabled_StillResolvesALeftoverPendingRequest()
     {
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await ApprovalsEnabledSut(enabled: true).CreateAsync(
             person, Request("2026-03-02", "2026-03-06"));
 
@@ -570,7 +568,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         await approvalSut.ApproveAsync(reviewer, created.Id);
 
@@ -583,7 +581,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         webhooks.Published.Clear();
 
@@ -622,7 +620,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         await approvalSut.RejectAsync(reviewer, created.Id, note: null);
 
@@ -635,7 +633,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         webhooks.Published.Clear();
 
@@ -662,7 +660,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         await approvalSut.RejectAsync(reviewer, created.Id, note: null);
@@ -697,7 +695,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var pending = await approvalSut.CreateAsync(
             person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
         var approved = await approvalSut.CreateAsync(person, Request("2026-05-01", "2026-05-05"));
@@ -715,7 +713,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: true);
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         await approvalSut.ApproveAsync(reviewer, created.Id);
@@ -729,7 +727,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: false);
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         await approvalSut.ApproveAsync(reviewer, created.Id);
@@ -742,7 +740,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson(email: null, emailOnAbsenceReviewed: true);
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         await approvalSut.ApproveAsync(reviewer, created.Id);
@@ -755,7 +753,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
         var person = CreatePerson(email: "jdoe@example.test", emailOnAbsenceReviewed: true);
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         await approvalSut.RejectAsync(reviewer, created.Id, "Not enough coverage that week.");
@@ -769,9 +767,9 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     public async Task CreateAsync_WhenApprovalsAreOnAndAnAbsenceLandsPending_EmailsEveryOptedInApprover()
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
-        var uninterested = CreatePerson("bystander", "#444444", email: "bystander@example.test");
-        var person = CreatePerson("jdoe", "#111111");
+        var approver = CreatePerson("approver", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var uninterested = CreatePerson("bystander", email: "bystander@example.test");
+        var person = CreatePerson("jdoe");
 
         await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
@@ -785,8 +783,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         // Off means the absence is Approved on arrival, so there is nothing pending for an
         // approver to be told about, opted in or not.
-        CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
-        var person = CreatePerson("jdoe", "#111111");
+        CreatePerson("approver", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe");
 
         await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
@@ -797,9 +795,9 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     public async Task UpdateAsync_WhenAnApprovedAbsenceIsResetToPending_EmailsOptedInApprovers()
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
-        var person = CreatePerson("jdoe", "#111111");
-        var reviewer = CreatePerson("reviewer", "#333333");
+        var approver = CreatePerson("approver", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe");
+        var reviewer = CreatePerson("reviewer");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         await approvalSut.ApproveAsync(reviewer, created.Id);
         emails.Sent.Clear();
@@ -814,8 +812,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     public async Task UpdateAsync_WhenAlreadyPendingAndEditedAgain_DoesNotReEmailApprovers()
     {
         var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var approver = CreatePerson("approver", "#222222", email: "approver@example.test", emailOnNewAbsenceRequest: true);
-        var person = CreatePerson("jdoe", "#111111");
+        var approver = CreatePerson("approver", email: "approver@example.test", emailOnNewAbsenceRequest: true);
+        var person = CreatePerson("jdoe");
         var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
         emails.Sent.Clear();
 

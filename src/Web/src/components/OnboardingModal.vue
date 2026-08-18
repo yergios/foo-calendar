@@ -20,7 +20,6 @@ defineEmits<{
     payload: {
       displayName: string | null;
       homeCity: string | null;
-      color: string;
       emailOnAbsenceReviewed: boolean;
       emailOnNewAbsenceRequest: boolean;
       emailOnWeeklyDigest: boolean;

@@ -1,19 +1,16 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-using Api.Configuration;
 using Api.Data;
 using Api.Data.Models;
 using Api.Dtos;
 using Api.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Api.Services;
 
 public sealed class PersonService(
     AppDbContext db,
-    IOptions<PersonColorPaletteOptions> colorPalette,
     ITeamRegionService teamRegions,
     RegionLabels regionLabels,
     IAuditLog audit) : IPersonService
@@ -29,10 +26,6 @@ public sealed class PersonService(
         if (await db.People.AnyAsync(p => p.Username == request.Username, ct))
             throw new InvalidOperationException("A person already exists for this account.");
 
-        var color = NormalizeColor(request.Color);
-        if (!await IsColorAvailableAsync(color, excludingPersonId: null, ct))
-            throw new InvalidOperationException("Color is already taken by another person.");
-
         var person = new Person
         {
             Username = request.Username,
@@ -41,7 +34,6 @@ public sealed class PersonService(
             Email = request.Email,
             DisplayName = request.DisplayName,
             HomeCity = request.HomeCity,
-            Color = color,
             EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed,
             EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest,
             EmailOnWeeklyDigest = request.EmailOnWeeklyDigest,
@@ -79,12 +71,6 @@ public sealed class PersonService(
         return new([.. people.Select(PersonDto.FromEntity)], labels);
     }
 
-    public async Task<ColorsInUseResponse> GetColorsInUseAsync(CancellationToken ct = default)
-    {
-        var colors = await db.People.Select(p => p.Color).ToListAsync(ct);
-        return new(colors);
-    }
-
     public async Task DeleteAsync(int personId, CancellationToken ct = default)
     {
         var person = await db.People.FindAsync([personId], ct)
@@ -110,20 +96,6 @@ public sealed class PersonService(
         await teamRegions.PruneIfUnusedAsync(vacated, ct);
     }
 
-    // Colors are free-form hex now, not just palette entries, so the same color can arrive
-    // as "#FF4500" or "#ff4500". Both the uniqueness check and the unique index compare
-    // bytes, so everything is lower-cased before it is compared or stored.
-    private static string NormalizeColor(string color) => color.ToLowerInvariant();
-
-    private async Task<bool> IsColorAvailableAsync(string color, int? excludingPersonId, CancellationToken ct = default)
-    {
-        var query = db.People.Where(p => p.Color == color);
-        if (excludingPersonId is int id)
-            query = query.Where(p => p.Id != id);
-
-        return !await query.AnyAsync(ct);
-    }
-
     public async Task<PersonDto> UpdateAsync(
         int personId,
         UpdatePersonRequest request,
@@ -133,10 +105,6 @@ public sealed class PersonService(
         var person = await db.People.FindAsync([personId], ct)
             ?? throw new KeyNotFoundException($"Person {personId} not found.");
 
-        var color = NormalizeColor(request.Color);
-        if (!await IsColorAvailableAsync(color, personId, ct))
-            throw new InvalidOperationException("Color is already taken by another person.");
-
         var vacated = person.HomeCity;
 
         // Captured before the assignments below overwrite them. Nothing is logged when
@@ -144,13 +112,10 @@ public sealed class PersonService(
         var changes = new List<string>();
         if (person.DisplayName != request.DisplayName)
             changes.Add($"name {person.DisplayName} → {request.DisplayName}");
-        if (person.Color != color)
-            changes.Add($"color {person.Color} → {color}");
         if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
             changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");
 
         person.DisplayName = request.DisplayName;
-        person.Color = color;
         person.HomeCity = request.HomeCity;
         person.EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed;
         person.EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest;
@@ -182,7 +147,6 @@ public sealed class PersonService(
     private const string DisplayNameColumn = "DISPLAYNAME";
     private const string EmailColumn = "EMAIL";
     private const string HomeCityColumn = "HOMECITY";
-    private const string ColorColumn = "COLOR";
 
     private static string NormalizeColumn(string header) =>
         new string([.. header.Where(char.IsLetterOrDigit)]).ToUpperInvariant();
@@ -206,8 +170,6 @@ public sealed class PersonService(
 
         // Everything is decided in memory against these, then written once at the end.
         var takenUsernames = (await db.People.Select(p => p.Username).ToListAsync(ct))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var takenColors = (await db.People.Select(p => p.Color).ToListAsync(ct))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var created = new List<string>();
@@ -236,29 +198,6 @@ public sealed class PersonService(
                 continue;
             }
 
-            var color = NormalizeColor(Field(row, columns, ColorColumn));
-            if (color.Length == 0)
-            {
-                // Assigned rather than demanded: an HR export has no idea what the app's
-                // palette is, and colors have to stay unique.
-                var free = colorPalette.Value.Find(c => !takenColors.Contains(c));
-                if (free is null)
-                {
-                    failed.Add(new ImportPersonIssue(line, username,
-                        $"Every color in PersonColorPalette is taken ({colorPalette.Value.Count} in total). Add more to import more people."));
-                    continue;
-                }
-
-                color = NormalizeColor(free);
-            }
-            else if (takenColors.Contains(color))
-            {
-                failed.Add(new ImportPersonIssue(line, username, $"Color {color} is already taken."));
-                continue;
-            }
-
-            takenColors.Add(color);
-
             var firstName = Field(row, columns, FirstNameColumn);
             var lastName = Field(row, columns, LastNameColumn);
             var displayName = Field(row, columns, DisplayNameColumn);
@@ -275,7 +214,6 @@ public sealed class PersonService(
                 NullIfEmpty(lastName),
                 displayName,
                 NullIfEmpty(Field(row, columns, HomeCityColumn)),
-                color,
                 NullIfEmpty(Field(row, columns, EmailColumn)));
 
             // The same annotations the API validates a single POST against, so an import
@@ -296,7 +234,6 @@ public sealed class PersonService(
                 Email = request.Email,
                 DisplayName = request.DisplayName,
                 HomeCity = request.HomeCity,
-                Color = request.Color,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = actorUsername,
             });

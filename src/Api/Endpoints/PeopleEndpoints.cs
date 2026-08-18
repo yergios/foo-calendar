@@ -16,7 +16,6 @@ public static class PeopleEndpoints
 
         group.MapPost("/", CreateMe);
         group.MapGet("/", GetAll);
-        group.MapGet("/colors", GetColorsInUse);
         group.MapGet("/me", GetMe);
         group.MapPut("/me", UpdateMe);
         group.MapGet("/me/stats", GetMyStats);
@@ -37,7 +36,6 @@ public static class PeopleEndpoints
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
             request.HomeCity,
-            request.Color,
             user.FindFirstValue(claimTypes.Email),
             request.EmailOnAbsenceReviewed,
             request.EmailOnNewAbsenceRequest,
@@ -50,12 +48,6 @@ public static class PeopleEndpoints
     private static async Task<IResult> GetAll(IPersonService people, CancellationToken ct)
     {
         var result = await people.GetAllAsync(ct);
-        return Results.Ok(result);
-    }
-
-    private static async Task<IResult> GetColorsInUse(IPersonService people, CancellationToken ct)
-    {
-        var result = await people.GetColorsInUseAsync(ct);
         return Results.Ok(result);
     }
 

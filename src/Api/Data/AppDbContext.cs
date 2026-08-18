@@ -18,10 +18,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             .HasIndex(p => p.Username)
             .IsUnique();
 
-        modelBuilder.Entity<Person>()
-            .HasIndex(p => p.Color)
-            .IsUnique();
-
         modelBuilder.Entity<Absence>()
             .HasIndex(a => new { a.PersonId, a.StartDate, a.EndDate });
 

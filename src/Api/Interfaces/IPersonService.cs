@@ -5,7 +5,6 @@ namespace Api.Interfaces;
 public interface IPersonService
 {
     Task<PeopleResponse> GetAllAsync(CancellationToken ct = default);
-    Task<ColorsInUseResponse> GetColorsInUseAsync(CancellationToken ct = default);
     Task<PersonDto> CreateAsync(CreatePersonRequest request, string actorUsername, CancellationToken ct = default);
 
     /// <summary>Creates a person per CSV row. Existing usernames are skipped rather than

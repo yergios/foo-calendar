@@ -1,9 +1,7 @@
-using Api.Configuration;
 using Api.Data.Models;
 using Api.Services;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -15,26 +13,22 @@ public sealed class PersonImportTests : SqliteTestBase
 {
     private const string Actor = "admin";
 
-    private readonly PersonColorPaletteOptions palette = ["#111111", "#222222", "#333333"];
-
     private readonly RecordingTeamRegionService teamRegions = new();
 
     private readonly RecordingAuditLog audit = new();
 
     private PersonService CreateService() => new(
         Db,
-        Options.Create(palette),
         teamRegions,
         new RegionLabels(NullLogger<RegionLabels>.Instance),
         audit);
 
-    private Person AddPerson(string username, string color)
+    private Person AddPerson(string username)
     {
         var person = new Person
         {
             Username = username,
             DisplayName = username,
-            Color = color,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = Actor,
         };
@@ -64,31 +58,9 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task ImportAsync_AssignsAFreeColorWhenNoneIsGiven()
-    {
-        AddPerson("existing", "#111111");
-
-        await CreateService().ImportAsync("username\njdoe\nasmith", Actor);
-
-        Db.People.Single(p => p.Username == "jdoe").Color.ShouldBe("#222222");
-        Db.People.Single(p => p.Username == "asmith").Color.ShouldBe("#333333");
-    }
-
-    [Fact]
-    public async Task ImportAsync_WhenThePaletteRunsOut_ReportsIt()
-    {
-        var result = await CreateService().ImportAsync("username\na\nb\nc\nd", Actor);
-
-        result.Created.Count.ShouldBe(3);
-        var issue = result.Failed.ShouldHaveSingleItem();
-        issue.Username.ShouldBe("d");
-        issue.Reason.ShouldContain("PersonColorPalette");
-    }
-
-    [Fact]
     public async Task ImportAsync_SkipsUsernamesThatAlreadyExist()
     {
-        AddPerson("jdoe", "#111111");
+        AddPerson("jdoe");
 
         var result = await CreateService().ImportAsync("username\njdoe\nasmith", Actor);
 
@@ -133,24 +105,6 @@ public sealed class PersonImportTests : SqliteTestBase
 
         result.Created.ShouldBeEmpty();
         result.Failed.ShouldHaveSingleItem().Username.ShouldBe("jdoe");
-    }
-
-    [Fact]
-    public async Task ImportAsync_RejectsAColorAlreadyTaken()
-    {
-        AddPerson("existing", "#111111");
-
-        var result = await CreateService().ImportAsync("username,color\njdoe,#111111", Actor);
-
-        result.Failed.ShouldHaveSingleItem().Reason.ShouldContain("already taken");
-    }
-
-    [Fact]
-    public async Task ImportAsync_StoresColorsLowerCased()
-    {
-        await CreateService().ImportAsync("username,color\njdoe,#A1B2C3", Actor);
-
-        Db.People.Single().Color.ShouldBe("#a1b2c3");
     }
 
     [Fact]

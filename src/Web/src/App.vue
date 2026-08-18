@@ -18,10 +18,9 @@ const authStore = useAuthStore();
 const personStore = usePersonStore();
 const { isAuthenticated, isLoading, user } = useAuth();
 
-// The modal stays open on failure with the reason in it: a color claimed while this person
-// was still filling the form is fixable right here.
+// The modal stays open on failure with the reason in it, fixable right here.
 async function completeOnboarding(
-  payload: { displayName: string | null; homeCity: string | null; color: string },
+  payload: { displayName: string | null; homeCity: string | null },
   done: (error?: string | null) => void,
 ) {
   try {

@@ -8,7 +8,6 @@ public sealed class Person
     public string LastName { get; set; }
     public string Email { get; set; }
     public required string DisplayName { get; set; }
-    public required string Color { get; set; }
     public string HomeCity { get; set; } // For bank holiday matching, e.g. "CH-ZH" ISO 3166-2
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

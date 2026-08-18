@@ -123,7 +123,7 @@ ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
 
-The same applies to the `Team` and `PersonColorPalette` sections below, and to `Telemetry`.
+The same applies to the `Team` section below, and to `Telemetry`.
 
 To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
 
@@ -299,10 +299,6 @@ Holidays__File__Path=/etc/foo-calendar/holidays.json
 
 Rows created this way are labelled `File` in the API and the UI, and stamped `file-sync` in the audit columns, so it stays visible which system put a holiday there.
 
-### Adding an assignable color
-
-Edit the `PersonColorPalette` array in `src/Api/appsettings.json` — each entry must be a 6-digit hex color (`#RRGGBB`). This is the palette offered when someone picks their calendar color. A color already claimed by someone else shows as taken until they change it or delete their profile.
-
 ---
 
 ### Importing people in bulk
@@ -331,7 +327,6 @@ asmith,Alan,Smith,alan@acme.example,CH-ZH
 | `displayName` | Defaults to "First Last", or the username when neither is given. |
 | `email` | Up to 255 characters. |
 | `homeCity` | ISO 3166-2, e.g. `ES-MD` or just `ES`. Blank is fine. Importing someone into a region new to the team pulls its holidays in. |
-| `color` | Assigned from `PersonColorPalette` when blank, which is the usual case. |
 
 Header names are matched loosely — case, spaces and underscores are ignored, so `Home City`, `home_city` and `homeCity` are the same column — and column order doesn't matter. Quoted fields, embedded commas and a UTF-8 BOM are all handled, so a spreadsheet export works as-is.
 
@@ -347,7 +342,6 @@ Valid rows are imported even when others fail, and the response says exactly wha
 }
 ```
 
-> **Palette size caps your headcount.** Each person's calendar color has to be unique, so the app holds at most as many people as `PersonColorPalette` has colors — 32 as shipped. An import that runs out says so, per row. Add more colors before importing a larger team, see [Adding an assignable color](#adding-an-assignable-color).
 
 ### Access levels
 

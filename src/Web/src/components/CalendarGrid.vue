@@ -93,10 +93,6 @@
           >
             <div class="flex items-center gap-2">
               <span class="text-secondary/40 select-none text-xs leading-none">⠿</span>
-              <span
-                class="inline-block w-2.5 h-2.5 rounded-pill shrink-0"
-                :style="{ backgroundColor: row.person.color }"
-              />
               <span class="truncate" :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'">{{
                 row.person.displayName ?? row.person.username
               }}</span>

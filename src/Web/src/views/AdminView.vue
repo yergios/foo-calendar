@@ -24,15 +24,7 @@
         </thead>
         <tbody>
           <tr v-for="person in people" :key="person.id" class="border-b border-border">
-            <td class="py-2 pr-2">
-              <div class="flex items-center gap-2">
-                <span
-                  class="inline-block w-2.5 h-2.5 rounded-pill shrink-0"
-                  :style="{ backgroundColor: person.color }"
-                />
-                {{ person.displayName ?? person.username }}
-              </div>
-            </td>
+            <td class="py-2 pr-2">{{ person.displayName ?? person.username }}</td>
             <td class="py-2 pr-2 text-secondary">{{ person.username }}</td>
             <td class="py-2 pr-2 text-secondary">{{ person.homeCity ?? "—" }}</td>
             <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
@@ -116,19 +108,6 @@
           <!-- Keyed so switching to another person, or back to the blank form, rebuilds
                the picker around their region instead of keeping the last one's. -->
           <RegionPicker :key="editingId ?? 'new'" v-model="form.homeCity" id-prefix="admin" />
-        </div>
-
-        <div class="flex flex-col gap-1.5 mt-3">
-          <label class="text-xs font-semibold text-secondary"
-            >Color<span class="text-error ml-0.5" title="Required">*</span></label
-          >
-          <ColorPicker
-            v-model="form.color"
-            :palette="palette"
-            :colors-in-use="colorsInUse"
-            :exclude="editingOriginalColor"
-            :loading="configLoading"
-          />
         </div>
 
         <p v-if="formError" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mt-3">
@@ -346,13 +325,10 @@ import {
   syncBankHolidays,
   updatePerson,
 } from "@/api/admin";
-import { getColorsInUse } from "@/api/people";
 import { useAuthStore } from "@/auth";
-import ColorPicker from "@/components/ColorPicker.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { groupRegions } from "@/lib/regionGroups";
-import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import type { AbsenceDto } from "@/types/absence";
 import type { AuditEntryDto } from "@/types/audit";
@@ -369,10 +345,6 @@ const canSyncHolidays = computed(() => authStore.can(Permission.holidaysSync));
 const canReadAudit = computed(() => authStore.can(Permission.auditRead));
 const canApproveAbsences = computed(() => authStore.can(Permission.absencesApprove));
 
-const configStore = useConfigStore();
-const palette = computed(() => configStore.config?.colorPalette ?? []);
-const configLoading = ref(true);
-
 // This is the same store HomeView's CalendarGrid uses. Routing admin CRUD through it
 // instead of a separate fetch keeps both views in sync with a single refresh() call.
 const peopleStore = usePeopleStore();
@@ -382,10 +354,8 @@ const { people, regionLabels } = storeToRefs(peopleStore);
 // exactly what the scheduled sync covers and what the API will accept here.
 const regionGroups = computed(() => groupRegions(regionLabels.value));
 const loadingPeople = ref(true);
-const colorsInUse = ref<string[]>([]);
 
 const editingId = ref<number | null>(null);
-const editingOriginalColor = ref<string | null>(null);
 const deletingId = ref<number | null>(null);
 const formError = ref<string | null>(null);
 const submittingForm = ref(false);
@@ -396,11 +366,10 @@ const form = reactive({
   lastName: "",
   displayName: "",
   homeCity: null as string | null,
-  color: "",
 });
 
 const canSubmitForm = computed(() => {
-  if (!form.displayName.trim() || !form.color) return false;
+  if (!form.displayName.trim()) return false;
   if (editingId.value) return true;
   return form.username.trim().length > 0;
 });
@@ -408,11 +377,7 @@ const canSubmitForm = computed(() => {
 async function loadPeople(forceRefresh = false) {
   loadingPeople.value = true;
   try {
-    const [, { colors }] = await Promise.all([
-      forceRefresh ? peopleStore.refresh() : peopleStore.loadOnce(),
-      getColorsInUse(),
-    ]);
-    colorsInUse.value = colors;
+    await (forceRefresh ? peopleStore.refresh() : peopleStore.loadOnce());
   } catch (error: unknown) {
     console.error("ERROR => Failed to load people:", error);
   } finally {
@@ -553,14 +518,6 @@ onMounted(() => {
   // still be sitting there after they're turned back off, and this is the only place to
   // resolve it.
   if (canApproveAbsences.value) loadPending();
-  configStore
-    .loadOnce()
-    .catch((error: unknown) => {
-      console.error("ERROR => Failed to load app config:", error);
-    })
-    .finally(() => {
-      configLoading.value = false;
-    });
 });
 
 function resetForm() {
@@ -569,21 +526,17 @@ function resetForm() {
   form.lastName = "";
   form.displayName = "";
   form.homeCity = null;
-  form.color = "";
 }
 
 function startEdit(person: PersonDto) {
   editingId.value = person.id;
-  editingOriginalColor.value = person.color;
   formError.value = null;
   form.displayName = person.displayName ?? "";
   form.homeCity = person.homeCity;
-  form.color = person.color;
 }
 
 function cancelEdit() {
   editingId.value = null;
-  editingOriginalColor.value = null;
   formError.value = null;
   resetForm();
 }
@@ -598,7 +551,6 @@ async function submitForm() {
       await updatePerson(editingId.value, {
         displayName: form.displayName.trim(),
         homeCity: form.homeCity,
-        color: form.color,
       });
     } else {
       await createPerson({
@@ -607,7 +559,6 @@ async function submitForm() {
         lastName: form.lastName.trim(),
         displayName: form.displayName.trim(),
         homeCity: form.homeCity,
-        color: form.color,
       });
     }
     cancelEdit();

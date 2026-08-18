@@ -49,13 +49,6 @@ services.AddOptions<TeamOptions>()
         "Team:HomeTimeZone must be a valid IANA timezone id, e.g. \"Europe/Zurich\".")
     .ValidateOnStart();
 
-services.AddOptions<PersonColorPaletteOptions>()
-    .Bind(config.GetSection(PersonColorPaletteOptions.SectionName))
-    .Validate(colors => colors.Count > 0, "PersonColorPalette must contain at least one color.")
-    .Validate(colors => colors.All(c => Regex.IsMatch(c, ValidationPatterns.HexColor)),
-        "PersonColorPalette entries must be valid 6-digit hex colors.")
-    .ValidateOnStart();
-
 services.AddOptions<HolidayOptions>()
     .Bind(config.GetSection(HolidayOptions.SectionName))
     .Validate(

@@ -166,7 +166,6 @@ internal static class Program
                 DisplayName = $"{firstName} {lastName}",
                 Email = $"{username}@example.test",
                 HomeCity = region,
-                Color = ColorFor(i),
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = "seed-script",
             });
@@ -274,34 +273,5 @@ internal static class Program
         };
 
         return pool[rng.Next(pool.Length)];
-    }
-
-    private static string ColorFor(int index)
-    {
-        // Golden-angle hue rotation spreads any number of colors evenly around the wheel
-        // with no risk of two indices landing on the same hue.
-        var hue = index * 137.508 % 360;
-        return HslToHex(hue, 55, 45);
-    }
-
-    private static string HslToHex(double h, double s, double l)
-    {
-        s /= 100;
-        l /= 100;
-        var c = (1 - Math.Abs(2 * l - 1)) * s;
-        var x = c * (1 - Math.Abs(h / 60 % 2 - 1));
-        var m = l - c / 2;
-
-        var (r, g, b) = h switch
-        {
-            < 60 => (c, x, 0.0),
-            < 120 => (x, c, 0.0),
-            < 180 => (0.0, c, x),
-            < 240 => (0.0, x, c),
-            < 300 => (x, 0.0, c),
-            _ => (c, 0.0, x),
-        };
-
-        return $"#{(int)Math.Round((r + m) * 255):X2}{(int)Math.Round((g + m) * 255):X2}{(int)Math.Round((b + m) * 255):X2}";
     }
 }

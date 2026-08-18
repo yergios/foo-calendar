@@ -16,13 +16,12 @@ public sealed class NotificationServiceTests : SqliteTestBase
         sut = new NotificationService(Db);
     }
 
-    private Person CreatePerson(string username = "jdoe", string color = "#111111")
+    private Person CreatePerson(string username = "jdoe")
     {
         var person = new Person
         {
             Username = username,
             DisplayName = username,
-            Color = color,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = username,
         };
@@ -77,8 +76,8 @@ public sealed class NotificationServiceTests : SqliteTestBase
     [Fact]
     public async Task GetForPersonAsync_OnlyReturnsThatPersonsNotifications()
     {
-        var alice = CreatePerson("alice", "#111111");
-        var bob = CreatePerson("bob", "#222222");
+        var alice = CreatePerson("alice");
+        var bob = CreatePerson("bob");
         await sut.NotifyAsync(
             NewAbsence(alice.Id, "2026-01-05", "2026-01-06"), NotificationType.AbsenceApproved, null);
 
@@ -91,8 +90,8 @@ public sealed class NotificationServiceTests : SqliteTestBase
     [Fact]
     public async Task MarkAllReadAsync_MarksOnlyThatPersonsUnreadNotifications()
     {
-        var alice = CreatePerson("alice", "#111111");
-        var bob = CreatePerson("bob", "#222222");
+        var alice = CreatePerson("alice");
+        var bob = CreatePerson("bob");
         await sut.NotifyAsync(
             NewAbsence(alice.Id, "2026-01-05", "2026-01-06"), NotificationType.AbsenceApproved, null);
         await sut.NotifyAsync(

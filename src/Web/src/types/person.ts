@@ -10,7 +10,6 @@ export interface PersonDto {
   username: string;
   displayName: string;
   homeCity: string | null;
-  color: string;
   // Only present on the /me responses (GetMe/CreateMe/UpdateMe serialize the raw entity);
   // the colleagues list from getAllPeople() never carries these, same as it never carries
   // email itself.
@@ -25,13 +24,11 @@ export interface CreatePersonRequest {
   lastName: string;
   displayName?: string | null;
   homeCity?: string | null;
-  color: string;
 }
 
 export interface UpdatePersonRequest {
   displayName?: string | null;
   homeCity?: string | null;
-  color: string;
   emailOnAbsenceReviewed?: boolean;
   emailOnNewAbsenceRequest?: boolean;
   emailOnWeeklyDigest?: boolean;
@@ -42,10 +39,6 @@ export interface AbsenceStatsResponse {
   vacationDays: number;
   sickDays: number;
   otherDays: number;
-}
-
-export interface ColorsInUseResponse {
-  colors: string[];
 }
 
 export interface PersonAbsenceStatsDto {

@@ -2,7 +2,6 @@ import { apiFetch, apiFetchRaw, apiJson, errorForResponse } from "@/api";
 
 import type {
   AbsenceStatsResponse,
-  ColorsInUseResponse,
   PeopleResponse,
   PersonDto,
   UpdatePersonRequest,
@@ -17,10 +16,6 @@ export function createMe(request: UpdatePersonRequest): Promise<PersonDto> {
 
 export function getAllPeople(): Promise<PeopleResponse> {
   return apiJson(`/api/people`);
-}
-
-export function getColorsInUse(): Promise<ColorsInUseResponse> {
-  return apiJson(`/api/people/colors`);
 }
 
 export function getMyStats(year?: number): Promise<AbsenceStatsResponse> {

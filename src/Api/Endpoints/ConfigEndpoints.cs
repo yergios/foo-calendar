@@ -11,7 +11,6 @@ namespace Api.Endpoints;
 /// derived from the people list instead.</summary>
 public sealed record AppConfigResponse(
     string HomeRegion,
-    List<string> ColorPalette,
     bool AbsenceApprovalsEnabled,
     // Whether the deployment can send email at all, i.e. Email:Host is configured. Same
     // reasoning as AbsenceApprovalsEnabled: the SPA uses this to hide the opt-in checkboxes
@@ -62,12 +61,10 @@ public static class ConfigEndpoints
 
     private static IResult GetConfig(
         IOptions<TeamOptions> team,
-        IOptions<PersonColorPaletteOptions> palette,
         IOptions<AbsenceApprovalOptions> absenceApprovals,
         IOptions<EmailOptions> email) =>
         Results.Ok(new AppConfigResponse(
             team.Value.HomeRegion,
-            palette.Value,
             absenceApprovals.Value.Enabled,
             !string.IsNullOrWhiteSpace(email.Value.Host),
             team.Value.HomeTimeZone));

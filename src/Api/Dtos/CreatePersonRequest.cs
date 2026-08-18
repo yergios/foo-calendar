@@ -12,7 +12,6 @@ public sealed record CreatePersonRequest(
     [property: MaxLength(100)] string LastName,
     [property: MaxLength(100)] string DisplayName,
     [property: RegularExpression(ValidationPatterns.RegionCode)] string HomeCity, // Format according to ISO 3166-2, e.g. "ES-MD"
-    [property: Required, RegularExpression(ValidationPatterns.HexColor)] string Color,    // Hex color format, e.g. "#EC4899"
     [property: MaxLength(255)] string Email = null,
     bool EmailOnAbsenceReviewed = false,
     bool EmailOnNewAbsenceRequest = false,
