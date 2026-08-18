@@ -2,8 +2,8 @@
   <div
     class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] h-full flex flex-col gap-4 min-h-0"
   >
-    <header class="flex items-center justify-between flex-wrap gap-3">
-      <div class="flex items-center gap-2">
+    <header class="flex items-center gap-3 flex-wrap">
+      <div class="flex-1 flex items-center gap-2">
         <button
           type="button"
           class="h-9 w-42 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
@@ -24,7 +24,15 @@
         </button>
       </div>
 
-      <div class="flex items-center gap-3 flex-wrap">
+      <button
+        type="button"
+        class="shrink-0 h-9 flex items-center justify-center border border-primary-text text-primary-text rounded-8 px-3 text-sm font-semibold hover:bg-primary-text/10 transition-colors"
+        @click="showWhosOffModal = true"
+      >
+        Who's off today
+      </button>
+
+      <div class="flex-1 flex items-center justify-end gap-3 flex-wrap">
         <div class="flex items-center gap-1.5">
           <label for="sortMode" class="text-xs font-semibold text-secondary">Sort by</label>
           <select
@@ -125,6 +133,7 @@
       @saved="closeHolidayModal"
       @deleted="closeHolidayModal"
     />
+    <WhosOffTodayModal v-if="showWhosOffModal" @close="showWhosOffModal = false" />
   </div>
 </template>
 
@@ -138,6 +147,7 @@ import AddAbsenceModal from "@/components/AddAbsenceModal.vue";
 import AddBankHolidayModal from "@/components/AddBankHolidayModal.vue";
 import CalendarGrid from "@/components/CalendarGrid.vue";
 import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
+import WhosOffTodayModal from "@/components/WhosOffTodayModal.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
@@ -167,6 +177,7 @@ const loading = ref(false);
 const calendarGridRef = ref<InstanceType<typeof CalendarGrid> | null>(null);
 const showAbsenceModal = ref(false);
 const showHolidayModal = ref(false);
+const showWhosOffModal = ref(false);
 const prefillDate = ref<string | null>(null);
 const prefillHolidayDate = ref<string | null>(null);
 const dayAbsences = ref<AbsenceDto[]>([]);

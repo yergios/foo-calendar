@@ -521,10 +521,12 @@ const absenceMap = computed(() => {
   return map;
 });
 
-// Weekends and bank holidays aren't work days, so an absence stretch doesn't paint over
-// them: the day keeps its own weekend/holiday background instead of the person's color.
-function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
-  return !day.isWeekend && !holidayMap.value.has(day.iso);
+// A weekend isn't a work day, so an absence stretch doesn't paint over it: the day keeps
+// its own weekend background instead of the person's color. A bank holiday used to work
+// the same way, but its background shouldn't be able to hide that someone is actually off
+// that day - an absence still paints straight through a holiday, same as any workday.
+function isPaintDay(day: { isWeekend: boolean }): boolean {
+  return !day.isWeekend;
 }
 
 // This precomputes each visible person's per-day absences once. Otherwise the template
