@@ -6,6 +6,9 @@
       aria-label="Scroll left"
       :disabled="!canScrollLeft"
       @click="scrollByPage(-1)"
+      @mousedown="startHold(-1)"
+      @mouseup="stopHold"
+      @mouseleave="stopHold"
     >
       ‹
     </button>
@@ -191,6 +194,9 @@
       aria-label="Scroll right"
       :disabled="!canScrollRight"
       @click="scrollByPage(1)"
+      @mousedown="startHold(1)"
+      @mouseup="stopHold"
+      @mouseleave="stopHold"
     >
       ›
     </button>
@@ -343,6 +349,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
+  stopHold();
 });
 
 /** Scrolls the grid so today's column is centered in view. No-op if today isn't in the displayed year. */
@@ -377,6 +384,42 @@ function scrollByPage(direction: 1 | -1) {
   const container = containerRef.value;
   if (!container) return;
   container.scrollBy({ left: direction * container.clientWidth * 0.9, behavior: "smooth" });
+}
+
+// A plain click still does the one-page jump above (bound via @click, so it also covers
+// keyboard activation); holding the button down instead ramps into a continuous scroll,
+// like an OS scrollbar's own arrow buttons. The delay before it kicks in is what stops an
+// ordinary click's mousedown from also starting one - mouseup cancels the pending timeout
+// well before it'd fire.
+const HOLD_DELAY_MS = 350;
+const HOLD_SPEED_PX_PER_FRAME = 14;
+let holdTimeout: ReturnType<typeof setTimeout> | null = null;
+let holdFrame: number | null = null;
+
+function startHold(direction: 1 | -1) {
+  stopHold();
+  holdTimeout = setTimeout(() => {
+    const step = () => {
+      const container = containerRef.value;
+      // Stops itself at either end rather than spinning uselessly against the clamped
+      // scroll position until the button is finally released.
+      if (!container || (direction === 1 ? !canScrollRight.value : !canScrollLeft.value)) return;
+      container.scrollLeft += direction * HOLD_SPEED_PX_PER_FRAME;
+      holdFrame = requestAnimationFrame(step);
+    };
+    holdFrame = requestAnimationFrame(step);
+  }, HOLD_DELAY_MS);
+}
+
+function stopHold() {
+  if (holdTimeout !== null) {
+    clearTimeout(holdTimeout);
+    holdTimeout = null;
+  }
+  if (holdFrame !== null) {
+    cancelAnimationFrame(holdFrame);
+    holdFrame = null;
+  }
 }
 
 // region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland".
