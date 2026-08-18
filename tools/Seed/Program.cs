@@ -1,9 +1,15 @@
+using Api.Configuration;
 using Api.Data;
 using Api.Data.Models;
+using Api.Dtos;
+using Api.Interfaces;
+using Api.Services;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Seed;
 
@@ -134,6 +140,58 @@ internal static class Program
 
         Console.WriteLine($"Done: {people.Count} people, {absenceCount} absences "
             + $"(avg {absenceCount / (double)people.Count:F1} per person).");
+
+        // Inserted straight into the database above, unlike a real signup or CSV import,
+        // which both go through PersonService and so trigger TeamRegionService's sync as a
+        // side effect of saving. Nothing does that here, so without this the seeded people
+        // would show up with none of their regions' bank holidays until the next scheduled
+        // sync (up to a week later, see HolidayOptions.SyncInterval).
+        await SyncHolidaysAsync(db, configuration);
+    }
+
+    private static async Task SyncHolidaysAsync(AppDbContext db, IConfiguration configuration)
+    {
+        var regions = Regions.Distinct(StringComparer.Ordinal).ToList();
+        Console.WriteLine($"Syncing bank holidays for {regions.Count} region(s) ...");
+
+        var holidayOptions = configuration.GetSection(HolidayOptions.SectionName).Get<HolidayOptions>()
+            ?? new HolidayOptions();
+        var source = BuildHolidaySource(holidayOptions);
+        var bankHolidays = new BankHolidayService(
+            db, source, new NoOpAuditLog(), NullLogger<BankHolidayService>.Instance);
+
+        // Same two years the background job keeps warm and a profile save syncs on the
+        // spot, see TeamRegionService.EnsureSyncedAsync.
+        var failed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var year in new[] { Year, Year + 1 })
+            failed.UnionWith(await bankHolidays.SyncRegionsAsync(regions, year, default));
+
+        Console.WriteLine(failed.Count == 0
+            ? "Done: bank holidays synced."
+            : $"Done: bank holidays synced, but {failed.Count} region(s) failed: {string.Join(", ", failed)}.");
+    }
+
+    private static IHolidaySource BuildHolidaySource(HolidayOptions options) => options.Source switch
+    {
+        HolidayOptions.SourceFile => new FileHolidaySource(Options.Create(options)),
+        HolidayOptions.SourceNone => new DisabledHolidaySource(),
+        // Nager, the default: needs no client-side config beyond its base URL, same as
+        // Program.cs's own registration.
+        _ => new NagerHolidaySource(new HttpClient { BaseAddress = new Uri(options.Nager.BaseUrl) }),
+    };
+
+    // Stands in for the real AuditLog, which needs a signed-in user (IHttpContextAccessor)
+    // that a console script doesn't have. The seed script doesn't audit-log the people or
+    // absences it creates either, so staying silent here is consistent, not a shortcut.
+    private sealed class NoOpAuditLog : IAuditLog
+    {
+        public Task RecordAsync(
+            string action, string target, string details = null, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<AuditEntriesResponse> ReadAsync(
+            int limit, int offset, CancellationToken ct = default) =>
+            throw new NotSupportedException("The seed script never reads the audit log.");
     }
 
     private static string FindRepoRoot()

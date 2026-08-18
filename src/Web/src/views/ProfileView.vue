@@ -61,7 +61,7 @@
         <p v-if="deleteError" class="text-sm text-error mt-2">{{ deleteError }}</p>
       </div>
       <div>
-        <YearPicker v-model="statsYear">
+        <YearPicker v-model="statsYear" class="justify-center">
           <h5>Absence stats {{ statsYear }}</h5>
         </YearPicker>
         <div v-if="statsLoading" class="grid grid-cols-3 gap-3 mt-3">

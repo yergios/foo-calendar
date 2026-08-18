@@ -10,7 +10,7 @@
       :style="{ minWidth: tableMinWidth }"
     >
       <colgroup>
-        <col style="width: 120px" />
+        <col style="width: 160px" />
         <col v-for="day in days" :key="day.iso" />
       </colgroup>
 
@@ -94,11 +94,18 @@
             @drop="handleDrop(row.person.id)"
           >
             <div class="flex items-center gap-2">
-              <span class="text-secondary/40 select-none text-xs leading-none">⠿</span>
-              <span class="truncate" :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'">{{
-                row.person.displayName ?? row.person.username
-              }}</span>
-              <span v-if="row.isMine" class="text-[10px] text-primary-text font-semibold shrink-0">You</span>
+              <span class="text-secondary/40 select-none text-xs leading-none shrink-0">⠿</span>
+              <span
+                class="truncate min-w-0"
+                :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'"
+                >{{ row.person.displayName ?? row.person.username }}</span
+              >
+              <span
+                v-if="row.regionCode"
+                class="ml-auto text-[9px] text-secondary shrink-0"
+                :title="row.regionLabel ?? undefined"
+                >{{ row.regionCode }}</span
+              >
             </div>
           </th>
 
@@ -436,7 +443,17 @@ const rows = computed(() =>
     // too (see --color-row-mine), which needs to stay fully opaque to occlude day columns
     // scrolling underneath it rather than letting them show through.
     const isMine = isMyRow(person);
-    return { person, cells, isMine, background: isMine ? "bg-row-mine" : rowBackgroundClass(rowIndex) };
+
+    return {
+      person,
+      cells,
+      isMine,
+      background: isMine ? "bg-row-mine" : rowBackgroundClass(rowIndex),
+      // Code shown on the row itself (compact enough for the widened name column); the
+      // full label is only surfaced on hover, via the title below.
+      regionCode: person.homeCity,
+      regionLabel: person.homeCity ? (regionLabels.value.get(person.homeCity) ?? person.homeCity) : null,
+    };
   }),
 );
 
@@ -645,7 +662,7 @@ function emptyCellTitle(person: PersonDto, day: { iso: string }): string {
   return holiday ? `${holiday} (click to add absence)` : "Click to add absence";
 }
 
-const tableMinWidth = computed(() => `${120 + days.value.length * 28}px`);
+const tableMinWidth = computed(() => `${160 + days.value.length * 28}px`);
 </script>
 
 <style scoped>

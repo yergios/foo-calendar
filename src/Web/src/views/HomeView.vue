@@ -33,6 +33,7 @@
             class="h-9 border border-border-strong rounded-8 px-2 text-sm bg-background"
           >
             <option value="name">Name</option>
+            <option value="mine">Me first, then name</option>
             <option value="absentToday">Absent today, then name</option>
             <option value="region">Region, then name</option>
             <option value="custom">Custom order</option>
@@ -44,11 +45,9 @@
           <RegionFilterSelect id="regionFilter" v-model="regionFilter" :groups="regionGroups" />
         </div>
 
-        <div class="h-9 flex items-center gap-1 border border-border-strong rounded-8 bg-background px-1">
-          <YearPicker v-model="year">
-            <span class="text-sm font-semibold px-1 tabular-nums">{{ year }}</span>
-          </YearPicker>
-        </div>
+        <YearPicker v-model="year">
+          <span class="text-sm font-semibold px-1 tabular-nums">{{ year }}</span>
+        </YearPicker>
       </div>
     </header>
 
@@ -152,7 +151,7 @@ import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 import type { PersonDto } from "@/types/person";
 
-type SortMode = "name" | "absentToday" | "region" | "custom";
+type SortMode = "name" | "mine" | "absentToday" | "region" | "custom";
 
 const { people, regionLabels } = storeToRefs(usePeopleStore());
 const personStore = usePersonStore();
@@ -244,6 +243,11 @@ function primaryRank(): (person: PersonDto) => number {
   if (sortMode.value === "custom" && customOrder.value.length > 0) {
     const order = new Map(customOrder.value.map((id, index) => [id, index]));
     return (p) => order.get(p.id) ?? Number.MAX_SAFE_INTEGER;
+  }
+
+  if (sortMode.value === "mine") {
+    const myId = personStore.person?.id;
+    return (p) => (p.id === myId ? 0 : 1);
   }
 
   if (sortMode.value === "absentToday") {

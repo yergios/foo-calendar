@@ -152,4 +152,33 @@ public sealed class PersonImportTests : SqliteTestBase
     {
         await Should.ThrowAsync<ArgumentException>(() => CreateService().ImportAsync("", Actor));
     }
+
+    [Fact]
+    public async Task ImportAsync_SyncsEachDistinctRegionAmongTheImportedRows()
+    {
+        await CreateService().ImportAsync(
+            """
+            username,homeCity
+            jdoe,ES-MD
+            asmith,CH-ZH
+            bwong,CH-ZH
+            """, Actor);
+
+        teamRegions.Synced.ShouldBe(["ES-MD", "CH-ZH"]);
+    }
+
+    [Fact]
+    public async Task ImportAsync_DoesNotSyncARegionThatWasOnlyOnASkippedOrFailedRow()
+    {
+        AddPerson("jdoe");
+
+        await CreateService().ImportAsync(
+            """
+            username,homeCity
+            jdoe,ES-MD
+            broken,not-a-region
+            """, Actor);
+
+        teamRegions.Synced.ShouldBeEmpty();
+    }
 }
