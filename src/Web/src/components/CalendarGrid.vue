@@ -81,10 +81,7 @@
           <th
             scope="row"
             class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
-            :class="[
-              row.background,
-              row.isMine ? 'border-l-[3px] border-l-primary-text' : 'border-l-[3px] border-l-transparent',
-            ]"
+            :class="[row.background, mineRowClass(row.isMine, 'start')]"
             draggable="true"
             title="Drag to reorder"
             @dragstart="handleDragStart(row.person.id)"
@@ -101,9 +98,9 @@
           </th>
 
           <td
-            v-for="cell in row.cells"
+            v-for="(cell, cellIndex) in row.cells"
             :key="`${row.person.id}-${cell.day.iso}`"
-            class="h-9 p-0 align-middle border-b border-border"
+            class="relative h-9 p-0 align-middle border-b border-border"
             :class="[
               dayHeaderClass(cell.day, row.background),
               columnSideBorderClass(cell.day),
@@ -111,6 +108,7 @@
                 cell.day.isToday,
                 rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
               ),
+              mineRowClass(row.isMine, cellIndex === row.cells.length - 1 ? 'end' : 'middle'),
               row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
             ]"
             :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
@@ -521,6 +519,22 @@ function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): 
   if (edge === "top") return `${TODAY_OUTLINE} after:border-t-2`;
   if (edge === "bottom") return `${TODAY_OUTLINE} after:border-b-2`;
   return TODAY_OUTLINE;
+}
+
+// The current user's row gets the same outline treatment as today's column above: an
+// overlaid pseudo-element rather than a real border, so it costs no layout and doesn't
+// compete with the cell's own border-b/border-l. Top and bottom close off every cell in
+// the row; left/right close off the two ends (the sticky name cell and the row's last day
+// column), same as today's column closing off with its own top/bottom.
+const MINE_ROW_OUTLINE =
+  "after:content-[''] after:absolute after:inset-0 after:pointer-events-none "
+  + "after:border-t-2 after:border-b-2 after:border-primary-text";
+
+function mineRowClass(isMine: boolean, edge: "start" | "middle" | "end"): string {
+  if (!isMine) return "";
+  if (edge === "start") return `${MINE_ROW_OUTLINE} after:border-l-2`;
+  if (edge === "end") return `${MINE_ROW_OUTLINE} after:border-r-2`;
+  return MINE_ROW_OUTLINE;
 }
 
 // Every day gets a real left border, not just the bottom one: this is the column-axis
