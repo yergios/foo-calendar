@@ -183,7 +183,12 @@ import type { BankHolidayDto } from "@/types/bankHoliday";
 import type { PersonDto } from "@/types/person";
 
 const props = defineProps<{
+  /** Filtered but not sorted - see `order` below for display sequence. */
   people: PersonDto[];
+  /** Person ids in the order rows should render. Kept separate from `people` so that a
+   * sort-mode change (reordering only) doesn't invalidate the per-person cell computation
+   * below, which only cares about *which* people are visible, not what order they're in. */
+  order: number[];
   absences: AbsenceDto[];
   holidays: BankHolidayDto[];
   year: number;
@@ -407,9 +412,13 @@ function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
   return !day.isWeekend && !holidayMap.value.has(day.iso);
 }
 
-// This precomputes each row's per-day absences once. Otherwise the template would look
-// it up up to four times per cell (v-if, opacity, title, label). Now it's resolved a
-// single time per cell, and only recalculated when people, absences, or days change.
+// This precomputes each visible person's per-day absences once. Otherwise the template
+// would look it up up to four times per cell (v-if, opacity, title, label). Now it's
+// resolved a single time per cell, and only recalculated when the visible people,
+// absences, or days actually change - not when they're merely reordered. That split
+// matters: rebuilding a year of cells for everyone is the expensive part of this
+// component, and a sort-mode change (see HomeView's `order` prop) is otherwise nothing
+// more than that - it doesn't add, remove, or change anyone's absences.
 //
 // wholeDay is the at-most-one whole-day absence a day can hold (mutual exclusivity is
 // enforced server-side); timeBased is everything else. isLabelCell marks only the first
@@ -419,29 +428,44 @@ function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
 // each is inherently single-day, so a cell holding one always shows its own label on any
 // painted day, independently of its neighbors, and none on an unpainted one, same as a
 // wholeDay absence.
+function cellsForPerson(person: PersonDto) {
+  const byDate = absenceMap.value.get(person.id);
+  let previousPaintedAbsence: AbsenceDto | undefined;
+
+  return days.value.map((day) => {
+    const absences = byDate?.get(day.iso) ?? [];
+    const wholeDay = absences.find((a) => !a.startTime);
+    const timeBased = absences.filter((a) => a.startTime);
+
+    const hasContent = wholeDay !== undefined || timeBased.length > 0;
+    const painted = hasContent && isPaintDay(day);
+    const isLabelCell =
+      wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : painted && timeBased.length > 0;
+    previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
+
+    return { day, absences, wholeDay, timeBased, painted, isLabelCell };
+  });
+}
+
+const cellsByPersonId = computed(
+  () => new Map(props.people.map((person) => [person.id, cellsForPerson(person)])),
+);
+
+const personById = computed(() => new Map(props.people.map((person) => [person.id, person])));
+
+// The rows the template actually renders, in display order. Deliberately cheap: index
+// math and two map lookups per row, not a year of cell computation, so a sort-mode
+// change - which only touches `order` - stays snappy no matter how big the team or the
+// year is.
 const rows = computed(() =>
-  props.people.map((person, rowIndex) => {
-    const byDate = absenceMap.value.get(person.id);
-    let previousPaintedAbsence: AbsenceDto | undefined;
+  props.order.map((personId, rowIndex) => {
+    const person = personById.value.get(personId)!;
+    const cells = cellsByPersonId.value.get(personId)!;
 
-    const cells = days.value.map((day) => {
-      const absences = byDate?.get(day.iso) ?? [];
-      const wholeDay = absences.find((a) => !a.startTime);
-      const timeBased = absences.filter((a) => a.startTime);
-
-      const hasContent = wholeDay !== undefined || timeBased.length > 0;
-      const painted = hasContent && isPaintDay(day);
-      const isLabelCell =
-        wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : painted && timeBased.length > 0;
-      previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
-
-      return { day, absences, wholeDay, timeBased, painted, isLabelCell };
-    });
-
-    // Resolved once per row rather than once per cell, same reasoning as `cells` above.
-    // bg-row-mine, not a translucent bg-primary-text/N: this backs the sticky name cell
-    // too (see --color-row-mine), which needs to stay fully opaque to occlude day columns
-    // scrolling underneath it rather than letting them show through.
+    // Resolved once per row rather than once per cell, same reasoning as `cellsForPerson`
+    // above. bg-row-mine, not a translucent bg-primary-text/N: this backs the sticky name
+    // cell too (see --color-row-mine), which needs to stay fully opaque to occlude day
+    // columns scrolling underneath it rather than letting them show through.
     const isMine = isMyRow(person);
 
     return {
@@ -457,12 +481,12 @@ const rows = computed(() =>
   }),
 );
 
-// How many rows fit in the visible container, recomputed from actual measured pixels
-// (not a fixed guess) since the container's height comes from flex layout and varies
-// with viewport and header content. Backs both the filler rows below (padding a small
-// team's grid to the bottom of the container) and the loading skeleton's row count
-// (filling the same space, since a team's size isn't known yet while it loads).
-const FALLBACK_ROW_HEIGHT_PX = 36; // h-9, used only before any row has rendered to measure
+// How many rows fit in the visible container. Only the container's own height needs
+// measuring - every row (real, filler, or skeleton) is a fixed h-9, so row height itself
+// is a constant, not something to read off the DOM. Backs both the filler rows below
+// (padding a small team's grid to the bottom of the container) and the loading skeleton's
+// row count (filling the same space, since a team's size isn't known yet while it loads).
+const ROW_HEIGHT_PX = 36; // h-9
 const rowCapacity = ref(0);
 let resizeObserver: ResizeObserver | null = null;
 let measureScheduled = false;
@@ -471,14 +495,17 @@ function updateRowCapacity() {
   const container = containerRef.value;
   if (!container) return;
   const headerHeight = theadRef.value?.getBoundingClientRect().height ?? 0;
-  const rowHeight =
-    container.querySelector("tbody tr")?.getBoundingClientRect().height || FALLBACK_ROW_HEIGHT_PX;
-  rowCapacity.value = Math.max(0, Math.floor((container.clientHeight - headerHeight) / rowHeight));
+  rowCapacity.value = Math.max(0, Math.floor((container.clientHeight - headerHeight) / ROW_HEIGHT_PX));
 }
 
-// Coalesces bursts of ResizeObserver callbacks (e.g. a window drag-resize fires many
-// times per second) down to once per animation frame, so the measurement work below
-// doesn't run more often than the browser can actually paint.
+// Coalesces bursts of layout-affecting changes - a window drag-resize fires many
+// ResizeObserver callbacks a second, and a big rows/loading change patches hundreds of
+// cells at once - down to one measurement per animation frame. Deferred past the current
+// task rather than measured inline (the previous approach, via nextTick): reading layout
+// synchronously right after a big DOM patch forces the browser to lay the whole grid out
+// immediately instead of on its own schedule, which is what made switching sort modes feel
+// sluggish. requestAnimationFrame alone is enough to run after that patch lands - it
+// can't fire until the microtask queue (where Vue's own DOM updates are flushed) drains.
 function scheduleRowCapacityUpdate() {
   if (measureScheduled) return;
   measureScheduled = true;
@@ -488,7 +515,7 @@ function scheduleRowCapacityUpdate() {
   });
 }
 
-watch([rows, () => props.loading], () => nextTick(updateRowCapacity));
+watch([rows, () => props.loading], scheduleRowCapacityUpdate);
 
 // At least one row even before the first measurement lands, so the skeleton never
 // flashes empty.

@@ -53,7 +53,8 @@
 
     <CalendarGrid
       ref="calendarGridRef"
-      :people="visiblePeople"
+      :people="filteredPeople"
+      :order="visibleOrder"
       :absences="absences"
       :holidays="holidays"
       :year="year"
@@ -274,18 +275,26 @@ function primaryRank(): (person: PersonDto) => number {
   return () => 0; // by name alone
 }
 
-const visiblePeople = computed(() => {
+// Filtering only, no sorting: CalendarGrid keys its (expensive, a year of cells per
+// person) content off this list, so switching sort mode - which only ever changes display
+// order, never membership - doesn't force it to rebuild that content from scratch. See
+// visibleOrder below for the cheap part that does change with sort mode.
+const filteredPeople = computed(() => people.value.filter((p) => matchesRegionFilter(p.homeCity)));
+
+// Just the ids, in display order. Recomputed on every sort mode change, but that's cheap:
+// sorting person records, not rebuilding anyone's cells.
+const visibleOrder = computed(() => {
   const rank = primaryRank();
-  return people.value
-    .filter((p) => matchesRegionFilter(p.homeCity))
-    .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)));
+  return [...filteredPeople.value]
+    .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)))
+    .map((p) => p.id);
 });
 
 // Reordering starts from the order you currently see, not the saved customOrder array
 // (that one can be empty or out of date for newer team members). That way a drag
 // always works, no matter which sort mode was active beforehand.
 function handleReorder(personId: number, targetPersonId: number) {
-  const order = visiblePeople.value.map((p) => p.id);
+  const order = [...visibleOrder.value];
   const fromIndex = order.indexOf(personId);
   const toIndex = order.indexOf(targetPersonId);
   if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
