@@ -1,171 +1,199 @@
 <template>
-  <div
-    ref="containerRef"
-    class="overflow-auto flex-1 min-h-0 border border-border rounded-12 shadow-card"
-    @mouseover="handleGridHover"
-    @mouseleave="clearHoverColumn"
-  >
-    <table
-      class="w-full table-fixed border-separate border-spacing-0"
-      :style="{ minWidth: tableMinWidth }"
+  <div class="flex gap-1.5 flex-1 min-h-0">
+    <button
+      type="button"
+      class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      aria-label="Scroll left"
+      :disabled="!canScrollLeft"
+      @click="scrollByPage(-1)"
     >
-      <colgroup>
-        <col style="width: 160px" />
-        <col v-for="day in days" :key="day.iso" />
-      </colgroup>
+      ‹
+    </button>
 
-      <thead ref="theadRef" class="sticky top-0 z-20">
-        <tr>
-          <th
-            scope="col"
-            rowspan="2"
-            class="sticky left-0 bg-background z-30 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1 text-xs font-semibold text-secondary text-center align-middle"
-          >
-            Team
-          </th>
+    <div
+      ref="containerRef"
+      class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-card"
+      @mouseover="handleGridHover"
+      @mouseleave="clearHoverColumn"
+      @scroll="updateScrollButtons"
+    >
+      <table
+        class="w-full table-fixed border-separate border-spacing-0"
+        :style="{ minWidth: tableMinWidth }"
+      >
+        <colgroup>
+          <col style="width: 160px" />
+          <col v-for="day in days" :key="day.iso" />
+        </colgroup>
 
-          <th
-            v-for="group in monthGroups"
-            :key="group.month"
-            scope="colgroup"
-            :colspan="group.span"
-            class="border-b border-l-2 border-border px-1 py-1 text-center text-xs font-semibold text-ink bg-surface"
-          >
-            {{ group.label }}
-          </th>
-        </tr>
-
-        <tr>
-          <th
-            v-for="day in days"
-            :key="day.iso"
-            scope="col"
-            class="border-b border-border px-1 py-1 text-center text-xs font-normal align-middle"
-            :class="[
-              dayHeaderClass(day),
-              columnSideBorderClass(day),
-              todayColumnClass(day.isToday, 'top'),
-              editableHoliday(day.iso) || canAddHoliday(day.iso)
-                ? 'cursor-pointer hover:opacity-70'
-                : '',
-            ]"
-            :title="headerTitle(day)"
-            :data-today="day.isToday || undefined"
-            :data-iso="day.iso"
-            @click="handleHeaderClick(day)"
-          >
-            <div class="font-semibold" :class="day.isToday ? 'text-today' : 'text-ink'">{{ day.dayNum }}</div>
-            <div class="text-[10px]" :class="day.isToday ? 'text-today font-semibold' : 'text-secondary'">
-              {{ day.weekdayLabel }}
-            </div>
-          </th>
-        </tr>
-      </thead>
-
-      <tbody v-if="loading">
-        <tr v-for="n in skeletonRowCount" :key="`skeleton-${n}`">
-          <th
-            scope="row"
-            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
-            :class="rowBackgroundClass(n - 1)"
-          >
-            <AppSkeleton class="h-4 w-20" />
-          </th>
-          <td
-            :colspan="days.length"
-            class="border-b border-border h-9 p-1.5 align-middle"
-            :class="rowBackgroundClass(n - 1)"
-          >
-            <AppSkeleton class="h-full w-full" />
-          </td>
-        </tr>
-      </tbody>
-
-      <tbody v-else>
-        <tr v-for="(row, rowIndex) in rows" :key="row.person.id" :data-person-id="row.person.id">
-          <th
-            scope="row"
-            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
-            :class="[row.background, mineRowClass(row.isMine, 'start')]"
-            draggable="true"
-            title="Drag to reorder"
-            @dragstart="handleDragStart(row.person.id)"
-            @dragover.prevent
-            @drop="handleDrop(row.person.id)"
-          >
-            <div class="flex items-center gap-2">
-              <span class="text-secondary/40 select-none text-xs leading-none shrink-0">⠿</span>
-              <span
-                class="truncate min-w-0"
-                :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'"
-                >{{ row.person.displayName ?? row.person.username }}</span
-              >
-              <span
-                v-if="row.regionCode"
-                class="ml-auto text-[9px] text-secondary shrink-0"
-                :title="row.regionLabel ?? undefined"
-                >{{ row.regionCode }}</span
-              >
-            </div>
-          </th>
-
-          <td
-            v-for="(cell, cellIndex) in row.cells"
-            :key="`${row.person.id}-${cell.day.iso}`"
-            class="relative h-9 p-0 align-middle border-b border-border"
-            :class="[
-              dayHeaderClass(cell.day, row.background),
-              columnSideBorderClass(cell.day),
-              todayColumnClass(
-                cell.day.isToday,
-                rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
-              ),
-              mineRowClass(row.isMine, cellIndex === row.cells.length - 1 ? 'end' : 'middle'),
-              row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
-            ]"
-            :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
-            :data-iso="cell.day.iso"
-            @click="handleCellClick(row.person, cell)"
-          >
-            <div
-              v-if="cell.absences.length > 0"
-              class="w-full h-full flex items-center justify-center text-[10px] font-bold"
-              :class="cell.painted ? 'bg-accent-solid text-on-accent' : ''"
-              :title="cellTitle(row.person, cell.absences)"
+        <thead ref="theadRef" class="sticky top-0 z-20">
+          <tr>
+            <th
+              scope="col"
+              rowspan="2"
+              class="sticky left-0 bg-background z-30 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1 text-xs font-semibold text-secondary text-center align-middle"
             >
-              {{
-                cell.isLabelCell
-                  ? cell.wholeDay
-                    ? absenceLabel(cell.wholeDay)
-                    : timeBasedCellLabel(cell.timeBased)
-                  : ""
-              }}
-            </div>
-          </td>
-        </tr>
+              Team
+            </th>
 
-        <!-- Padding rows so a small team's grid still fills the container instead of
+            <th
+              v-for="group in monthGroups"
+              :key="group.month"
+              scope="colgroup"
+              :colspan="group.span"
+              class="border-b border-l-2 border-border px-1 py-1 text-center text-xs font-semibold text-ink bg-surface"
+            >
+              {{ group.label }}
+            </th>
+          </tr>
+
+          <tr>
+            <th
+              v-for="day in days"
+              :key="day.iso"
+              scope="col"
+              class="border-b border-border px-1 py-1 text-center text-xs font-normal align-middle"
+              :class="[
+                dayHeaderClass(day),
+                columnSideBorderClass(day),
+                todayColumnClass(day.isToday, 'top'),
+                editableHoliday(day.iso) || canAddHoliday(day.iso)
+                  ? 'cursor-pointer hover:opacity-70'
+                  : '',
+              ]"
+              :title="headerTitle(day)"
+              :data-today="day.isToday || undefined"
+              :data-iso="day.iso"
+              @click="handleHeaderClick(day)"
+            >
+              <div class="font-semibold" :class="day.isToday ? 'text-today' : 'text-ink'">
+                {{ day.dayNum }}
+              </div>
+              <div
+                class="text-[10px]"
+                :class="day.isToday ? 'text-today font-semibold' : 'text-secondary'"
+              >
+                {{ day.weekdayLabel }}
+              </div>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody v-if="loading">
+          <tr v-for="n in skeletonRowCount" :key="`skeleton-${n}`">
+            <th
+              scope="row"
+              class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+              :class="rowBackgroundClass(n - 1)"
+            >
+              <AppSkeleton class="h-4 w-20" />
+            </th>
+            <td
+              :colspan="days.length"
+              class="border-b border-border h-9 p-1.5 align-middle"
+              :class="rowBackgroundClass(n - 1)"
+            >
+              <AppSkeleton class="h-full w-full" />
+            </td>
+          </tr>
+        </tbody>
+
+        <tbody v-else>
+          <tr v-for="(row, rowIndex) in rows" :key="row.person.id" :data-person-id="row.person.id">
+            <th
+              scope="row"
+              class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
+              :class="[row.background, mineRowClass(row.isMine, 'start')]"
+              draggable="true"
+              title="Drag to reorder"
+              @dragstart="handleDragStart(row.person.id)"
+              @dragover.prevent
+              @drop="handleDrop(row.person.id)"
+            >
+              <div class="flex items-center gap-2">
+                <span class="text-secondary/40 select-none text-xs leading-none shrink-0">⠿</span>
+                <span
+                  class="truncate min-w-0"
+                  :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'"
+                  >{{ row.person.displayName ?? row.person.username }}</span
+                >
+                <span
+                  v-if="row.regionCode"
+                  class="ml-auto text-[9px] text-secondary shrink-0"
+                  :title="row.regionLabel ?? undefined"
+                  >{{ row.regionCode }}</span
+                >
+              </div>
+            </th>
+
+            <td
+              v-for="(cell, cellIndex) in row.cells"
+              :key="`${row.person.id}-${cell.day.iso}`"
+              class="relative h-9 p-0 align-middle border-b border-border"
+              :class="[
+                dayHeaderClass(cell.day, row.background),
+                columnSideBorderClass(cell.day),
+                todayColumnClass(
+                  cell.day.isToday,
+                  rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
+                ),
+                mineRowClass(row.isMine, cellIndex === row.cells.length - 1 ? 'end' : 'middle'),
+                row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
+              ]"
+              :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
+              :data-iso="cell.day.iso"
+              @click="handleCellClick(row.person, cell)"
+            >
+              <div
+                v-if="cell.absences.length > 0"
+                class="w-full h-full flex items-center justify-center text-[10px] font-bold"
+                :class="cell.painted ? 'bg-accent-solid text-on-accent' : ''"
+                :title="cellTitle(row.person, cell.absences)"
+              >
+                {{
+                  cell.isLabelCell
+                    ? cell.wholeDay
+                      ? absenceLabel(cell.wholeDay)
+                      : timeBasedCellLabel(cell.timeBased)
+                    : ""
+                }}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Padding rows so a small team's grid still fills the container instead of
         leaving bare space below the last person, keeping the day columns' borders and
         shading running the full height. -->
-        <tr v-for="filler in fillerRows" :key="`filler-${filler.rowIndex}`" aria-hidden="true">
-          <th
-            scope="row"
-            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
-            :class="filler.background"
-          />
-          <td
-            v-for="day in days"
-            :key="day.iso"
-            class="h-9 p-0 align-middle border-b border-border"
-            :class="[
-              dayHeaderClass(day, filler.background),
-              columnSideBorderClass(day),
-              todayColumnClass(day.isToday, filler.isLast ? 'bottom' : 'middle'),
-            ]"
-          />
-        </tr>
-      </tbody>
-    </table>
+          <tr v-for="filler in fillerRows" :key="`filler-${filler.rowIndex}`" aria-hidden="true">
+            <th
+              scope="row"
+              class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+              :class="filler.background"
+            />
+            <td
+              v-for="day in days"
+              :key="day.iso"
+              class="h-9 p-0 align-middle border-b border-border"
+              :class="[
+                dayHeaderClass(day, filler.background),
+                columnSideBorderClass(day),
+                todayColumnClass(day.isToday, filler.isLast ? 'bottom' : 'middle'),
+              ]"
+            />
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button
+      type="button"
+      class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      aria-label="Scroll right"
+      :disabled="!canScrollRight"
+      @click="scrollByPage(1)"
+    >
+      ›
+    </button>
   </div>
 </template>
 
@@ -217,7 +245,10 @@ function isMyRow(person: PersonDto): boolean {
 // day stacking several time-based absences needs one unambiguous click target rather than
 // "click the one letter currently shown", so the cell is clickable for the viewer's own
 // row regardless of what it holds. Non-owned rows stay non-clickable (tooltip only).
-function handleCellClick(person: PersonDto, cell: { day: { iso: string }; absences: AbsenceDto[] }) {
+function handleCellClick(
+  person: PersonDto,
+  cell: { day: { iso: string }; absences: AbsenceDto[] },
+) {
   if (!isMyRow(person)) return;
   if (cell.absences.length === 0) emit("add-absence", cell.day.iso);
   else emit("edit-absence", cell.absences, cell.day.iso);
@@ -284,7 +315,9 @@ function setHoverColumn(iso: string | null) {
 function setHoverRow(personId: string | null) {
   const container = containerRef.value;
   if (container && hoveredPersonId) {
-    const row = container.querySelector<HTMLTableRowElement>(`tr[data-person-id="${hoveredPersonId}"]`);
+    const row = container.querySelector<HTMLTableRowElement>(
+      `tr[data-person-id="${hoveredPersonId}"]`,
+    );
     for (const cell of row?.children ?? []) cell.removeAttribute("data-row-hover");
   }
   if (container && personId) {
@@ -301,6 +334,7 @@ onMounted(() => {
   scrollToToday();
 
   updateRowCapacity();
+  updateScrollButtons();
   if (containerRef.value) {
     resizeObserver = new ResizeObserver(scheduleRowCapacityUpdate);
     resizeObserver.observe(containerRef.value);
@@ -321,6 +355,29 @@ async function scrollToToday() {
 }
 
 defineExpose({ scrollToToday });
+
+// Lets the arrow buttons stand in for the horizontal scrollbar, which a year's worth of
+// day columns pushes to the very bottom of the page - out of the way of the grid itself,
+// and easy to miss. Scrolls by nearly a full viewport width rather than a fixed number of
+// days, so a click always advances a useful amount regardless of window size; the 10%
+// overlap leaves a sliver of the previous view in frame as an anchor.
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+
+function updateScrollButtons() {
+  const container = containerRef.value;
+  if (!container) return;
+  canScrollLeft.value = container.scrollLeft > 0;
+  // A pixel of slack: without it, subpixel scroll positions can leave this true forever,
+  // a hair short of the max scrollLeft a browser actually reports at full scroll.
+  canScrollRight.value = container.scrollLeft < container.scrollWidth - container.clientWidth - 1;
+}
+
+function scrollByPage(direction: 1 | -1) {
+  const container = containerRef.value;
+  if (!container) return;
+  container.scrollBy({ left: direction * container.clientWidth * 0.9, behavior: "smooth" });
+}
 
 // region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland".
 // Comes from the people payload rather than config: it covers wherever the team is now,
@@ -440,7 +497,9 @@ function cellsForPerson(person: PersonDto) {
     const hasContent = wholeDay !== undefined || timeBased.length > 0;
     const painted = hasContent && isPaintDay(day);
     const isLabelCell =
-      wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : painted && timeBased.length > 0;
+      wholeDay !== undefined
+        ? painted && wholeDay !== previousPaintedAbsence
+        : painted && timeBased.length > 0;
     previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
 
     return { day, absences, wholeDay, timeBased, painted, isLabelCell };
@@ -476,7 +535,9 @@ const rows = computed(() =>
       // Code shown on the row itself (compact enough for the widened name column); the
       // full label is only surfaced on hover, via the title below.
       regionCode: person.homeCity,
-      regionLabel: person.homeCity ? (regionLabels.value.get(person.homeCity) ?? person.homeCity) : null,
+      regionLabel: person.homeCity
+        ? (regionLabels.value.get(person.homeCity) ?? person.homeCity)
+        : null,
     };
   }),
 );
@@ -495,7 +556,10 @@ function updateRowCapacity() {
   const container = containerRef.value;
   if (!container) return;
   const headerHeight = theadRef.value?.getBoundingClientRect().height ?? 0;
-  rowCapacity.value = Math.max(0, Math.floor((container.clientHeight - headerHeight) / ROW_HEIGHT_PX));
+  rowCapacity.value = Math.max(
+    0,
+    Math.floor((container.clientHeight - headerHeight) / ROW_HEIGHT_PX),
+  );
 }
 
 // Coalesces bursts of layout-affecting changes - a window drag-resize fires many
@@ -512,6 +576,10 @@ function scheduleRowCapacityUpdate() {
   requestAnimationFrame(() => {
     measureScheduled = false;
     updateRowCapacity();
+    // Piggybacks on the same measurement pass: a year change resizes the table (and so
+    // scrollWidth) without necessarily moving scrollLeft, which the scroll listener alone
+    // wouldn't catch.
+    updateScrollButtons();
   });
 }
 
@@ -565,8 +633,8 @@ function rowBackgroundClass(rowIndex: number): string {
 // neighbours. The overlay is absolutely positioned, so it costs no layout and still
 // paints above a filled-in absence block instead of being hidden underneath it.
 const TODAY_OUTLINE =
-  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none "
-  + "after:border-l-2 after:border-r-2 after:border-today after:bg-today/10";
+  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
+  "after:border-l-2 after:border-r-2 after:border-today after:bg-today/10";
 
 // The header row is always the top of the outline; only the last row has to close it off.
 function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): string {
@@ -582,8 +650,8 @@ function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): 
 // the row; left/right close off the two ends (the sticky name cell and the row's last day
 // column), same as today's column closing off with its own top/bottom.
 const MINE_ROW_OUTLINE =
-  "after:content-[''] after:absolute after:inset-0 after:pointer-events-none "
-  + "after:border-t-2 after:border-b-2 after:border-primary-text";
+  "after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
+  "after:border-t-2 after:border-b-2 after:border-primary-text";
 
 function mineRowClass(isMine: boolean, edge: "start" | "middle" | "end"): string {
   if (!isMine) return "";
@@ -675,7 +743,9 @@ function cellTitle(person: PersonDto, absences: AbsenceDto[]): string {
   const name = person.displayName ?? person.username;
   const lines = absences.map((a) => {
     const status = a.status === "Pending" ? " (pending approval)" : "";
-    const timeRange = a.startTime ? ` ${toDisplayTime(a.startTime)}–${toDisplayTime(a.endTime)}` : "";
+    const timeRange = a.startTime
+      ? ` ${toDisplayTime(a.startTime)}–${toDisplayTime(a.endTime)}`
+      : "";
     const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
     return `${name} — ${body}${status}`;
   });
