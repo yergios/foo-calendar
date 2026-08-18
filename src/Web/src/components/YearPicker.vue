@@ -1,8 +1,8 @@
 <template>
-  <div class="flex items-center gap-3">
+  <div class="flex items-center gap-1.5">
     <button
       type="button"
-      class="px-3 py-1 rounded-8 hover:bg-surface text-primary-text transition-colors"
+      class="w-7 h-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text transition-colors"
       aria-label="Previous year"
       @click="$emit('update:modelValue', modelValue - 1)"
     >
@@ -11,7 +11,7 @@
     <slot>{{ modelValue }}</slot>
     <button
       type="button"
-      class="px-3 py-1 rounded-8 hover:bg-surface text-primary-text transition-colors"
+      class="w-7 h-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text transition-colors"
       aria-label="Next year"
       @click="$emit('update:modelValue', modelValue + 1)"
     >

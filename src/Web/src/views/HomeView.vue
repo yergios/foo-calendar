@@ -6,7 +6,7 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="w-42 text-center bg-primary text-on-primary border border-transparent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+          class="h-9 w-42 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
           :disabled="!personStore.person"
           :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddAbsence()"
@@ -15,7 +15,7 @@
         </button>
         <button
           type="button"
-          class="w-42 text-center border border-accent text-accent rounded-8 px-3 py-2 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
+          class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="!personStore.person"
           :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddBankHoliday()"
@@ -30,30 +30,25 @@
           <select
             id="sortMode"
             v-model="sortMode"
-            class="border border-border-strong rounded-8 px-2 py-1 text-sm bg-background"
+            class="h-9 border border-border-strong rounded-8 px-2 text-sm bg-background"
           >
             <option value="name">Name</option>
             <option value="absentToday">Absent today, then name</option>
+            <option value="region">Region, then name</option>
             <option value="custom">Custom order</option>
           </select>
         </div>
 
         <div class="flex items-center gap-1.5">
           <label for="regionFilter" class="text-xs font-semibold text-secondary">Region</label>
-          <RegionSelect
-            id="regionFilter"
-            class="w-48"
-            :model-value="regionFilter || null"
-            :options="regionFilterOptions"
-            empty-label="All regions"
-            placeholder="All regions"
-            @update:model-value="(value) => (regionFilter = value ?? '')"
-          />
+          <RegionFilterSelect id="regionFilter" v-model="regionFilter" :groups="regionGroups" />
         </div>
 
-        <YearPicker v-model="year">
-          <h4>{{ year }}</h4>
-        </YearPicker>
+        <div class="h-9 flex items-center gap-1 border border-border-strong rounded-8 bg-background px-1">
+          <YearPicker v-model="year">
+            <span class="text-sm font-semibold px-1 tabular-nums">{{ year }}</span>
+          </YearPicker>
+        </div>
       </div>
     </header>
 
@@ -145,7 +140,7 @@ import { getCatalogHolidays } from "@/api/bankHolidays";
 import AddAbsenceModal from "@/components/AddAbsenceModal.vue";
 import AddBankHolidayModal from "@/components/AddBankHolidayModal.vue";
 import CalendarGrid from "@/components/CalendarGrid.vue";
-import RegionSelect from "@/components/RegionSelect.vue";
+import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
@@ -155,10 +150,9 @@ import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
-import type { RegionOption } from "@/types/config";
 import type { PersonDto } from "@/types/person";
 
-type SortMode = "name" | "absentToday" | "custom";
+type SortMode = "name" | "absentToday" | "region" | "custom";
 
 const { people, regionLabels } = storeToRefs(usePeopleStore());
 const personStore = usePersonStore();
@@ -168,16 +162,6 @@ const configStore = useConfigStore();
 // is filtering. Deriving it rather than reading a configured list is what lets someone
 // joining a new region show up here without a redeploy.
 const regionGroups = computed(() => groupRegions(regionLabels.value));
-
-// RegionSelect (see ProfileForm) takes a flat, scrollable list rather than a native
-// <optgroup> tree, same reason it exists there: a plain <select>'s dropdown can't be kept
-// to a sane height once a team spans more than a handful of regions.
-const regionFilterOptions = computed<RegionOption[]>(() =>
-  regionGroups.value.flatMap((country) => [
-    { code: country.code, label: `${country.label} (all)` },
-    ...country.regions,
-  ]),
-);
 
 const year = ref(new Date().getFullYear());
 const absences = ref<AbsenceDto[]>([]);
@@ -192,11 +176,14 @@ const dayAbsences = ref<AbsenceDto[]>([]);
 const editingHoliday = ref<BankHolidayDto | null>(null);
 
 const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "name");
-const regionFilter = ref(readCache<string>("teamRegionFilter") ?? "");
+// Array now, not a single code: coerced defensively since an older cached value here
+// (from before multi-select) was a plain string, not an array.
+const cachedRegionFilter = readCache<string[]>("teamRegionFilter");
+const regionFilter = ref<string[]>(Array.isArray(cachedRegionFilter) ? cachedRegionFilter : []);
 const customOrder = ref<number[]>(readCache<number[]>("teamCustomOrder") ?? []);
 
 watch(sortMode, (mode) => writeCache("teamSortMode", mode));
-watch(regionFilter, (region) => writeCache("teamRegionFilter", region));
+watch(regionFilter, (regions) => writeCache("teamRegionFilter", regions));
 
 const yearRange = computed(() => {
   const from = new Date(year.value, 0, 1);
@@ -234,12 +221,20 @@ function personLabel(person: PersonDto): string {
   return (person.displayName ?? person.username).toLowerCase();
 }
 
-// A region filter matches its own code exactly, or any subdivision under it. So if
-// you pick a country like "CH", you also get people set to "CH-ZH", "CH-BE", etc.
+// A selected code matches its own region exactly, or any subdivision under it. So if
+// you pick a country like "CH", you also get people set to "CH-ZH", "CH-BE", etc. No
+// codes selected means no filtering at all, and any one selected code matching is enough.
 function matchesRegionFilter(homeCity: string | null): boolean {
-  if (!regionFilter.value) return true;
+  if (regionFilter.value.length === 0) return true;
   if (!homeCity) return false;
-  return homeCity === regionFilter.value || homeCity.startsWith(`${regionFilter.value}-`);
+  return regionFilter.value.some((code) => homeCity === code || homeCity.startsWith(`${code}-`));
+}
+
+// Falls back to the bare code so someone whose region isn't in the team's current
+// catalog (yet, or anymore) still sorts somewhere sensible instead of crashing the
+// comparator.
+function regionLabel(code: string): string {
+  return regionLabels.value[code] ?? code;
 }
 
 // Every sort mode falls back to name, so they only differ in the primary rank they give
@@ -257,6 +252,19 @@ function primaryRank(): (person: PersonDto) => number {
       absences.value.filter((a) => a.startDate <= iso && a.endDate >= iso).map((a) => a.personId),
     );
     return (p) => (absent.has(p.id) ? 0 : 1);
+  }
+
+  if (sortMode.value === "region") {
+    // Ranked by each region's own label rather than its code, so the order reads
+    // alphabetically the way it's displayed, not by ISO code. Nobody's homeCity sorts
+    // last, after every region that has one.
+    const codes = [...new Set(people.value.map((p) => p.homeCity))].sort((a, b) => {
+      if (!a) return 1;
+      if (!b) return -1;
+      return regionLabel(a).localeCompare(regionLabel(b));
+    });
+    const order = new Map(codes.map((code, index) => [code, index]));
+    return (p) => order.get(p.homeCity) ?? Number.MAX_SAFE_INTEGER;
   }
 
   return () => 0; // by name alone
