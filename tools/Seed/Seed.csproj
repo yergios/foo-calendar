@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<IsPackable>false</IsPackable>
+		<RootNamespace>Seed</RootNamespace>
+		<!-- Throwaway dev script, not shipped product code: skip the full-strength
+		     analyzer set (e.g. "Random is insecure") that makes sense for the API. -->
+		<EnableNETAnalyzers>false</EnableNETAnalyzers>
+		<RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Api\Api.csproj" />
+	</ItemGroup>
+
+</Project>
