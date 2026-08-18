@@ -63,14 +63,19 @@
       </thead>
 
       <tbody v-if="loading">
-        <tr v-for="n in 5" :key="`skeleton-${n}`">
+        <tr v-for="n in skeletonRowCount" :key="`skeleton-${n}`">
           <th
             scope="row"
-            class="sticky left-0 bg-background z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+            class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
+            :class="rowBackgroundClass(n - 1)"
           >
             <AppSkeleton class="h-4 w-20" />
           </th>
-          <td :colspan="days.length" class="border-b border-border h-9 p-1.5 align-middle">
+          <td
+            :colspan="days.length"
+            class="border-b border-border h-9 p-1.5 align-middle"
+            :class="rowBackgroundClass(n - 1)"
+          >
             <AppSkeleton class="h-full w-full" />
           </td>
         </tr>
@@ -283,9 +288,9 @@ onMounted(() => {
   });
   scrollToToday();
 
-  updateFillerRowCount();
+  updateRowCapacity();
   if (containerRef.value) {
-    resizeObserver = new ResizeObserver(scheduleFillerRowUpdate);
+    resizeObserver = new ResizeObserver(scheduleRowCapacityUpdate);
     resizeObserver.observe(containerRef.value);
   }
 });
@@ -435,38 +440,44 @@ const rows = computed(() =>
   }),
 );
 
-// Keeps the grid's body filled to the bottom of the container even when a team has
-// too few people to reach it, rather than leaving bare space below the last row.
-// Recomputed from actual measured pixels (not a fixed guess) since the container's
-// height now comes from flex layout and varies with viewport and header content.
+// How many rows fit in the visible container, recomputed from actual measured pixels
+// (not a fixed guess) since the container's height comes from flex layout and varies
+// with viewport and header content. Backs both the filler rows below (padding a small
+// team's grid to the bottom of the container) and the loading skeleton's row count
+// (filling the same space, since a team's size isn't known yet while it loads).
 const FALLBACK_ROW_HEIGHT_PX = 36; // h-9, used only before any row has rendered to measure
-const fillerRowCount = ref(0);
+const rowCapacity = ref(0);
 let resizeObserver: ResizeObserver | null = null;
 let measureScheduled = false;
 
-function updateFillerRowCount() {
+function updateRowCapacity() {
   const container = containerRef.value;
   if (!container) return;
   const headerHeight = theadRef.value?.getBoundingClientRect().height ?? 0;
   const rowHeight =
     container.querySelector("tbody tr")?.getBoundingClientRect().height || FALLBACK_ROW_HEIGHT_PX;
-  const availableRows = Math.floor((container.clientHeight - headerHeight) / rowHeight);
-  fillerRowCount.value = Math.max(0, availableRows - rows.value.length);
+  rowCapacity.value = Math.max(0, Math.floor((container.clientHeight - headerHeight) / rowHeight));
 }
 
 // Coalesces bursts of ResizeObserver callbacks (e.g. a window drag-resize fires many
 // times per second) down to once per animation frame, so the measurement work below
 // doesn't run more often than the browser can actually paint.
-function scheduleFillerRowUpdate() {
+function scheduleRowCapacityUpdate() {
   if (measureScheduled) return;
   measureScheduled = true;
   requestAnimationFrame(() => {
     measureScheduled = false;
-    updateFillerRowCount();
+    updateRowCapacity();
   });
 }
 
-watch([rows, () => props.loading], () => nextTick(updateFillerRowCount));
+watch([rows, () => props.loading], () => nextTick(updateRowCapacity));
+
+// At least one row even before the first measurement lands, so the skeleton never
+// flashes empty.
+const skeletonRowCount = computed(() => Math.max(1, rowCapacity.value));
+
+const fillerRowCount = computed(() => Math.max(0, rowCapacity.value - rows.value.length));
 
 // Precomputed once per filler row (not re-derived per cell) for the same reason as
 // `rows.background` above: index math and the "is this the closing row" check only

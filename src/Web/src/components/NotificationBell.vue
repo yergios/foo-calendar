@@ -3,7 +3,7 @@
     <button
       type="button"
       class="relative w-9 h-9 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 transition-colors"
-      title="Notifications"
+      :title="unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'"
       @click="toggle"
     >
       <svg

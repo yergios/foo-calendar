@@ -40,19 +40,15 @@
 
         <div class="flex items-center gap-1.5">
           <label for="regionFilter" class="text-xs font-semibold text-secondary">Region</label>
-          <select
+          <RegionSelect
             id="regionFilter"
-            v-model="regionFilter"
-            class="border border-border-strong rounded-8 px-2 py-1 text-sm bg-background"
-          >
-            <option value="">All regions</option>
-            <optgroup v-for="country in regionGroups" :key="country.code" :label="country.label">
-              <option :value="country.code">{{ country.label }} (all)</option>
-              <option v-for="opt in country.regions" :key="opt.code" :value="opt.code">
-                {{ opt.label }}
-              </option>
-            </optgroup>
-          </select>
+            class="w-48"
+            :model-value="regionFilter || null"
+            :options="regionFilterOptions"
+            empty-label="All regions"
+            placeholder="All regions"
+            @update:model-value="(value) => (regionFilter = value ?? '')"
+          />
         </div>
 
         <YearPicker v-model="year">
@@ -149,6 +145,7 @@ import { getCatalogHolidays } from "@/api/bankHolidays";
 import AddAbsenceModal from "@/components/AddAbsenceModal.vue";
 import AddBankHolidayModal from "@/components/AddBankHolidayModal.vue";
 import CalendarGrid from "@/components/CalendarGrid.vue";
+import RegionSelect from "@/components/RegionSelect.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
@@ -158,6 +155,7 @@ import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
+import type { RegionOption } from "@/types/config";
 import type { PersonDto } from "@/types/person";
 
 type SortMode = "name" | "absentToday" | "custom";
@@ -170,6 +168,16 @@ const configStore = useConfigStore();
 // is filtering. Deriving it rather than reading a configured list is what lets someone
 // joining a new region show up here without a redeploy.
 const regionGroups = computed(() => groupRegions(regionLabels.value));
+
+// RegionSelect (see ProfileForm) takes a flat, scrollable list rather than a native
+// <optgroup> tree, same reason it exists there: a plain <select>'s dropdown can't be kept
+// to a sane height once a team spans more than a handful of regions.
+const regionFilterOptions = computed<RegionOption[]>(() =>
+  regionGroups.value.flatMap((country) => [
+    { code: country.code, label: `${country.label} (all)` },
+    ...country.regions,
+  ]),
+);
 
 const year = ref(new Date().getFullYear());
 const absences = ref<AbsenceDto[]>([]);
