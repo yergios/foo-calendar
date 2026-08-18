@@ -15,6 +15,7 @@
 - The profile page offers every country and region the holiday source knows about, rather than a fixed list. Both fields are searchable, by name or by code, and ignore accents.
 - Region and country names come from a bundled CLDR name table, so a region no longer has to be named by hand to be readable.
 - The admin sync panel can re-run a single region, which is what a region reported as failed needs.
+- A new `Appointment` absence type, and an `Other` absence may now optionally be time-based too: a single day with a start and end time instead of a whole-day date range. Any number of time-based absences can share a day; a whole-day absence still takes the day exclusively.
 
 ### Changed
 
@@ -24,7 +25,7 @@
 - Manually added bank holidays stay everyone's to maintain, deliberately. `HolidaysSync` gates only the hand-triggered sync, which calls out to the holiday source and writes in bulk.
 - `/healthchecks/detail` now requires `AuditRead` rather than the admin permission.
 - **Breaking:** `Team:HomeRegion` is now required. It is the team's own locality — always synced, never removed.
-- `RegionCatalog` is no longer what decides which regions exist. It is now an optional set of display-name overrides, and may be left out entirely.
+- **Breaking:** `Team:HomeTimeZone` is now required, an IANA timezone id (e.g. `Europe/Zurich`). Every time-based absence's start/end time is wall-clock time in this one zone, for every viewer.
 - The calendar's region filter and the manual bank-holiday form now offer only the regions the team occupies. Adding a holiday for anywhere else is rejected.
 - `POST /api/admin/bank-holidays/sync` reports `syncedRegions`/`failedRegions` instead of countries, and takes an optional `region`.
 

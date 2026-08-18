@@ -24,7 +24,7 @@ public sealed class PersonServiceTests : SqliteTestBase
             Db,
             Options.Create<PersonColorPaletteOptions>([]),
             teamRegions,
-            new RegionLabels(Options.Create<RegionCatalogOptions>([]), NullLogger<RegionLabels>.Instance),
+            new RegionLabels(NullLogger<RegionLabels>.Instance),
             audit);
     }
 

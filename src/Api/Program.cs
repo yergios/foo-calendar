@@ -35,12 +35,6 @@ var services = builder.Services;
 
 // ---- Options --------------------------------------------------------------
 
-// No longer the source of truth for what is selectable, so an empty one is valid: it is
-// only overriding display names now, see RegionCatalogOptions.
-services.AddOptions<RegionCatalogOptions>()
-    .Bind(config.GetSection(RegionCatalogOptions.SectionName))
-    .ValidateOnStart();
-
 services.AddOptions<TeamOptions>()
     .Bind(config.GetSection(TeamOptions.SectionName))
     .Validate(o => !string.IsNullOrWhiteSpace(o.HomeRegion),

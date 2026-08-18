@@ -19,8 +19,9 @@
         </span>
         <button
           type="button"
-          class="text-error shrink-0 px-1.5 text-lg leading-none hover:opacity-70"
+          class="text-error shrink-0 px-1.5 text-lg leading-none hover:opacity-70 disabled:opacity-40"
           title="Delete"
+          :disabled="deletingId !== null"
           @click.stop="deleteFromList(a)"
         >
           ×
@@ -193,7 +194,7 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
 import AppModal from "@/components/AppModal.vue";
-import { formatLongDate, toApiTime, today } from "@/lib/dates";
+import { formatLongDate, toApiTime, toDisplayTime, today } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import type { AbsenceDto, AbsenceType } from "@/types/absence";
 
@@ -269,6 +270,10 @@ const apptEndTime = ref("");
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const deleting = ref(false);
+// The list view's own delete, distinct from `deleting` above: an id rather than a bool
+// since it must identify which row is disabled, and null rather than a set since only one
+// row can ever be in flight (every button but the one clicked is already disabled by it).
+const deletingId = ref<number | null>(null);
 
 // Whether the day/time fields (rather than the start/end date fields) are the ones in
 // play right now: always for Appointment, and for Other only once the checkbox is on.
@@ -286,8 +291,8 @@ function seedFormFrom(absence: AbsenceDto | null) {
   otherIsTimeBased.value = absence?.type === "Other" && !!absence.startTime;
   note.value = absence?.note ?? "";
   apptDate.value = absence?.startDate ?? day;
-  apptStartTime.value = absence?.startTime?.slice(0, 5) ?? "";
-  apptEndTime.value = absence?.endTime?.slice(0, 5) ?? "";
+  apptStartTime.value = toDisplayTime(absence?.startTime);
+  apptEndTime.value = toDisplayTime(absence?.endTime);
   error.value = null;
 }
 
@@ -306,13 +311,26 @@ function openForAdd() {
 }
 
 function formatTimeRange(absence: AbsenceDto): string {
-  return `${absence.startTime?.slice(0, 5) ?? ""}–${absence.endTime?.slice(0, 5) ?? ""}`;
+  return `${toDisplayTime(absence.startTime)}–${toDisplayTime(absence.endTime)}`;
 }
 
 // Pushing start past the current end date drags end along with it. Otherwise you'd
 // end up with an invalid (end < start) range you'd have to notice and fix yourself.
 watch(startDate, (newStart) => {
   if (endDate.value < newStart) endDate.value = newStart;
+});
+
+// The whole-day and time-based fields are separate refs (see seedFormFrom), so switching
+// Type - or toggling "Specific time" on Other - would otherwise strand whatever day the
+// user already entered in the fields that just went hidden. Carrying it across keeps the
+// day the user picked instead of silently reverting to whatever seedFormFrom started with.
+watch(showTimeFields, (nowTimeBased) => {
+  if (nowTimeBased) {
+    apptDate.value = startDate.value;
+  } else {
+    startDate.value = apptDate.value;
+    endDate.value = apptDate.value;
+  }
 });
 
 const canSubmit = computed(() => {
@@ -385,7 +403,10 @@ async function handleDelete() {
 // staying open with just that row removed: simpler, and still one click to "quickly
 // delete" any one of a day's time-based absences.
 async function deleteFromList(absence: AbsenceDto) {
+  if (deletingId.value !== null) return;
+
   error.value = null;
+  deletingId.value = absence.id;
   try {
     await deleteAbsence(absence.id);
     emit("deleted", absence.id);
@@ -393,6 +414,8 @@ async function deleteFromList(absence: AbsenceDto) {
     console.error("ERROR => Failed to delete absence:", err);
     error.value =
       err instanceof Error ? err.message : "Failed to delete absence. Please try again.";
+  } finally {
+    deletingId.value = null;
   }
 }
 </script>

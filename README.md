@@ -123,7 +123,7 @@ ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
 
-The same applies to the `Team`, `RegionCatalog` and `PersonColorPalette` sections below, and to `Telemetry`.
+The same applies to the `Team` and `PersonColorPalette` sections below, and to `Telemetry`.
 
 To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
 
@@ -248,18 +248,8 @@ API rejects a manual holiday for anywhere else.
 
 **Region names** come from a bundled ISO 3166-1/3166-2 name table
 (`src/Api/Data/regions.json`, derived from [CLDR](https://cldr.unicode.org/), see
-`NOTICE.txt`), because the Nager API returns subdivision *codes* with no names attached. To
-override a name — CLDR calls `ES-MD` "Madrid Autonomous Community" — or to name a code the
-table is missing, use the optional `RegionCatalog` section:
-
-```json
-"RegionCatalog": [
-  { "Code": "ES", "Name": "Spain", "Regions": [{ "Code": "ES-MD", "Label": "Madrid" }] }
-]
-```
-
-It only overrides display names now; leaving it out entirely is fine. Anything with no entry
-in either place falls back to showing the raw code.
+`NOTICE.txt`), because the Nager API returns subdivision *codes* with no names attached. A
+code missing from that table falls back to showing the raw code.
 
 ### Where holidays come from
 

@@ -1,12 +1,12 @@
 ﻿using System.Text.RegularExpressions;
 
-using Api.Configuration;
 using Api.Dtos;
 using Api.Interfaces;
 using Api.Services;
 
 namespace Api.Endpoints;
 
+public sealed record RegionOption(string Code, string Label);
 public sealed record AvailableRegionsResponse(List<RegionOption> Regions);
 
 /// <summary>What someone could pick on their profile, which is everything the holiday

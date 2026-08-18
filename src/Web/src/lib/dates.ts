@@ -25,6 +25,12 @@ export function toApiTime(hhmm: string): string {
   return hhmm.length === 5 ? `${hhmm}:00` : hhmm;
 }
 
+/** The reverse of toApiTime: the API's "HH:mm:ss" trimmed to "HH:mm" for display, or "" for
+ * a whole-day absence's null start/end time. */
+export function toDisplayTime(time: string | null | undefined): string {
+  return time?.slice(0, 5) ?? "";
+}
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -42,7 +48,7 @@ function ordinal(n: number): string {
   }
 }
 
-/** A locale-independent long date, e.g. "Monday 8th of August, 2026" — deliberately not
+/** A locale-independent long date, e.g. "Monday 8th of August, 2026". Deliberately not
  * Intl.DateTimeFormat, whose exact wording and even weekday/month spelling depend on the
  * browser's locale and ICU data. Scoped to the time-based absence UI; the calendar grid's
  * own month/weekday headers keep using Intl.DateTimeFormat(navigator.language, ...). */

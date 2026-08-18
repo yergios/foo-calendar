@@ -167,7 +167,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import AppSkeleton from "@/components/AppSkeleton.vue";
 import { textColorFor } from "@/lib/contrastText";
-import { parse, toIso } from "@/lib/dates";
+import { parse, toDisplayTime, toIso } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
@@ -385,8 +385,9 @@ function isPaintDay(day: { iso: string; isWeekend: boolean }): boolean {
 // day of each contiguous run of *painted* days for the same wholeDay absence, so a 5-day
 // vacation shows its "V" once instead of once per day (a weekend or holiday in the middle
 // breaks the run, same as before). A time-based absence never joins a multi-day run -
-// each is inherently single-day, so a cell holding one always shows its own label
-// independently of its neighbors.
+// each is inherently single-day, so a cell holding one always shows its own label on any
+// painted day, independently of its neighbors, and none on an unpainted one, same as a
+// wholeDay absence.
 const rows = computed(() =>
   props.people.map((person, rowIndex) => {
     const byDate = absenceMap.value.get(person.id);
@@ -400,7 +401,7 @@ const rows = computed(() =>
       const hasContent = wholeDay !== undefined || timeBased.length > 0;
       const painted = hasContent && isPaintDay(day);
       const isLabelCell =
-        wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : timeBased.length > 0;
+        wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : painted && timeBased.length > 0;
       previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
 
       return { day, absences, wholeDay, timeBased, painted, isLabelCell };
@@ -568,7 +569,7 @@ function cellTitle(person: PersonDto, absences: AbsenceDto[]): string {
   const name = person.displayName ?? person.username;
   const lines = absences.map((a) => {
     const status = a.status === "Pending" ? " (pending approval)" : "";
-    const timeRange = a.startTime ? ` ${a.startTime.slice(0, 5)}–${a.endTime?.slice(0, 5)}` : "";
+    const timeRange = a.startTime ? ` ${toDisplayTime(a.startTime)}–${toDisplayTime(a.endTime)}` : "";
     const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
     return `${name} — ${body}${status}`;
   });

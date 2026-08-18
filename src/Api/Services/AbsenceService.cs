@@ -78,8 +78,12 @@ public sealed class AbsenceService(
     public async Task<AbsencesResponse> GetOverlappingAsync(
         DateOnly from, DateOnly to, int? viewerPersonId, CancellationToken ct = default)
     {
+        // ThenBy Id: a plain OrderBy(StartDate) leaves same-day rows in no guaranteed
+        // order, which the calendar grid depends on being stable (it picks the first
+        // same-day time-based absence's type to letter a stacked cell).
         var absences = await VisibleOverlapping(db.Absences, from, to)
             .OrderBy(a => a.StartDate)
+            .ThenBy(a => a.Id)
             .ToListAsync(ct);
 
         // Notes come back only on the viewer's own rows. Filtered here rather than in the
