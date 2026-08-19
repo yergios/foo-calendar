@@ -15,7 +15,9 @@
 - The profile page offers every country and region the holiday source knows about, rather than a fixed list. Both fields are searchable, by name or by code, and ignore accents.
 - Region and country names come from a bundled CLDR name table, so a region no longer has to be named by hand to be readable.
 - The admin sync panel can re-run a single region, which is what a region reported as failed needs.
-- A new `Appointment` absence type, and an `Other` absence may now optionally be time-based too: a single day with a start and end time instead of a whole-day date range. Any number of time-based absences can share a day; a whole-day absence still takes the day exclusively.
+- A new `Appointment` absence type, and an `Other` absence may now optionally be time-based too: a single day with a start and end time instead of a whole-day date range. Any number of time-based absences can share a day; a whole-day absence still takes the day exclusively. Every displayed time is labeled with the team's timezone.
+- A "Who's off today" button on the home page lists everyone out today: approved personal absences plus anyone whose home region has a bank holiday, without listing a person twice for both.
+- Arrow buttons alongside the calendar grid page it horizontally by about a viewport's width; holding one down ramps into a continuous scroll instead of repeated clicking.
 
 ### Changed
 
@@ -32,11 +34,3 @@
 ### Removed
 
 - When the last person in a region leaves or is deleted, that region's bank holidays are deleted, **including manually added ones**. A country's nationwide holidays go only once nobody is left in any of its regions. The home region is exempt.
-
----
-
-## v1.0.0 — 2026-07-28
-
-### Added
-
-- Initial release.
