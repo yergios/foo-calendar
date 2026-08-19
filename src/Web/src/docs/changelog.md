@@ -6,7 +6,8 @@
 
 ### Added
 
-- Per-job permissions instead of a single admin role: `PeopleManage`, `ReportsRead`, `HolidaysSync`, and `AuditRead`, each configured under `Auth:Permissions` (the claim values that grant it) and enforced by a policy of the same name. The admin page shows only the sections you hold, and the nav item is hidden from someone who holds none of them. The app refuses to start if a permission is left with no values.
+- Per-job permissions instead of a single admin role: `PeopleManage`, `ReportsRead`, `HolidaysSync`, and `AuditRead`, each configured under `Auth:Permissions` (the claim values that grant it) and enforced by a policy of the same name. The app refuses to start if a permission is left with no values.
+- The admin area is split into its own page per section — People, Bank holidays, Absence approvals, Audit log — reachable from a left sidebar, each gated by its own permission(s). The sidebar, and the nav item leading to it, shows only what you hold; someone who holds none of them never reaches `/admin` at all.
 - An audit log, readable at `/admin` with `AuditRead` or from `GET /api/admin/audit`. It records profile creates/updates/deletes, bulk imports, deleted absences, every hand edit to a manual bank holiday, and hand-triggered syncs — with who did it and when. Append-only, and a person's entries outlive their profile. `/healthchecks/detail` also requires `AuditRead`.
 - `Auth:DevUser:GrantAllPermissions` (default on) holds every configured permission in local development, so the dev bypass never drifts as permissions are added. Set it false to browse as a plain member.
 - The API describes itself as OpenAPI at `/openapi/v1.json` and serves a [Scalar](https://scalar.com/) reference over it at `/scalar`, with a bearer scheme so calls can be made from the page. On by default in development, `ApiDocs:Enabled` elsewhere — both routes are anonymous, so it is off by default.
