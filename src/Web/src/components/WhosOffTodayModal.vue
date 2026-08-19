@@ -1,6 +1,8 @@
 <template>
   <AppModal title="Who's off today" size="md" @close="$emit('close')">
-    <p class="text-xs text-secondary -mt-1 mb-3">{{ todayLabel }}</p>
+    <p class="text-xs text-secondary -mt-1 mb-3">
+      {{ todayLabel }}<span v-if="configStore.config"> ({{ configStore.config.homeTimeZone }})</span>
+    </p>
 
     <p v-if="loading" class="text-sm text-secondary py-2">Loading…</p>
     <p v-else-if="error" class="text-sm text-error">{{ error }}</p>
@@ -34,12 +36,24 @@ import { getAbsences } from "@/api/absences";
 import { getCatalogHolidays } from "@/api/bankHolidays";
 import AppModal from "@/components/AppModal.vue";
 import { formatLongDate, toDisplayTime, today } from "@/lib/dates";
+import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto, type AbsenceType } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 import type { PersonDto } from "@/types/person";
 
 defineEmits<{ close: [] }>();
+
+const configStore = useConfigStore();
+
+// Same reasoning as AddAbsenceModal's own onMounted: nothing guarantees another view
+// already loaded this before the modal opens, and loadOnce() dedupes so it's never a
+// second round trip when one did.
+onMounted(() => {
+  configStore.loadOnce().catch((error: unknown) => {
+    console.error("ERROR => Failed to load app config:", error);
+  });
+});
 
 // The whole team, regardless of the home page's own region filter: "who's off today" is a
 // global question, not scoped to whatever the grid currently happens to be narrowed to.

@@ -809,6 +809,10 @@ function cellTitle(person: PersonDto, absences: AbsenceDto[]): string {
     const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
     return `${name} — ${body}${status}`;
   });
+  // Once at the end rather than repeated per line: every time here is in the same zone,
+  // same as the add/edit form's own (Europe/Zurich) labels.
+  if (absences.some((a) => a.startTime) && configStore.config)
+    lines.push(`(times in ${configStore.config.homeTimeZone})`);
   if (isMyRow(person)) lines.push("(click to edit)");
   return lines.join("\n");
 }

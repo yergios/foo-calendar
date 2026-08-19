@@ -3,6 +3,9 @@
     <div v-if="view === 'list'" class="flex flex-col gap-2">
       <p class="text-sm text-secondary mb-1">
         {{ formatLongDate(props.dayAbsences[0].startDate) }}
+        <span v-if="configStore.config" class="text-secondary/70"
+          >({{ configStore.config.homeTimeZone }})</span
+        >
       </p>
 
       <div
