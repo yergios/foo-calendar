@@ -8,6 +8,8 @@ public static class AuditActions
     public const string PersonUpdated = "person.updated";
     public const string PersonDeleted = "person.deleted";
     public const string PeopleImported = "people.imported";
+    public const string AbsenceCreated = "absence.created";
+    public const string AbsenceUpdated = "absence.updated";
     public const string AbsenceDeleted = "absence.deleted";
     public const string AbsenceApproved = "absence.approved";
     public const string AbsenceRejected = "absence.rejected";

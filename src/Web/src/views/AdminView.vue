@@ -328,6 +328,7 @@ import {
 import { useAuthStore } from "@/auth";
 import RegionPicker from "@/components/RegionPicker.vue";
 import YearPicker from "@/components/YearPicker.vue";
+import { useStaleGuard } from "@/composables/useStaleGuard";
 import { groupRegions } from "@/lib/regionGroups";
 import { usePeopleStore } from "@/stores/people";
 import type { AbsenceDto } from "@/types/absence";
@@ -389,15 +390,19 @@ const statsYear = ref(new Date().getFullYear());
 const statsByPerson = ref<Map<number, PersonAbsenceStatsDto>>(new Map());
 const statsLoading = ref(true);
 
+const isLatestStatsLoad = useStaleGuard();
+
 async function loadStats() {
+  const isCurrent = isLatestStatsLoad();
   statsLoading.value = true;
   try {
     const { stats } = await getAllPeopleStats(statsYear.value);
+    if (!isCurrent()) return;
     statsByPerson.value = new Map(stats.map((s) => [s.personId, s]));
   } catch (error: unknown) {
     console.error("ERROR => Failed to load people stats:", error);
   } finally {
-    statsLoading.value = false;
+    if (isCurrent()) statsLoading.value = false;
   }
 }
 

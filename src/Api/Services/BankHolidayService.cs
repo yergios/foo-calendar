@@ -1,3 +1,5 @@
+using System.Data;
+
 using Api.Data;
 using Api.Data.Models;
 using Api.Dtos;
@@ -231,7 +233,6 @@ public sealed class BankHolidayService(
         CancellationToken ct = default)
     {
         EnsureTracked(trackedRegions, request.Region);
-        await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: null, ct);
 
         var holiday = new BankHoliday
         {
@@ -244,8 +245,17 @@ public sealed class BankHolidayService(
             CreatedBy = actorUsername,
         };
 
-        db.BankHolidays.Add(holiday);
-        await db.SaveChangesAsync(ct);
+        // Serializable: same reasoning as AbsenceService's overlap checks. SQLite takes the
+        // write lock the instant this transaction opens, so a second, colliding add just
+        // waits for this one to commit before running its own collision check.
+        await using (var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
+        {
+            await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: null, ct);
+
+            db.BankHolidays.Add(holiday);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
 
         await audit.RecordAsync(AuditActions.BankHolidayCreated, holiday.Name, Describe(holiday), ct);
 
@@ -266,17 +276,24 @@ public sealed class BankHolidayService(
             throw new InvalidOperationException("Only manually added holidays can be edited.");
 
         EnsureTracked(trackedRegions, request.Region);
-        await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: id, ct);
 
         var before = $"{holiday.Name} ({Describe(holiday)})";
 
-        holiday.Region = request.Region;
-        holiday.Date = request.Date;
-        holiday.Name = request.Name;
-        holiday.IsRecurringAnnually = request.IsRecurringAnnually;
-        holiday.UpdatedAt = DateTime.UtcNow;
-        holiday.UpdatedBy = actorUsername;
-        await db.SaveChangesAsync(ct);
+        // Serializable, same reasoning as AddManualAsync: guards the collision check
+        // against a concurrent add/edit landing a colliding holiday before this commits.
+        await using (var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
+        {
+            await EnsureNoCollisionAsync(request.Region, request.Date, request.IsRecurringAnnually, excludeId: id, ct);
+
+            holiday.Region = request.Region;
+            holiday.Date = request.Date;
+            holiday.Name = request.Name;
+            holiday.IsRecurringAnnually = request.IsRecurringAnnually;
+            holiday.UpdatedAt = DateTime.UtcNow;
+            holiday.UpdatedBy = actorUsername;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
 
         await audit.RecordAsync(
             AuditActions.BankHolidayUpdated,

@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 
+import { useFloatingPanel } from "@/composables/useFloatingPanel";
 import type { RegionOption } from "@/types/config";
 
 /**
@@ -102,7 +103,12 @@ const list = ref<HTMLElement | null>(null);
 const open = ref(false);
 const query = ref("");
 const active = ref(0);
-const panel = ref<Record<string, string>>({});
+const {
+  style: panel,
+  reposition,
+  track: trackPanel,
+  untrack: untrackPanel,
+} = useFloatingPanel(root, { flipThreshold: 176, maxHeight: 288 });
 
 const choices = computed<Choice[]>(() => [
   { value: null, label: props.emptyLabel },
@@ -140,10 +146,7 @@ function show() {
     matches.value.findIndex((c) => c.value === props.modelValue),
   );
   open.value = true;
-  reposition();
-  // Capture phase: the modal body scrolls, not the window, and that scroll doesn't bubble.
-  window.addEventListener("scroll", reposition, true);
-  window.addEventListener("resize", reposition);
+  trackPanel();
   document.addEventListener("mousedown", onPointerDown);
   scrollActiveIntoView();
 }
@@ -152,8 +155,7 @@ function hide() {
   if (!open.value) return;
   open.value = false;
   query.value = "";
-  window.removeEventListener("scroll", reposition, true);
-  window.removeEventListener("resize", reposition);
+  untrackPanel();
   document.removeEventListener("mousedown", onPointerDown);
 }
 
@@ -211,27 +213,6 @@ function onKeydown(event: KeyboardEvent) {
 
 function scrollActiveIntoView() {
   nextTick(() => list.value?.children[active.value]?.scrollIntoView({ block: "nearest" }));
-}
-
-// Sized and placed against the viewport every time it could have moved. Drops upward only
-// when there is genuinely more room up there, so it doesn't flip on a nearly full screen.
-function reposition() {
-  const el = root.value;
-  if (!el) return;
-
-  const rect = el.getBoundingClientRect();
-  const below = window.innerHeight - rect.bottom - 8;
-  const above = rect.top - 8;
-  const dropUp = below < 176 && above > below;
-
-  panel.value = {
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    maxHeight: `${Math.min(288, dropUp ? above : below)}px`,
-    ...(dropUp
-      ? { bottom: `${window.innerHeight - rect.top + 4}px` }
-      : { top: `${rect.bottom + 4}px` }),
-  };
 }
 
 // The list shrinks as you type, so an index that was valid a keystroke ago may not be.

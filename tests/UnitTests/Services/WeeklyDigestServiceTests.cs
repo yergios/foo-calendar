@@ -28,12 +28,16 @@ public sealed class WeeklyDigestServiceTests : SqliteTestBase
             teamRegions,
             emails,
             Options.Create(new BrandingOptions()),
-            Options.Create(new EmailOptions()));
+            Options.Create(new EmailOptions()),
+            Options.Create(new TeamOptions { HomeTimeZone = "UTC" }));
     }
 
+    // UTC, matching the team's HomeTimeZone configured above: SendAsync computes "this
+    // week" in that zone, not the test host's local time, so this has to agree with it
+    // rather than with DateTime.Now to stay correct regardless of where tests run.
     private static (DateOnly Start, DateOnly End) ThisWeek()
     {
-        var start = DateOnly.FromDateTime(DateTime.Now);
+        var start = DateOnly.FromDateTime(DateTime.UtcNow);
         return (start, start.AddDays(6));
     }
 

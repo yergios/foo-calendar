@@ -149,6 +149,7 @@ import CalendarGrid from "@/components/CalendarGrid.vue";
 import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
 import WhosOffTodayModal from "@/components/WhosOffTodayModal.vue";
 import YearPicker from "@/components/YearPicker.vue";
+import { useStaleGuard } from "@/composables/useStaleGuard";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
 import { groupRegions } from "@/lib/regionGroups";
@@ -261,8 +262,12 @@ function primaryRank(): (person: PersonDto) => number {
 
   if (sortMode.value === "absentToday") {
     const iso = today();
+    // Approved only, same distinction WhosOffTodayModal draws: a still-pending request
+    // hasn't actually taken anyone off the team yet.
     const absent = new Set(
-      absences.value.filter((a) => a.startDate <= iso && a.endDate >= iso).map((a) => a.personId),
+      absences.value
+        .filter((a) => a.status === "Approved" && a.startDate <= iso && a.endDate >= iso)
+        .map((a) => a.personId),
     );
     return (p) => (absent.has(p.id) ? 0 : 1);
   }
@@ -318,7 +323,10 @@ function goToToday() {
   nextTick(() => calendarGridRef.value?.scrollToToday());
 }
 
+const isLatestYearLoad = useStaleGuard();
+
 async function loadYear() {
+  const isCurrent = isLatestYearLoad();
   loading.value = true;
   try {
     const { from, to } = yearRange.value;
@@ -326,12 +334,13 @@ async function loadYear() {
       getAbsences(from, to),
       getCatalogHolidays(from, to),
     ]);
+    if (!isCurrent()) return;
     absences.value = absencesRes.absences;
     holidays.value = holidaysRes.holidays;
   } catch (error: unknown) {
     console.error("ERROR => Failed to load absences/holidays for year:", error);
   } finally {
-    loading.value = false;
+    if (isCurrent()) loading.value = false;
   }
 }
 

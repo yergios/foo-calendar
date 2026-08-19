@@ -49,7 +49,7 @@ public sealed class PersonService(
         // Somewhere new to the team brings its holidays in with it.
         await teamRegions.EnsureSyncedAsync(person.HomeCity, ct);
 
-        return PersonDto.FromEntity(person);
+        return PersonDto.FromEntity(person, includePreferences: true);
     }
 
     public async Task<PeopleResponse> GetAllAsync(CancellationToken ct = default)
@@ -68,7 +68,7 @@ public sealed class PersonService(
             labels[country] = regionLabels.For(country);
         }
 
-        return new([.. people.Select(PersonDto.FromEntity)], labels);
+        return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], labels);
     }
 
     public async Task DeleteAsync(int personId, CancellationToken ct = default)
@@ -136,7 +136,7 @@ public sealed class PersonService(
             await teamRegions.PruneIfUnusedAsync(vacated, ct);
         }
 
-        return PersonDto.FromEntity(person);
+        return PersonDto.FromEntity(person, includePreferences: true);
     }
 
     // Column headers, normalized to letters and digits only and upper-cased, so

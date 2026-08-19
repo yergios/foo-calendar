@@ -359,6 +359,35 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task CreateAsync_LogsWhatWasFiledWithoutTheNote()
+    {
+        var person = CreatePerson();
+
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceCreated);
+        entry.Target.ShouldBe(person.DisplayName);
+        entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
+        entry.Details.ShouldNotContain("Flu");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LogsWhatChangedWithoutTheNote()
+    {
+        var person = CreatePerson();
+        var created = await sut.CreateAsync(
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+
+        await sut.UpdateAsync(
+            person, created.Id, Request("2026-04-02", "2026-04-06", AbsenceType.Vacation, "Trip"));
+
+        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceUpdated);
+        entry.Target.ShouldBe(person.DisplayName);
+        entry.Details.ShouldBe("Vacation, 2026-04-02 → 2026-04-06");
+        entry.Details.ShouldNotContain("Trip");
+    }
+
+    [Fact]
     public async Task UpdateAsync_PublishesAnAbsenceUpdatedEventWithTheNewDates()
     {
         var person = CreatePerson();
@@ -461,8 +490,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         await sut.DeleteAsync(person, created.Id);
 
-        var entry = audit.Entries.ShouldHaveSingleItem();
-        entry.Action.ShouldBe(AuditActions.AbsenceDeleted);
+        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceDeleted);
         entry.Target.ShouldBe(person.DisplayName);
         entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
         entry.Details.ShouldNotContain("Flu");
@@ -589,8 +617,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         approved.Status.ShouldBe(AbsenceStatus.Approved);
 
-        var entry = audit.Entries.ShouldHaveSingleItem();
-        entry.Action.ShouldBe(AuditActions.AbsenceApproved);
+        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceApproved);
         entry.Target.ShouldBe(person.DisplayName);
 
         var notified = notifications.Notified.ShouldHaveSingleItem();
@@ -641,8 +668,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         rejected.Status.ShouldBe(AbsenceStatus.Rejected);
 
-        var entry = audit.Entries.ShouldHaveSingleItem();
-        entry.Action.ShouldBe(AuditActions.AbsenceRejected);
+        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceRejected);
         entry.Details.ShouldNotContain("Not enough coverage");
 
         var notified = notifications.Notified.ShouldHaveSingleItem();

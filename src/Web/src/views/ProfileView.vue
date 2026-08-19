@@ -107,6 +107,7 @@ import { deleteMe, getMyStats, updateMe } from "@/api/people";
 import AppSkeleton from "@/components/AppSkeleton.vue";
 import ProfileForm from "@/components/ProfileForm.vue";
 import YearPicker from "@/components/YearPicker.vue";
+import { useStaleGuard } from "@/composables/useStaleGuard";
 import { useConfigStore } from "@/stores/config";
 import { usePersonStore } from "@/stores/person";
 import type { AbsenceStatsResponse, UpdatePersonRequest } from "@/types/person";
@@ -128,16 +129,21 @@ const statsYear = ref(new Date().getFullYear());
 // Fires alongside checkOnce() below rather than waiting on it: the backend resolves
 // "me" from the auth token independently, so there's no need for the frontend to
 // already know who the person is before asking for their stats.
+const isLatestStatsLoad = useStaleGuard();
+
 watch(
   statsYear,
   async (year) => {
+    const isCurrent = isLatestStatsLoad();
     statsLoading.value = true;
     try {
-      stats.value = await getMyStats(year);
+      const result = await getMyStats(year);
+      if (!isCurrent()) return;
+      stats.value = result;
     } catch (error: unknown) {
       console.error("ERROR => Failed to load absence stats:", error);
     } finally {
-      statsLoading.value = false;
+      if (isCurrent()) statsLoading.value = false;
     }
   },
   { immediate: true },

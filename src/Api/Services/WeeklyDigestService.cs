@@ -18,7 +18,8 @@ public sealed class WeeklyDigestService(
     ITeamRegionService teamRegions,
     IEmailSender emailSender,
     IOptions<BrandingOptions> branding,
-    IOptions<EmailOptions> emailOptions) : IWeeklyDigestService
+    IOptions<EmailOptions> emailOptions,
+    IOptions<TeamOptions> team) : IWeeklyDigestService
 {
     public async Task SendAsync(CancellationToken ct = default)
     {
@@ -30,7 +31,13 @@ public sealed class WeeklyDigestService(
         // Nobody to send it to, so there's no point building the body at all.
         if (recipients.Count == 0) return;
 
-        var weekStart = DateOnly.FromDateTime(DateTime.Now);
+        // "Today" in the team's own timezone, not the container's: the absences and
+        // holidays this digest lists are plain calendar dates with no timezone of their
+        // own, so the week they fall into has to be decided in the one timezone the whole
+        // team already shares (see TeamOptions.HomeTimeZone), not wherever the process
+        // happens to be running.
+        var homeZone = TimeZoneInfo.FindSystemTimeZoneById(team.Value.HomeTimeZone);
+        var weekStart = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, homeZone));
         var weekEnd = weekStart.AddDays(6);
 
         // Time-based absences are excluded: a few hours isn't "off this week" in the sense

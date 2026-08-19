@@ -72,6 +72,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from "vue";
 
+import { useFloatingPanel } from "@/composables/useFloatingPanel";
 import type { RegionGroup } from "@/lib/regionGroups";
 
 /**
@@ -97,7 +98,11 @@ const emit = defineEmits<{ "update:modelValue": [value: string[]] }>();
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const open = ref(false);
-const panelStyle = ref<Record<string, string>>({});
+const { style: panelStyle, track: trackPanel, untrack: untrackPanel } = useFloatingPanel(root, {
+  flipThreshold: 240,
+  maxHeight: 320,
+  minWidth: 240,
+});
 
 function isSelected(code: string): boolean {
   return props.modelValue.includes(code);
@@ -131,11 +136,7 @@ function togglePanel() {
     return;
   }
   open.value = true;
-  reposition();
-  // Capture phase: an ancestor other than the window may be what scrolls, and that
-  // scroll doesn't bubble.
-  window.addEventListener("scroll", reposition, true);
-  window.addEventListener("resize", reposition);
+  trackPanel();
   document.addEventListener("mousedown", onPointerDown);
   document.addEventListener("keydown", onKeydown);
 }
@@ -143,8 +144,7 @@ function togglePanel() {
 function close() {
   if (!open.value) return;
   open.value = false;
-  window.removeEventListener("scroll", reposition, true);
-  window.removeEventListener("resize", reposition);
+  untrackPanel();
   document.removeEventListener("mousedown", onPointerDown);
   document.removeEventListener("keydown", onKeydown);
 }
@@ -159,27 +159,5 @@ function onPointerDown(event: MouseEvent) {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === "Escape") close();
-}
-
-// Sized and placed against the viewport every time it could have moved. Drops upward
-// only when there is genuinely more room up there, so it doesn't flip on a nearly full
-// screen. Same approach as RegionSelect's own reposition.
-function reposition() {
-  const el = root.value;
-  if (!el) return;
-
-  const rect = el.getBoundingClientRect();
-  const below = window.innerHeight - rect.bottom - 8;
-  const above = rect.top - 8;
-  const dropUp = below < 240 && above > below;
-
-  panelStyle.value = {
-    left: `${rect.left}px`,
-    width: `${Math.max(rect.width, 240)}px`,
-    maxHeight: `${Math.min(320, dropUp ? above : below)}px`,
-    ...(dropUp
-      ? { bottom: `${window.innerHeight - rect.top + 4}px` }
-      : { top: `${rect.bottom + 4}px` }),
-  };
 }
 </script>
