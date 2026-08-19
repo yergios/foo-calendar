@@ -62,8 +62,11 @@ const navItems = computed(() => {
   return items;
 });
 
+// Prefix match, not just equality: /admin now redirects straight into one of its
+// sections (see router/index.ts), so the nav item has to stay lit for /admin/people and
+// the rest, not just for the bare /admin path nobody actually lands on.
 function isActive(to: string): boolean {
-  return route.path === to;
+  return route.path === to || route.path.startsWith(`${to}/`);
 }
 
 onMounted(() => {

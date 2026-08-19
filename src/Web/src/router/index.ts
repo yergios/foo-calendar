@@ -9,9 +9,11 @@ import {
   useAuth,
   useAuthStore,
 } from "@/auth";
+import AdminLayout from "@/layouts/AdminLayout.vue";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { basePath } from "@/lib/appUrl";
-import AdminView from "@/views/AdminView.vue";
+import { ADMIN_SECTIONS } from "@/router/adminSections";
+import type { Permission } from "@/types/permission";
 import ErrorView from "@/views/ErrorView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
 import HomeView from "@/views/HomeView.vue";
@@ -31,9 +33,30 @@ const router = createRouter({
       children: [
         { path: "", component: HomeView },
         { path: "profile", component: ProfileView },
-        // Nothing finer here on purpose: the page's sections gate themselves, and this
-        // only keeps out someone who would find every one of them hidden.
-        { path: "admin", component: AdminView, meta: { requiresAnyPermission: true } },
+        {
+          path: "admin",
+          component: AdminLayout,
+          // Keeps out someone who would find every section hidden; which sections they
+          // actually see is then up to each child route's own requiresPermissions below.
+          meta: { requiresAnyPermission: true },
+          children: [
+            {
+              path: "",
+              redirect: () => {
+                const authStore = useAuthStore();
+                const first = ADMIN_SECTIONS.find((section) =>
+                  section.permissions.some((p) => authStore.can(p)),
+                );
+                return first ? `/admin/${first.path}` : "/403";
+              },
+            },
+            ...ADMIN_SECTIONS.map((section) => ({
+              path: section.path,
+              component: section.component,
+              meta: { requiresPermissions: section.permissions },
+            })),
+          ],
+        },
       ],
     },
     {
@@ -80,6 +103,16 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
 
       if (to.matched.some((r) => r.meta.requiresAnyPermission) && !useAuthStore().canAnything) {
         return "/403";
+      }
+
+      // Each admin section's own gate: held with any one of the permissions listed for
+      // it, same "any, not all" rule ADMIN_SECTIONS and AdminLayout's sidebar both use.
+      const requiredPermissions = to.matched.flatMap(
+        (r) => (r.meta.requiresPermissions as Permission[] | undefined) ?? [],
+      );
+      if (requiredPermissions.length > 0) {
+        const authStore = useAuthStore();
+        if (!requiredPermissions.some((p) => authStore.can(p))) return "/403";
       }
 
       return true;

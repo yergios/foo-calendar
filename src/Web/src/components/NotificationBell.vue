@@ -129,7 +129,7 @@ function statusClass(type: NotificationType): string {
 const relativeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 // The API stores UTC and serializes it without an offset, which the browser would read as
-// local time, same reasoning as AdminView's audit timestamps.
+// local time, same reasoning as AdminAuditView's audit timestamps.
 function relativeTime(createdAt: string): string {
   const utc = /(Z|[+-]\d{2}:\d{2})$/.test(createdAt) ? createdAt : `${createdAt}Z`;
   const diffMs = new Date(utc).getTime() - Date.now();
