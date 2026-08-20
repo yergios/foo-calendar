@@ -189,6 +189,11 @@ const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "name");
 // (from before multi-select) was a plain string, not an array.
 const cachedRegionFilter = readCache<string[]>("teamRegionFilter");
 const regionFilter = ref<string[]>(Array.isArray(cachedRegionFilter) ? cachedRegionFilter : []);
+// What filteredPeople actually reads, kept separate from regionFilter itself so the select
+// box updates instantly while the (expensive - it changes who's visible, so CalendarGrid
+// has to rebuild a year of cells) grid update can lag one skeleton frame behind. See
+// applyRegionFilter below.
+const appliedRegionFilter = ref<string[]>(regionFilter.value);
 const customOrder = ref<number[]>(readCache<number[]>("teamCustomOrder") ?? []);
 
 watch(sortMode, (mode) => writeCache("teamSortMode", mode));
@@ -234,10 +239,38 @@ function personLabel(person: PersonDto): string {
 // you pick a country like "CH", you also get people set to "CH-ZH", "CH-BE", etc. No
 // codes selected means no filtering at all, and any one selected code matching is enough.
 function matchesRegionFilter(homeCity: string | null): boolean {
-  if (regionFilter.value.length === 0) return true;
+  if (appliedRegionFilter.value.length === 0) return true;
   if (!homeCity) return false;
-  return regionFilter.value.some((code) => homeCity === code || homeCity.startsWith(`${code}-`));
+  return appliedRegionFilter.value.some(
+    (code) => homeCity === code || homeCity.startsWith(`${code}-`),
+  );
 }
+
+const isLatestFilterApply = useStaleGuard();
+
+// Only regionFilter triggers this, not sortMode: a sort-mode change never touches who's
+// visible, so CalendarGrid rebuilds nothing beyond the cheap `order` array (see
+// filteredPeople's own comment below) and stays fast without a skeleton. A region-filter
+// change does change membership, which is the expensive part, so it gets the same
+// show-skeleton-then-do-the-work shape as loadYear.
+async function applyRegionFilter() {
+  const isCurrent = isLatestFilterApply();
+  loading.value = true;
+  // Two animation frames, not nextTick: nextTick only flushes Vue's own patch, still
+  // inside the same microtask turn as the loading=true write above, before the browser
+  // has had any chance to actually paint the skeleton. A single rAF fires before its own
+  // frame's paint too - only a second, nested one is guaranteed to run after the skeleton
+  // from the *previous* frame has actually been painted.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  if (!isCurrent()) return;
+  appliedRegionFilter.value = regionFilter.value;
+  await nextTick();
+  if (isCurrent()) loading.value = false;
+}
+
+watch(regionFilter, applyRegionFilter);
 
 // Falls back to the bare code so someone whose region isn't in the team's current
 // catalog (yet, or anymore) still sorts somewhere sensible instead of crashing the

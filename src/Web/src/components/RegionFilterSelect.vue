@@ -32,6 +32,22 @@
         :style="panelStyle"
         class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-card-hover py-1"
       >
+        <!-- Not just the empty summary label's implicit meaning - an explicit row so
+             clearing a multi-region selection is one click instead of unchecking each
+             box by hand. Always resets to no filter, regardless of the checkbox's own
+             prior state, rather than toggling back and forth. -->
+        <label
+          class="flex items-center gap-2 px-3 py-1.5 text-sm text-ink cursor-pointer hover:bg-surface border-b border-border"
+        >
+          <input
+            type="checkbox"
+            class="shrink-0"
+            :checked="modelValue.length === 0"
+            @change="selectAll"
+          />
+          All
+        </label>
+
         <p v-if="groups.length === 0" class="px-3 py-1.5 text-sm text-secondary">No regions yet</p>
 
         <!-- Grouped by country, with each region indented underneath it, so the
@@ -98,7 +114,11 @@ const emit = defineEmits<{ "update:modelValue": [value: string[]] }>();
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const open = ref(false);
-const { style: panelStyle, track: trackPanel, untrack: untrackPanel } = useFloatingPanel(root, {
+const {
+  style: panelStyle,
+  track: trackPanel,
+  untrack: untrackPanel,
+} = useFloatingPanel(root, {
   flipThreshold: 240,
   maxHeight: 320,
   minWidth: 240,
@@ -113,6 +133,10 @@ function toggleValue(code: string) {
     ? props.modelValue.filter((c) => c !== code)
     : [...props.modelValue, code];
   emit("update:modelValue", next);
+}
+
+function selectAll() {
+  emit("update:modelValue", []);
 }
 
 function labelFor(code: string): string {

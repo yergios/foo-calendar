@@ -124,6 +124,13 @@ services.ConfigureHttpJsonOptions(o =>
 
 services.AddHttpContextAccessor();
 
+// A year's absences run several hundred KB uncompressed for a real team - gzip/brotli cut
+// that roughly 5x on the wire, which measured as the dominant cost on anything but a fast
+// connection. EnableForHttps is safe here: nothing in these responses is a secret sitting
+// alongside attacker-influenced content, which is what the BREACH-style risk it guards
+// against actually requires.
+services.AddResponseCompression(o => o.EnableForHttps = true);
+
 // ---- Holidays -------------------------------------------------------------
 
 var holidayConfig = config.GetSection(HolidayOptions.SectionName).Get<HolidayOptions>()
@@ -449,6 +456,10 @@ if (proxyConfig.TrustForwardedHeaders)
 // proxy strips it before forwarding. Both arrangements work with the same setting.
 if (!string.IsNullOrEmpty(proxyConfig.PathBase))
     app.UsePathBase(proxyConfig.PathBase);
+
+// As early as the framework allows, per Microsoft's own guidance for this middleware -
+// everything after it should be compressed, not just the API responses it was added for.
+app.UseResponseCompression();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
