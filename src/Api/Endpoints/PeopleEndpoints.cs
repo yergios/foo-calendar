@@ -16,6 +16,7 @@ public static class PeopleEndpoints
 
         group.MapPost("/", CreateMe);
         group.MapGet("/", GetAll);
+        group.MapGet("/paged", GetPaged);
         group.MapGet("/me", GetMe);
         group.MapPut("/me", UpdateMe);
         group.MapGet("/me/stats", GetMyStats);
@@ -48,6 +49,27 @@ public static class PeopleEndpoints
     private static async Task<IResult> GetAll(IPersonService people, CancellationToken ct)
     {
         var result = await people.GetAllAsync(ct);
+        return Results.Ok(result);
+    }
+
+    private const int DefaultPeoplePageSize = 25;
+    private const int MaxPeoplePageSize = 200;
+
+    // Same authorization as GetAll above (just RequireAuthorization on the group, no
+    // specific permission): the admin people page is reachable with either PeopleManage or
+    // ReportsRead (see ADMIN_SECTIONS on the frontend), and this returns nothing GetAll
+    // doesn't already hand any signed-in user today.
+    private static async Task<IResult> GetPaged(
+        int? page,
+        int? pageSize,
+        IPersonService people,
+        CancellationToken ct)
+    {
+        var result = await people.GetPageAsync(
+            Math.Max(page ?? 1, 1),
+            Math.Clamp(pageSize ?? DefaultPeoplePageSize, 1, MaxPeoplePageSize),
+            ct);
+
         return Results.Ok(result);
     }
 

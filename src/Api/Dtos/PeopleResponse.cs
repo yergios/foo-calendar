@@ -7,3 +7,8 @@ namespace Api.Dtos;
 public sealed record PeopleResponse(
     IReadOnlyList<PersonDto> People,
     IReadOnlyDictionary<string, string> RegionLabels);
+
+/// <summary><paramref name="Total"/> is the whole team, not this page, so the admin page
+/// can show a page count without fetching everyone just to learn its size - same shape as
+/// AuditEntriesResponse.</summary>
+public sealed record PeoplePageResponse(IReadOnlyList<PersonDto> People, int Total);

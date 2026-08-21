@@ -2,6 +2,7 @@ import { apiFetch, apiFetchRaw, apiJson, errorForResponse } from "@/api";
 
 import type {
   AbsenceStatsResponse,
+  PeoplePageResponse,
   PeopleResponse,
   PersonDto,
   UpdatePersonRequest,
@@ -16,6 +17,12 @@ export function createMe(request: UpdatePersonRequest): Promise<PersonDto> {
 
 export function getAllPeople(): Promise<PeopleResponse> {
   return apiJson(`/api/people`);
+}
+
+/** For the admin people list, which pages instead of holding the whole roster in memory
+ * the way the calendar's shared people store needs to. */
+export function getPeoplePage(page: number, pageSize: number): Promise<PeoplePageResponse> {
+  return apiJson(`/api/people/paged?page=${page}&pageSize=${pageSize}`);
 }
 
 export function getMyStats(year?: number): Promise<AbsenceStatsResponse> {

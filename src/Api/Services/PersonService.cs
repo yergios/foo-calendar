@@ -71,6 +71,18 @@ public sealed class PersonService(
         return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], labels);
     }
 
+    public async Task<PeoplePageResponse> GetPageAsync(int page, int pageSize, CancellationToken ct = default)
+    {
+        // Same ordering as GetAllAsync, so a person's position doesn't shuffle between
+        // pages just because a different endpoint answered the request.
+        var query = db.People.OrderBy(p => p.DisplayName ?? p.Username);
+
+        var total = await query.CountAsync(ct);
+        var people = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+
+        return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], total);
+    }
+
     public async Task DeleteAsync(int personId, CancellationToken ct = default)
     {
         var person = await db.People.FindAsync([personId], ct)

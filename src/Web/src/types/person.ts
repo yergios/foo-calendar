@@ -5,6 +5,12 @@ export interface PeopleResponse {
   regionLabels: Record<string, string>;
 }
 
+/** total is the whole team, not this page - same shape as AuditEntriesResponse. */
+export interface PeoplePageResponse {
+  people: PersonDto[];
+  total: number;
+}
+
 export interface PersonDto {
   id: number;
   username: string;
