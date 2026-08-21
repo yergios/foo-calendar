@@ -32,7 +32,11 @@ export function getPeoplePage(
   if (query.search) params.set("search", query.search);
   for (const region of query.regions ?? []) params.append("regions", region);
   if (query.sortBy) params.set("sortBy", query.sortBy);
-  if (query.descending) params.set("sortDir", "desc");
+  // Sent explicitly either way, not just when true: the API's own default only happens to
+  // match "omitted" for this endpoint, and leaving that unstated is exactly what made the
+  // audit log's equivalent silently sort descending no matter what this sent (that
+  // endpoint's default direction is the opposite one).
+  if (query.descending !== undefined) params.set("sortDir", query.descending ? "desc" : "asc");
   if (query.statsYear !== undefined) params.set("year", String(query.statsYear));
 
   return apiJson(`/api/people/paged?${params.toString()}`);

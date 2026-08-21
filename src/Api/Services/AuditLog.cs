@@ -50,7 +50,8 @@ public sealed class AuditLog(
         var query = db.AuditEntries.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(e => EF.Functions.Like(e.Actor, $"%{search}%"));
+            query = query.Where(e =>
+                EF.Functions.Like(e.Actor, SqlLikePattern.Contains(search), SqlLikePattern.EscapeChar));
 
         if (!string.IsNullOrWhiteSpace(action))
             query = query.Where(e => e.Action == action);

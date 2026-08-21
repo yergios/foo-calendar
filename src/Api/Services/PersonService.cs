@@ -85,7 +85,8 @@ public sealed class PersonService(
         var query = db.People.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => EF.Functions.Like(p.DisplayName, $"%{search}%"));
+            query = query.Where(p =>
+                EF.Functions.Like(p.DisplayName, SqlLikePattern.Contains(search), SqlLikePattern.EscapeChar));
 
         if (regions is { Count: > 0 })
         {
@@ -101,14 +102,22 @@ public sealed class PersonService(
         if (PersonSortColumn.StatsColumns.Contains(sortBy))
             return await GetStatsSortedPageAsync(query, page, pageSize, sortBy, descending, statsYear, ct);
 
+        // Id is the final tiebreaker on every branch, not just Username's (which needs
+        // none - it's unique): DisplayName carries no such constraint, so two people can
+        // share one, and an ambiguous sort would repeat or skip rows between pages, same
+        // reasoning as AuditLog.ReadAsync's own sort switch.
         query = (sortBy, descending) switch
         {
             (PersonSortColumn.Username, false) => query.OrderBy(p => p.Username),
             (PersonSortColumn.Username, true) => query.OrderByDescending(p => p.Username),
-            (PersonSortColumn.HomeCity, false) => query.OrderBy(p => p.HomeCity).ThenBy(p => p.DisplayName ?? p.Username),
-            (PersonSortColumn.HomeCity, true) => query.OrderByDescending(p => p.HomeCity).ThenBy(p => p.DisplayName ?? p.Username),
-            (_, false) => query.OrderBy(p => p.DisplayName ?? p.Username),
-            (_, true) => query.OrderByDescending(p => p.DisplayName ?? p.Username),
+            (PersonSortColumn.HomeCity, false) => query.OrderBy(p => p.HomeCity)
+                .ThenBy(p => p.DisplayName ?? p.Username)
+                .ThenBy(p => p.Id),
+            (PersonSortColumn.HomeCity, true) => query.OrderByDescending(p => p.HomeCity)
+                .ThenBy(p => p.DisplayName ?? p.Username)
+                .ThenByDescending(p => p.Id),
+            (_, false) => query.OrderBy(p => p.DisplayName ?? p.Username).ThenBy(p => p.Id),
+            (_, true) => query.OrderByDescending(p => p.DisplayName ?? p.Username).ThenByDescending(p => p.Id),
         };
 
         var total = await query.CountAsync(ct);
@@ -148,8 +157,10 @@ public sealed class PersonService(
         }
 
         var ordered = descending
-            ? people.OrderByDescending(StatFor).ThenBy(p => p.DisplayName ?? p.Username)
-            : people.OrderBy(StatFor).ThenBy(p => p.DisplayName ?? p.Username);
+            ? people.OrderByDescending(StatFor)
+                .ThenBy(p => p.DisplayName ?? p.Username)
+                .ThenByDescending(p => p.Id)
+            : people.OrderBy(StatFor).ThenBy(p => p.DisplayName ?? p.Username).ThenBy(p => p.Id);
 
         var pageOfPeople = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 

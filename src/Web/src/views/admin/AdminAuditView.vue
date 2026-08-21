@@ -119,6 +119,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { getAuditLog } from "@/api/admin";
 import SortButton from "@/components/SortButton.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
+import { parse } from "@/lib/dates";
 import { AuditAction } from "@/types/audit";
 import type { AuditEntryDto, AuditSortColumn } from "@/types/audit";
 
@@ -154,12 +155,15 @@ function toggleSort(column: AuditSortColumn) {
   descending.value = column === "occurredAt";
 }
 
-// A date input gives a bare "YYYY-MM-DD" with no timezone, which JS parses as UTC midnight
-// if handed to `Date` directly - appending a time-less local marker instead makes it parse
-// as *local* midnight, so the instant this resolves to is the one the viewer actually means
-// by that calendar date.
-function localMidnight(date: string): Date {
-  return new Date(`${date}T00:00:00`);
+// The day after `date`'s local midnight (`parse`, from lib/dates, already resolves a bare
+// "YYYY-MM-DD" to local rather than UTC midnight) - `to` needs this as its exclusive upper
+// bound so the whole of the picked end date is included. `setDate`, not a flat 24h of
+// milliseconds: it operates on the calendar day field directly, so it stays correct across
+// a DST transition, where a day isn't exactly 24 real hours.
+function nextLocalMidnight(date: string): Date {
+  const next = parse(date);
+  next.setDate(next.getDate() + 1);
+  return next;
 }
 
 const isLatestPageLoad = useStaleGuard();
@@ -171,12 +175,8 @@ async function loadPage() {
     const result = await getAuditLog(page.value, AUDIT_PAGE_SIZE, {
       search: search.value.trim() || undefined,
       action: actionFilter.value || undefined,
-      from: fromDate.value ? localMidnight(fromDate.value).toISOString() : undefined,
-      // Exclusive: the day after the picked end date's local midnight, so the whole of
-      // that end date is included rather than cut off at its own midnight.
-      to: toDate.value
-        ? new Date(localMidnight(toDate.value).getTime() + 24 * 60 * 60 * 1000).toISOString()
-        : undefined,
+      from: fromDate.value ? parse(fromDate.value).toISOString() : undefined,
+      to: toDate.value ? nextLocalMidnight(toDate.value).toISOString() : undefined,
       sortBy: sortBy.value,
       descending: descending.value,
     });

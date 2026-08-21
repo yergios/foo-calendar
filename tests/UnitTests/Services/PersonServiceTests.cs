@@ -190,6 +190,32 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task GetPageAsync_SearchTreatsUnderscoreLiterally_NotAsAOneCharacterWildcard()
+    {
+        await sut.CreateAsync(CreateRequestNamed("jdoe1", "j_doe"), "admin");
+        await sut.CreateAsync(CreateRequestNamed("jdoe2", "jxdoe"), "admin");
+
+        var result = await sut.GetPageAsync(1, 25, "j_doe", null, PersonSortColumn.Name, false, null);
+
+        result.Total.ShouldBe(1);
+        result.People.ShouldHaveSingleItem().DisplayName.ShouldBe("j_doe");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_WhenDisplayNamesTie_PagesByIdWithNoDuplicatesOrGaps()
+    {
+        await sut.CreateAsync(CreateRequestNamed("a", "Same Name"), "admin");
+        await sut.CreateAsync(CreateRequestNamed("b", "Same Name"), "admin");
+        await sut.CreateAsync(CreateRequestNamed("c", "Same Name"), "admin");
+
+        var firstPage = await sut.GetPageAsync(1, 2, null, null, PersonSortColumn.Name, false, null);
+        var secondPage = await sut.GetPageAsync(2, 2, null, null, PersonSortColumn.Name, false, null);
+
+        firstPage.People.Select(p => p.Username).ShouldBe(["a", "b"]);
+        secondPage.People.Select(p => p.Username).ShouldBe(["c"]);
+    }
+
+    [Fact]
     public async Task GetPageAsync_FiltersByRegion_MatchingItAndItsSubdivisionsOnly()
     {
         await sut.CreateAsync(CreateRequestIn("madrid", "ES-MD"), "admin");

@@ -332,11 +332,20 @@ function reloadFromStart() {
   else page.value = 1;
 }
 
-watch([regionFilter, sortBy, descending], reloadFromStart);
+watch([sortBy, descending], reloadFromStart);
 
-// Debounced, unlike the region filter and sort: those are discrete clicks, this fires on
-// every keystroke, and a request per keystroke would just make the later ones win a race
-// against each other for no benefit.
+// Debounced, unlike sort: region filter is a multi-select checkbox panel, so picking
+// several regions is often several rapid clicks rather than the single discrete click a
+// sort-header press is. Undebounced, each of those clicks would fire its own reload.
+let regionFilterDebounce: ReturnType<typeof setTimeout> | undefined;
+watch(regionFilter, () => {
+  clearTimeout(regionFilterDebounce);
+  regionFilterDebounce = setTimeout(reloadFromStart, 300);
+});
+
+// Debounced for the same reason, more so: this fires on every keystroke, and a request
+// per keystroke would just make the later ones win a race against each other for no
+// benefit.
 let searchDebounce: ReturnType<typeof setTimeout> | undefined;
 watch(search, () => {
   clearTimeout(searchDebounce);

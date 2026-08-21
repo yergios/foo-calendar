@@ -45,7 +45,10 @@ export function getAuditLog(
   if (query.from) params.set("from", query.from);
   if (query.to) params.set("to", query.to);
   if (query.sortBy) params.set("sortBy", query.sortBy);
-  if (query.descending) params.set("sortDir", "desc");
+  // Sent explicitly either way, not just when true: this endpoint defaults to descending
+  // when sortDir is absent, so omitting it for an ascending request would silently sort
+  // descending regardless of which direction the caller actually asked for.
+  if (query.descending !== undefined) params.set("sortDir", query.descending ? "desc" : "asc");
 
   return apiJson(`/api/admin/audit?${params.toString()}`);
 }

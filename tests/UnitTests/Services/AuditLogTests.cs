@@ -107,6 +107,32 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task ReadAsync_SearchTreatsUnderscoreLiterally_NotAsAOneCharacterWildcard()
+    {
+        var sut = CreateSut();
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "j_doe",
+                Action = AuditActions.PersonUpdated,
+                Target = "t1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "jxdoe",
+                Action = AuditActions.PersonUpdated,
+                Target = "t2",
+            });
+        await Db.SaveChangesAsync();
+
+        var result = await sut.ReadAsync(limit: 25, offset: 0, search: "j_doe");
+
+        result.Entries.ShouldHaveSingleItem().Actor.ShouldBe("j_doe");
+    }
+
+    [Fact]
     public async Task ReadAsync_FiltersByAction()
     {
         var sut = CreateSut();
