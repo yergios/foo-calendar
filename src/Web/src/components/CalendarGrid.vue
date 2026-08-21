@@ -57,7 +57,7 @@
               scope="col"
               class="border-b border-border px-1 py-1 text-center text-xs font-normal align-middle"
               :class="[
-                dayHeaderClass(day),
+                dayHeaderClass(day, 'bg-background'),
                 columnSideBorderClass(day),
                 todayColumnClass(day.isToday, 'top'),
                 editableHoliday(day.iso) || canAddHoliday(day.iso)
@@ -87,26 +87,33 @@
             <th
               scope="row"
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
-              :class="rowBackgroundClass(n - 1)"
             >
               <AppSkeleton class="h-4 w-20" />
             </th>
-            <td
-              :colspan="days.length"
-              class="border-b border-border h-9 p-1.5 align-middle"
-              :class="rowBackgroundClass(n - 1)"
-            >
+            <td :colspan="days.length" class="border-b border-border h-9 p-1.5 align-middle">
               <AppSkeleton class="h-full w-full" />
             </td>
           </tr>
         </tbody>
 
         <tbody v-else>
-          <tr v-for="(row, rowIndex) in rows" :key="row.person.id" :data-person-id="row.person.id">
+          <tr
+            v-for="row in rows"
+            :key="row.person.id"
+            v-memo="[
+              row.person,
+              row.cells,
+              row.isMine,
+              row.person.id === lastRowPersonId,
+              regionLabels,
+            ]"
+            :data-person-id="row.person.id"
+            :class="row.isMine ? 'bg-row-mine' : undefined"
+          >
             <th
               scope="row"
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
-              :class="[row.background, mineRowClass(row.isMine, 'start')]"
+              :class="mineRowClass(row.isMine, 'start')"
               draggable="true"
               title="Drag to reorder"
               @dragstart="handleDragStart(row.person.id)"
@@ -134,11 +141,11 @@
               :key="`${row.person.id}-${cell.day.iso}`"
               class="relative h-9 p-0 align-middle border-b border-border"
               :class="[
-                dayHeaderClass(cell.day, row.background),
+                dayHeaderClass(cell.day),
                 columnSideBorderClass(cell.day),
                 todayColumnClass(
                   cell.day.isToday,
-                  rowIndex === rows.length - 1 && fillerRowCount === 0 ? 'bottom' : 'middle',
+                  row.person.id === lastRowPersonId ? 'bottom' : 'middle',
                 ),
                 mineRowClass(row.isMine, cellIndex === row.cells.length - 1 ? 'end' : 'middle'),
                 row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
@@ -171,14 +178,13 @@
             <th
               scope="row"
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
-              :class="filler.background"
             />
             <td
               v-for="day in days"
               :key="day.iso"
               class="h-9 p-0 align-middle border-b border-border"
               :class="[
-                dayHeaderClass(day, filler.background),
+                dayHeaderClass(day),
                 columnSideBorderClass(day),
                 todayColumnClass(day.isToday, filler.isLast ? 'bottom' : 'middle'),
               ]"
@@ -576,22 +582,25 @@ const personById = computed(() => new Map(props.people.map((person) => [person.i
 // math and two map lookups per row, not a year of cell computation, so a sort-mode
 // change - which only touches `order` - stays snappy no matter how big the team or the
 // year is.
+//
+// No zebra-stripe background here anymore (see the CSS at the bottom of this file):
+// striping used to be computed from each row's index, which meant a plain reorder gave
+// nearly every row a "new" background value and forced the template to re-render and
+// re-diff all of that row's day cells just to confirm most of them hadn't actually
+// changed. Row position is exactly what the browser's own :nth-child already tracks for
+// free, so it moved there, which also leaves this object's fields depending only on the
+// *person* a row belongs to - stable across a reorder, and what makes the v-memo on the
+// row template below actually able to skip unchanged rows.
 const rows = computed(() =>
-  props.order.map((personId, rowIndex) => {
+  props.order.map((personId) => {
     const person = personById.value.get(personId)!;
     const cells = cellsByPersonId.value.get(personId)!;
-
-    // Resolved once per row rather than once per cell, same reasoning as `cellsForPerson`
-    // above. bg-row-mine, not a translucent bg-primary-text/N: this backs the sticky name
-    // cell too (see --color-row-mine), which needs to stay fully opaque to occlude day
-    // columns scrolling underneath it rather than letting them show through.
     const isMine = isMyRow(person);
 
     return {
       person,
       cells,
       isMine,
-      background: isMine ? "bg-row-mine" : rowBackgroundClass(rowIndex),
       // Code shown on the row itself (compact enough for the widened name column); the
       // full label is only surfaced on hover, via the title below.
       regionCode: person.homeCity,
@@ -652,39 +661,41 @@ const skeletonRowCount = computed(() => Math.max(1, rowCapacity.value));
 const fillerRowCount = computed(() => Math.max(0, rowCapacity.value - rows.value.length));
 
 // Precomputed once per filler row (not re-derived per cell) for the same reason as
-// `rows.background` above: index math and the "is this the closing row" check only
-// need to happen once, not once per day cell in that row.
+// `todayColumnClass`'s "is this the closing row" check below: it only needs to happen
+// once, not once per day cell in that row.
 const fillerRows = computed(() => {
   const bodyRowCount = rows.value.length;
   return Array.from({ length: fillerRowCount.value }, (_, i) => ({
     rowIndex: bodyRowCount + i,
-    background: rowBackgroundClass(bodyRowCount + i),
     isLast: i === fillerRowCount.value - 1,
   }));
 });
 
-// Always resolves to exactly one background, including the "none of the above" case
-// (plain bg-background), so the sticky header fully occludes rows scrolling underneath it.
-// Today is marked separately with a ring, not a background, so it never has to compete
-// with a holiday's own tint.
+// The one real row the today-column's outline has to close its bottom edge on, if there's
+// no filler row to close it on instead. Deliberately downstream of `rows`/`fillerRowCount`
+// rather than folded into `rows` itself - `rows` computing this would need
+// `fillerRowCount.value`, which itself depends on `rows.value.length`, a circular
+// dependency. Compared per-row in the template (row.person.id === lastRowPersonId) rather
+// than passed down as a shared value, so only the (at most two) rows whose own answer
+// actually flips lose their v-memo on a reorder, not every row at once.
+const lastRowPersonId = computed(() => {
+  if (fillerRowCount.value > 0) return null;
+  return rows.value.at(-1)?.person.id ?? null;
+});
+
+// Weekends and holidays keep their own opaque tint regardless of row, since those already
+// mark the column and shouldn't be muddied by the row's own background. Everywhere else
+// this returns nothing (plainBackground's default): those cells stay transparent and let
+// the <tr>'s own background - the zebra stripe or the "mine" highlight, see the CSS at the
+// bottom of this file - show through instead of each cell carrying its own copy of it.
 //
-// plainBackground is left at its default for the day header row (the page background).
-// Body rows pass their precomputed zebra-stripe background instead, to make rows
-// easier to tell apart. Weekends and holidays keep their own tint regardless of row,
-// since those already mark the column and shouldn't be muddied by the row stripe.
-function dayHeaderClass(
-  day: { iso: string; isWeekend: boolean },
-  plainBackground = "bg-background",
-) {
+// The day header row is the one caller that still wants an explicit opaque background of
+// its own (plainBackground passed as 'bg-background'): it's sticky-positioned and in
+// <thead>, not a body row, so there's no <tr> stripe underneath it to show through.
+function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackground = "") {
   if (holidayMap.value.has(day.iso)) return "bg-holiday";
   if (day.isWeekend) return "bg-surface";
   return plainBackground;
-}
-
-// Same stripe used on the sticky name column, so the alternating background reads as
-// one continuous row rather than stopping at the day columns.
-function rowBackgroundClass(rowIndex: number): string {
-  return rowIndex % 2 === 1 ? "bg-row-alt" : "bg-background";
 }
 
 // Today's column is outlined (and tinted) by an overlay pseudo-element rather than by a
@@ -839,5 +850,44 @@ const tableMinWidth = computed(() => `${160 + days.value.length * 28}px`);
 
 [data-col-hover][data-row-hover] {
   box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-primary-text) 20%, transparent);
+}
+
+/* Zebra striping and the "mine" row highlight live here instead of a per-row JS class:
+   row position is exactly what :nth-child already tracks for free from the live DOM, so
+   computing it in JS on every render (as this used to) made a reorder look like every
+   row's content had changed - see the comment on `rows` in the script above. tbody covers
+   the real table body, the filler rows padding it, and the loading skeleton's body alike,
+   all plain <tr> siblings within it, so the stripe continues seamlessly across all three
+   without special-casing any of them. Split into three rules with :not() rather than
+   relying on source order or specificity to let .bg-row-mine win over the stripe, so the
+   two never have to compete for the same row. */
+tbody tr {
+  background-color: var(--color-background);
+}
+
+tbody tr:nth-child(even):not(.bg-row-mine) {
+  background-color: var(--color-row-alt);
+}
+
+tbody tr.bg-row-mine {
+  background-color: var(--color-row-mine);
+}
+
+/* The name column's <th> repeats the same three rules for itself rather than relying on
+   the <tr> background painting "through" it: that layering only holds for a normal table
+   cell. This one is position: sticky, which visually detaches it from its logical
+   position during scroll, so it needs its own explicit background to stay opaque - the
+   same requirement the JS version of this class used to meet directly, see the comment on
+   `rows` above. */
+tbody tr > th {
+  background-color: var(--color-background);
+}
+
+tbody tr:nth-child(even):not(.bg-row-mine) > th {
+  background-color: var(--color-row-alt);
+}
+
+tbody tr.bg-row-mine > th {
+  background-color: var(--color-row-mine);
 }
 </style>
