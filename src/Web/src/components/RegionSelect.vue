@@ -48,8 +48,10 @@
           :key="choice.value ?? ''"
           role="option"
           :aria-selected="choice.value === modelValue"
-          class="px-3 py-1.5 text-sm text-ink cursor-pointer"
+          class="py-1.5 text-sm text-ink cursor-pointer"
           :class="[
+            choice.group ? 'pl-7 pr-3' : 'px-3',
+            isGrouped && choice.value !== null && !choice.group ? 'font-semibold' : '',
             i === active ? 'bg-surface' : '',
             choice.value === modelValue ? 'font-bold' : '',
           ]"
@@ -70,6 +72,13 @@ import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { useFloatingPanel } from "@/composables/useFloatingPanel";
 import type { RegionOption } from "@/types/config";
 
+/** A plain RegionOption, plus which group (if any) it renders indented under - see the
+ * `options` prop doc below. Every existing caller's plain RegionOption[] is still valid
+ * here, since `group` is optional. */
+export interface RegionSelectOption extends RegionOption {
+  group?: string;
+}
+
 /**
  * One ISO 3166 code out of a list too long to scroll: 204 countries, or every subdivision
  * of one. A native <select> can neither be typed into nor kept to a sane height, which is
@@ -79,13 +88,19 @@ interface Choice {
   /** null is the "nothing picked" choice, which is always offered first. */
   value: string | null;
   label: string;
+  group?: string;
 }
 
 const props = withDefaults(
   defineProps<{
     id: string;
     modelValue: string | null;
-    options: RegionOption[];
+    /** `group` is optional per option and purely cosmetic: set it (to the country's own
+     * label) on a subdivision to have it render indented under that country's entry, the
+     * same shape RegionFilterSelect groups by, just single-pick and searchable instead of
+     * checkboxes. Leave every option's `group` unset for a plain flat list, today's
+     * behavior and what every caller besides the bank-holiday sync picker still wants. */
+    options: RegionSelectOption[];
     /** Label for the choice that clears the field, e.g. "Not set". */
     emptyLabel: string;
     placeholder?: string;
@@ -95,6 +110,11 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ "update:modelValue": [value: string | null] }>();
+
+// Whether ANY option opted into grouping, not per-choice: a country's own entry has no
+// `group` either (it isn't indented under itself), so "has a group" alone can't tell a
+// country header apart from a plain, ungrouped list's every option.
+const isGrouped = computed(() => props.options.some((o) => o.group));
 
 const root = ref<HTMLElement | null>(null);
 const field = ref<HTMLInputElement | null>(null);
@@ -112,7 +132,7 @@ const {
 
 const choices = computed<Choice[]>(() => [
   { value: null, label: props.emptyLabel },
-  ...props.options.map((o) => ({ value: o.code, label: o.label })),
+  ...props.options.map((o) => ({ value: o.code, label: o.label, group: o.group })),
 ]);
 
 // Falls back to the raw code so a saved region still reads as something while its
