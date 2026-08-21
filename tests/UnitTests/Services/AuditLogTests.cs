@@ -79,4 +79,163 @@ public sealed class AuditLogTests : SqliteTestBase
 
         result.Entries.ShouldHaveSingleItem().Target.ShouldBe("person 1");
     }
+
+    [Fact]
+    public async Task ReadAsync_FiltersBySearch_MatchingActorSubstringCaseInsensitively()
+    {
+        var sut = CreateSut();
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "t1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "bob",
+                Action = AuditActions.PersonUpdated,
+                Target = "t2",
+            });
+        await Db.SaveChangesAsync();
+
+        var result = await sut.ReadAsync(limit: 25, offset: 0, search: "ALI");
+
+        result.Entries.ShouldHaveSingleItem().Actor.ShouldBe("alice");
+    }
+
+    [Fact]
+    public async Task ReadAsync_FiltersByAction()
+    {
+        var sut = CreateSut();
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "t1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "alice",
+                Action = AuditActions.PersonDeleted,
+                Target = "t2",
+            });
+        await Db.SaveChangesAsync();
+
+        var result = await sut.ReadAsync(limit: 25, offset: 0, action: AuditActions.PersonDeleted);
+
+        result.Entries.ShouldHaveSingleItem().Action.ShouldBe(AuditActions.PersonDeleted);
+    }
+
+    [Fact]
+    public async Task ReadAsync_FiltersByTimeRange_InclusiveFromExclusiveTo()
+    {
+        var sut = CreateSut();
+        var day1 = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var day2 = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+        var day3 = new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc);
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = day1,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "day1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = day2,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "day2",
+            },
+            new AuditEntry
+            {
+                OccurredAt = day3,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "day3",
+            });
+        await Db.SaveChangesAsync();
+
+        // from is inclusive (day2 itself counts), to is exclusive (day3 itself does not) -
+        // together they cover exactly the single calendar day the caller computed them for.
+        var result = await sut.ReadAsync(limit: 25, offset: 0, from: day2, to: day3);
+
+        result.Entries.ShouldHaveSingleItem().Target.ShouldBe("day2");
+    }
+
+    [Fact]
+    public async Task ReadAsync_SortsByActorAscending()
+    {
+        var sut = CreateSut();
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "carl",
+                Action = AuditActions.PersonUpdated,
+                Target = "t1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "alice",
+                Action = AuditActions.PersonUpdated,
+                Target = "t2",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "bob",
+                Action = AuditActions.PersonUpdated,
+                Target = "t3",
+            });
+        await Db.SaveChangesAsync();
+
+        var result = await sut.ReadAsync(
+            limit: 25, offset: 0, sortBy: AuditSortColumn.Actor, descending: false);
+
+        result.Entries.Select(e => e.Actor).ShouldBe(["alice", "bob", "carl"]);
+    }
+
+    [Fact]
+    public async Task ReadAsync_SortsByActionDescending()
+    {
+        var sut = CreateSut();
+        Db.AuditEntries.AddRange(
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "a",
+                Action = AuditActions.PersonCreated,
+                Target = "t1",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "a",
+                Action = AuditActions.PersonDeleted,
+                Target = "t2",
+            },
+            new AuditEntry
+            {
+                OccurredAt = DateTime.UtcNow,
+                Actor = "a",
+                Action = AuditActions.PersonUpdated,
+                Target = "t3",
+            });
+        await Db.SaveChangesAsync();
+
+        var result = await sut.ReadAsync(
+            limit: 25, offset: 0, sortBy: AuditSortColumn.Action, descending: true);
+
+        result.Entries.Select(e => e.Action).ShouldBe(
+            [AuditActions.PersonUpdated, AuditActions.PersonDeleted, AuditActions.PersonCreated]);
+    }
 }

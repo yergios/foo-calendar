@@ -1,7 +1,7 @@
 import { apiFetch, apiJson } from "@/api";
 
 import type { AbsenceDto, PendingAbsencesResponse } from "../types/absence";
-import type { AuditEntriesResponse } from "../types/audit";
+import type { AuditEntriesResponse, AuditLogQuery } from "../types/audit";
 import type { SyncBankHolidaysResponse } from "../types/bankHoliday";
 import type {
   AllAbsenceStatsResponse,
@@ -32,9 +32,22 @@ export function getAllPeopleStats(year: number): Promise<AllAbsenceStatsResponse
   return apiJson(`/api/admin/people/stats?year=${year}`);
 }
 
-/** Newest first. `offset` pages further back through the same log. */
-export function getAuditLog(limit: number, offset = 0): Promise<AuditEntriesResponse> {
-  return apiJson(`/api/admin/audit?limit=${limit}&offset=${offset}`);
+/** Newest first by default. Search, action filter, time range, and sort all happen
+ * server-side, since they have to be applied before paging, not after. */
+export function getAuditLog(
+  page: number,
+  pageSize: number,
+  query: AuditLogQuery = {},
+): Promise<AuditEntriesResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (query.search) params.set("search", query.search);
+  if (query.action) params.set("action", query.action);
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.descending) params.set("sortDir", "desc");
+
+  return apiJson(`/api/admin/audit?${params.toString()}`);
 }
 
 /** Omitting the region syncs every region the team occupies; naming one re-runs just that

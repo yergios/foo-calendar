@@ -90,17 +90,33 @@ public static class AdminEndpoints
         return Results.Ok(result);
     }
 
-    /// <summary>Newest first, paged. Deliberately not filterable: the log is small, and a
-    /// query language over it would be more app than the thing it audits.</summary>
+    /// <summary>Newest first by default, paged. <paramref name="from"/>/<paramref name="to"/>
+    /// are exact instants, not calendar dates: the caller (the admin page) is the one that
+    /// knows the viewer's own timezone, and converts a picked date range into the right UTC
+    /// bounds before asking here.</summary>
     private static async Task<IResult> GetAuditLog(
-        int? limit,
-        int? offset,
+        int? page,
+        int? pageSize,
+        string search,
+        string action,
+        DateTime? from,
+        DateTime? to,
+        string sortBy,
+        string sortDir,
         IAuditLog audit,
         CancellationToken ct)
     {
+        var size = Math.Clamp(pageSize ?? DefaultAuditPageSize, 1, MaxAuditPageSize);
+
         var result = await audit.ReadAsync(
-            Math.Clamp(limit ?? DefaultAuditPageSize, 1, MaxAuditPageSize),
-            Math.Max(offset ?? 0, 0),
+            size,
+            (Math.Max(page ?? 1, 1) - 1) * size,
+            search,
+            action,
+            from,
+            to,
+            sortBy ?? AuditSortColumn.OccurredAt,
+            sortDir != "asc",
             ct);
 
         return Results.Ok(result);

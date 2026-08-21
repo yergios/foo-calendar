@@ -37,18 +37,45 @@ public sealed class AuditLog(
     }
 
     public async Task<AuditEntriesResponse> ReadAsync(
-        int limit, int offset, CancellationToken ct = default)
+        int limit,
+        int offset,
+        string search = null,
+        string action = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        string sortBy = AuditSortColumn.OccurredAt,
+        bool descending = true,
+        CancellationToken ct = default)
     {
-        // Ordered by Id rather than OccurredAt: two entries written in the same millisecond
-        // still have to come back in the order they happened, and paging over an ambiguous
-        // sort would repeat or skip rows between pages.
-        var entries = await db.AuditEntries
-            .OrderByDescending(e => e.Id)
-            .Skip(offset)
-            .Take(limit)
-            .ToListAsync(ct);
+        var query = db.AuditEntries.AsQueryable();
 
-        var total = await db.AuditEntries.CountAsync(ct);
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(e => EF.Functions.Like(e.Actor, $"%{search}%"));
+
+        if (!string.IsNullOrWhiteSpace(action))
+            query = query.Where(e => e.Action == action);
+
+        if (from is not null)
+            query = query.Where(e => e.OccurredAt >= from);
+
+        if (to is not null)
+            query = query.Where(e => e.OccurredAt < to);
+
+        // Ordered by Id, not just OccurredAt/Actor/Action: two entries can share the exact
+        // same value (written in the same millisecond, or by the same actor/action), and
+        // paging over an ambiguous sort would repeat or skip rows between pages.
+        query = (sortBy, descending) switch
+        {
+            (AuditSortColumn.Actor, false) => query.OrderBy(e => e.Actor).ThenBy(e => e.Id),
+            (AuditSortColumn.Actor, true) => query.OrderByDescending(e => e.Actor).ThenByDescending(e => e.Id),
+            (AuditSortColumn.Action, false) => query.OrderBy(e => e.Action).ThenBy(e => e.Id),
+            (AuditSortColumn.Action, true) => query.OrderByDescending(e => e.Action).ThenByDescending(e => e.Id),
+            (_, false) => query.OrderBy(e => e.Id),
+            (_, true) => query.OrderByDescending(e => e.Id),
+        };
+
+        var total = await query.CountAsync(ct);
+        var entries = await query.Skip(offset).Take(limit).ToListAsync(ct);
 
         return new([.. entries.Select(AuditEntryDto.FromEntity)], total);
     }

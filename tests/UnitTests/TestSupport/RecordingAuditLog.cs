@@ -1,5 +1,6 @@
 using Api.Dtos;
 using Api.Interfaces;
+using Api.Services;
 
 namespace UnitTests.TestSupport;
 
@@ -20,6 +21,14 @@ public sealed class RecordingAuditLog : IAuditLog
     }
 
     public Task<AuditEntriesResponse> ReadAsync(
-        int limit, int offset, CancellationToken ct = default) =>
+        int limit,
+        int offset,
+        string search = null,
+        string action = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        string sortBy = AuditSortColumn.OccurredAt,
+        bool descending = true,
+        CancellationToken ct = default) =>
         throw new NotSupportedException("Use AuditLog itself to test reading the log back.");
 }
