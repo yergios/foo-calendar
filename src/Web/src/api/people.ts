@@ -2,6 +2,7 @@ import { apiFetch, apiFetchRaw, apiJson, errorForResponse } from "@/api";
 
 import type {
   AbsenceStatsResponse,
+  PeoplePageQuery,
   PeoplePageResponse,
   PeopleResponse,
   PersonDto,
@@ -20,9 +21,21 @@ export function getAllPeople(): Promise<PeopleResponse> {
 }
 
 /** For the admin people list, which pages instead of holding the whole roster in memory
- * the way the calendar's shared people store needs to. */
-export function getPeoplePage(page: number, pageSize: number): Promise<PeoplePageResponse> {
-  return apiJson(`/api/people/paged?page=${page}&pageSize=${pageSize}`);
+ * the way the calendar's shared people store needs to. Search, region filter, and sort all
+ * happen server-side, since they have to be applied before paging, not after. */
+export function getPeoplePage(
+  page: number,
+  pageSize: number,
+  query: PeoplePageQuery = {},
+): Promise<PeoplePageResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (query.search) params.set("search", query.search);
+  for (const region of query.regions ?? []) params.append("regions", region);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.descending) params.set("sortDir", "desc");
+  if (query.statsYear !== undefined) params.set("year", String(query.statsYear));
+
+  return apiJson(`/api/people/paged?${params.toString()}`);
 }
 
 export function getMyStats(year?: number): Promise<AbsenceStatsResponse> {

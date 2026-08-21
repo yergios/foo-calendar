@@ -11,6 +11,22 @@ export interface PeoplePageResponse {
   total: number;
 }
 
+/** Matches the API's PersonSortColumn constants (Api/Services/PersonSortColumn.cs) -
+ * vacation/sick/other are gated server-side behind ReportsRead, since they carry the same
+ * per-year numbers the stats endpoint does. */
+export type PeopleSortColumn = "name" | "username" | "homeCity" | "vacation" | "sick" | "other";
+
+export interface PeoplePageQuery {
+  search?: string;
+  /** A region code matches its own people and anyone in a subdivision of it, same rule as
+   * the home page's region filter. */
+  regions?: string[];
+  sortBy?: PeopleSortColumn;
+  descending?: boolean;
+  /** Which year vacation/sick/other are computed for. Ignored unless sortBy is one of them. */
+  statsYear?: number;
+}
+
 export interface PersonDto {
   id: number;
   username: string;

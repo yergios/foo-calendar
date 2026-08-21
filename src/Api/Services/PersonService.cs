@@ -13,7 +13,8 @@ public sealed class PersonService(
     AppDbContext db,
     ITeamRegionService teamRegions,
     RegionLabels regionLabels,
-    IAuditLog audit) : IPersonService
+    IAuditLog audit,
+    IAbsenceService absenceService) : IPersonService
 {
     // What a person was, for a log entry that still reads sensibly once they are gone.
     private static string Describe(Person person) =>
@@ -71,16 +72,90 @@ public sealed class PersonService(
         return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], labels);
     }
 
-    public async Task<PeoplePageResponse> GetPageAsync(int page, int pageSize, CancellationToken ct = default)
+    public async Task<PeoplePageResponse> GetPageAsync(
+        int page,
+        int pageSize,
+        string search,
+        IReadOnlyList<string> regions,
+        string sortBy,
+        bool descending,
+        int? statsYear,
+        CancellationToken ct = default)
     {
-        // Same ordering as GetAllAsync, so a person's position doesn't shuffle between
-        // pages just because a different endpoint answered the request.
-        var query = db.People.OrderBy(p => p.DisplayName ?? p.Username);
+        var query = db.People.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(p => EF.Functions.Like(p.DisplayName, $"%{search}%"));
+
+        if (regions is { Count: > 0 })
+        {
+            // Same "a country also matches its own subdivisions" rule as the home page's
+            // region filter (HomeView.vue's matchesRegionFilter) - inlined rather than
+            // RegionCode.BelongsTo() so EF can translate it into SQL, same as
+            // TeamRegionService.PruneIfUnusedAsync does for the same reason.
+            query = query.Where(p =>
+                p.HomeCity != null
+                && regions.Any(r => p.HomeCity == r || p.HomeCity.StartsWith(r + RegionCode.Separator)));
+        }
+
+        if (PersonSortColumn.StatsColumns.Contains(sortBy))
+            return await GetStatsSortedPageAsync(query, page, pageSize, sortBy, descending, statsYear, ct);
+
+        query = (sortBy, descending) switch
+        {
+            (PersonSortColumn.Username, false) => query.OrderBy(p => p.Username),
+            (PersonSortColumn.Username, true) => query.OrderByDescending(p => p.Username),
+            (PersonSortColumn.HomeCity, false) => query.OrderBy(p => p.HomeCity).ThenBy(p => p.DisplayName ?? p.Username),
+            (PersonSortColumn.HomeCity, true) => query.OrderByDescending(p => p.HomeCity).ThenBy(p => p.DisplayName ?? p.Username),
+            (_, false) => query.OrderBy(p => p.DisplayName ?? p.Username),
+            (_, true) => query.OrderByDescending(p => p.DisplayName ?? p.Username),
+        };
 
         var total = await query.CountAsync(ct);
         var people = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
         return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], total);
+    }
+
+    // Vacation/sick/other aren't database columns - they're a per-year, day-by-day
+    // computation over each person's absences (see AbsenceService.GetAllStatsAsync) - so
+    // sorting by one means pulling the filtered set into memory to join against it, rather
+    // than an ORDER BY the database can do on its own. Same cost the admin reports view
+    // already pays every time it loads a year of stats; this only pays it when someone
+    // actually asks to sort by one of these three columns.
+    private async Task<PeoplePageResponse> GetStatsSortedPageAsync(
+        IQueryable<Person> query,
+        int page,
+        int pageSize,
+        string sortBy,
+        bool descending,
+        int? statsYear,
+        CancellationToken ct)
+    {
+        var people = await query.ToListAsync(ct);
+        var statsByPersonId = (await absenceService.GetAllStatsAsync(statsYear ?? DateTime.UtcNow.Year, ct))
+            .Stats.ToDictionary(s => s.PersonId);
+
+        int StatFor(Person person)
+        {
+            if (!statsByPersonId.TryGetValue(person.Id, out var stats)) return 0;
+            return sortBy switch
+            {
+                PersonSortColumn.Vacation => stats.VacationDays,
+                PersonSortColumn.Sick => stats.SickDays,
+                _ => stats.OtherDays,
+            };
+        }
+
+        var ordered = descending
+            ? people.OrderByDescending(StatFor).ThenBy(p => p.DisplayName ?? p.Username)
+            : people.OrderBy(StatFor).ThenBy(p => p.DisplayName ?? p.Username);
+
+        var pageOfPeople = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return new(
+            [.. pageOfPeople.Select(p => PersonDto.FromEntity(p, includePreferences: false))],
+            people.Count);
     }
 
     public async Task DeleteAsync(int personId, CancellationToken ct = default)

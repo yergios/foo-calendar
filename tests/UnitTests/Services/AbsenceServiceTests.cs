@@ -14,14 +14,6 @@ namespace UnitTests.Services;
 
 public sealed class AbsenceServiceTests : SqliteTestBase
 {
-    /// <summary>Records what the service published instead of delivering anything.</summary>
-    private sealed class RecordingWebhookPublisher : IWebhookPublisher
-    {
-        public List<WebhookEvent> Published { get; } = [];
-
-        public void Publish(WebhookEvent webhookEvent) => Published.Add(webhookEvent);
-    }
-
     private readonly RecordingWebhookPublisher webhooks = new();
     private readonly RecordingAuditLog audit = new();
     private readonly RecordingNotificationService notifications = new();

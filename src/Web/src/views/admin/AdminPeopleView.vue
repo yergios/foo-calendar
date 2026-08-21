@@ -7,7 +7,20 @@
       :class="canManagePeople ? 'grid-cols-[3fr_2fr]' : 'grid-cols-1'"
     >
       <div class="min-w-0 border border-border rounded-12 p-4">
-        <div class="flex items-center justify-end min-h-9">
+        <div class="flex items-center justify-between gap-3 flex-wrap min-h-9">
+          <div class="flex items-center gap-3 flex-wrap">
+            <input
+              v-model="search"
+              type="text"
+              placeholder="Search by name…"
+              class="h-9 w-56 border border-border-strong rounded-8 px-3 text-sm bg-background"
+            />
+            <RegionFilterSelect
+              id="peopleRegionFilter"
+              v-model="regionFilter"
+              :groups="regionGroups"
+            />
+          </div>
           <YearPicker v-if="canReadReports" v-model="statsYear">
             <span class="text-sm text-secondary">Stats for {{ statsYear }}</span>
           </YearPicker>
@@ -20,12 +33,54 @@
         <table v-else-if="people.length > 0" class="w-full text-sm mt-3">
           <thead>
             <tr class="text-left text-xs font-semibold text-secondary border-b border-border">
-              <th class="py-2 pr-2">Person</th>
-              <th class="py-2 pr-2">Username</th>
-              <th class="py-2 pr-2">Home city</th>
-              <th v-if="canReadReports" class="py-2 pr-2 text-center">Vacation</th>
-              <th v-if="canReadReports" class="py-2 pr-2 text-center">Sick</th>
-              <th v-if="canReadReports" class="py-2 pr-2 text-center">Other</th>
+              <th class="py-2 pr-2">
+                <SortButton
+                  :active="sortBy === 'name'"
+                  :descending="descending"
+                  @toggle="toggleSort('name')"
+                  >Person</SortButton
+                >
+              </th>
+              <th class="py-2 pr-2">
+                <SortButton
+                  :active="sortBy === 'username'"
+                  :descending="descending"
+                  @toggle="toggleSort('username')"
+                  >Username</SortButton
+                >
+              </th>
+              <th class="py-2 pr-2">
+                <SortButton
+                  :active="sortBy === 'homeCity'"
+                  :descending="descending"
+                  @toggle="toggleSort('homeCity')"
+                  >Home city</SortButton
+                >
+              </th>
+              <th v-if="canReadReports" class="py-2 pr-2 text-center">
+                <SortButton
+                  :active="sortBy === 'vacation'"
+                  :descending="descending"
+                  @toggle="toggleSort('vacation')"
+                  >Vacation</SortButton
+                >
+              </th>
+              <th v-if="canReadReports" class="py-2 pr-2 text-center">
+                <SortButton
+                  :active="sortBy === 'sick'"
+                  :descending="descending"
+                  @toggle="toggleSort('sick')"
+                  >Sick</SortButton
+                >
+              </th>
+              <th v-if="canReadReports" class="py-2 pr-2 text-center">
+                <SortButton
+                  :active="sortBy === 'other'"
+                  :descending="descending"
+                  @toggle="toggleSort('other')"
+                  >Other</SortButton
+                >
+              </th>
               <th class="py-2 pr-2"></th>
             </tr>
           </thead>
@@ -33,7 +88,7 @@
             <tr v-for="person in people" :key="person.id" class="border-b border-border">
               <td class="py-2 pr-2">{{ person.displayName ?? person.username }}</td>
               <td class="py-2 pr-2 text-secondary">{{ person.username }}</td>
-              <td class="py-2 pr-2 text-secondary">{{ person.homeCity ?? "—" }}</td>
+              <td class="py-2 pr-2 text-secondary">{{ regionLabel(person.homeCity) }}</td>
               <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
                 {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.vacationDays ?? 0) }}
               </td>
@@ -170,17 +225,21 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 
 import { createPerson, deletePerson, getAllPeopleStats, updatePerson } from "@/api/admin";
 import { getPeoplePage } from "@/api/people";
 import { useAuthStore } from "@/auth";
+import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
+import SortButton from "@/components/SortButton.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
+import { groupRegions } from "@/lib/regionGroups";
 import { usePeopleStore } from "@/stores/people";
 import { Permission } from "@/types/permission";
-import type { PersonAbsenceStatsDto, PersonDto } from "@/types/person";
+import type { PeopleSortColumn, PersonAbsenceStatsDto, PersonDto } from "@/types/person";
 
 // Reachable at all with either permission (see adminSections.ts); which pieces of the
 // page that actually unlocks - the stats columns, the add/edit/delete form - is still
@@ -189,10 +248,25 @@ const authStore = useAuthStore();
 const canManagePeople = computed(() => authStore.can(Permission.peopleManage));
 const canReadReports = computed(() => authStore.can(Permission.reportsRead));
 
-// Only touched to keep HomeView's calendar (which needs the *whole* roster, unlike this
-// page) in sync after a create/update/delete - this view's own table is paginated
-// separately below and never reads from this store.
+// Declared up here, not down by loadStats below, because loadPage's query also needs it
+// (for the stats-sorted path, see GetStatsSortedPageAsync) and comes first in the file.
+const statsYear = ref(new Date().getFullYear());
+
+// Also backs HomeView's calendar (which needs the *whole* roster, unlike this page) and,
+// here, just the region filter's options and labels - loaded for that reason alone, kept
+// in sync after a create/update/delete so a newly-picked region shows up in the filter
+// without a reload. This view's own table is paginated separately below and never reads
+// people from this store.
 const peopleStore = usePeopleStore();
+const { regionLabels } = storeToRefs(peopleStore);
+const regionGroups = computed(() => groupRegions(regionLabels.value));
+
+// Falls back to the bare code so a region that isn't in the team's current catalog (yet,
+// or anymore) still shows something, same as HomeView's own regionLabel.
+function regionLabel(code: string | null): string {
+  if (!code) return "—";
+  return regionLabels.value[code] ?? code;
+}
 
 // Real pagination, not a display slice of an already-fetched full roster: `people` here is
 // only ever one page's worth, fetched fresh from /api/people/paged on every page change.
@@ -208,11 +282,35 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PEOPLE_PAG
 
 const isLatestPageLoad = useStaleGuard();
 
+// Search, region filter, and sort all narrow or reorder the same underlying set, so they
+// all have to be applied server-side, before paging - not after, which would just be
+// slicing whatever 25 rows happened to load. See PersonService.GetPageAsync.
+const search = ref("");
+const regionFilter = ref<string[]>([]);
+const sortBy = ref<PeopleSortColumn>("name");
+const descending = ref(false);
+const STATS_SORT_COLUMNS: PeopleSortColumn[] = ["vacation", "sick", "other"];
+
+function toggleSort(column: PeopleSortColumn) {
+  if (sortBy.value === column) {
+    descending.value = !descending.value;
+  } else {
+    sortBy.value = column;
+    descending.value = false;
+  }
+}
+
 async function loadPage() {
   const isCurrent = isLatestPageLoad();
   pageLoading.value = true;
   try {
-    const result = await getPeoplePage(page.value, PEOPLE_PAGE_SIZE);
+    const result = await getPeoplePage(page.value, PEOPLE_PAGE_SIZE, {
+      search: search.value.trim() || undefined,
+      regions: regionFilter.value.length > 0 ? regionFilter.value : undefined,
+      sortBy: sortBy.value,
+      descending: descending.value,
+      statsYear: canReadReports.value ? statsYear.value : undefined,
+    });
     if (!isCurrent()) return;
     people.value = result.people;
     total.value = result.total;
@@ -224,6 +322,32 @@ async function loadPage() {
 }
 
 watch(page, loadPage);
+
+// Any of these changing means page 1 might not even be the same 25 people any more, so
+// they all jump back to it rather than staying wherever the user happened to be. Setting
+// `page` re-triggers the watch above when it was already 1 (a no-op reassignment doesn't),
+// so loadPage() is still called directly in that branch.
+function reloadFromStart() {
+  if (page.value === 1) loadPage();
+  else page.value = 1;
+}
+
+watch([regionFilter, sortBy, descending], reloadFromStart);
+
+// Debounced, unlike the region filter and sort: those are discrete clicks, this fires on
+// every keystroke, and a request per keystroke would just make the later ones win a race
+// against each other for no benefit.
+let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(reloadFromStart, 300);
+});
+
+// Only the stats-sorted path (see GetStatsSortedPageAsync) actually depends on the year;
+// reloading for every other sort would be a wasted request.
+watch(statsYear, () => {
+  if (STATS_SORT_COLUMNS.includes(sortBy.value)) reloadFromStart();
+});
 
 // A delete can leave the current page past the new end (e.g. deleting the last person on
 // the last page), which would otherwise show an empty table with no way back. Just moves
@@ -252,7 +376,6 @@ const canSubmitForm = computed(() => {
   return form.username.trim().length > 0;
 });
 
-const statsYear = ref(new Date().getFullYear());
 const statsByPerson = ref<Map<number, PersonAbsenceStatsDto>>(new Map());
 const statsLoading = ref(true);
 
@@ -277,6 +400,9 @@ watch(statsYear, loadStats);
 onMounted(() => {
   loadPage();
   if (canReadReports.value) loadStats();
+  peopleStore.loadOnce().catch((error: unknown) => {
+    console.error("ERROR => Failed to load people:", error);
+  });
 });
 
 function resetForm() {

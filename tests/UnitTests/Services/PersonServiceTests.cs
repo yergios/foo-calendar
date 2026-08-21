@@ -16,13 +16,21 @@ public sealed class PersonServiceTests : SqliteTestBase
     private readonly RecordingTeamRegionService teamRegions = new();
     private readonly RecordingAuditLog audit = new();
 
+    // A real AbsenceService, not a fake: sorting by a stats column (see
+    // GetPageAsync_SortedByVacation_OrdersAcrossPagesByThatYearsStats below) exercises its
+    // actual day-counting, which is the whole point of that path existing, and this is
+    // also what the tests for it use to give a person some approved vacation days.
+    private readonly AbsenceService absences;
+
     public PersonServiceTests()
     {
+        absences = TestAbsenceService.Create(Db);
         sut = new PersonService(
             Db,
             teamRegions,
             new RegionLabels(NullLogger<RegionLabels>.Instance),
-            audit);
+            audit,
+            absences);
     }
 
     private static CreatePersonRequest CreateRequest(string username) =>
@@ -164,5 +172,74 @@ public sealed class PersonServiceTests : SqliteTestBase
         await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane D.", "ES-MD"), "jdoe");
 
         audit.Entries.ShouldBeEmpty();
+    }
+
+    private static CreatePersonRequest CreateRequestNamed(string username, string displayName, string region = null) =>
+        new(username, "First", "Last", displayName, region);
+
+    [Fact]
+    public async Task GetPageAsync_FiltersBySearch_MatchingDisplayNameSubstringCaseInsensitively()
+    {
+        await sut.CreateAsync(CreateRequestNamed("asmith", "Alice Smith"), "admin");
+        await sut.CreateAsync(CreateRequestNamed("bjones", "Bob Jones"), "admin");
+
+        var result = await sut.GetPageAsync(1, 25, "smith", null, PersonSortColumn.Name, false, null);
+
+        result.Total.ShouldBe(1);
+        result.People.ShouldHaveSingleItem().DisplayName.ShouldBe("Alice Smith");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_FiltersByRegion_MatchingItAndItsSubdivisionsOnly()
+    {
+        await sut.CreateAsync(CreateRequestIn("madrid", "ES-MD"), "admin");
+        await sut.CreateAsync(CreateRequestIn("asturias", "ES-AS"), "admin");
+        await sut.CreateAsync(CreateRequestIn("california", "US-CA"), "admin");
+
+        var result = await sut.GetPageAsync(1, 25, null, ["ES"], PersonSortColumn.Name, false, null);
+
+        result.Total.ShouldBe(2);
+        result.People.Select(p => p.Username).ShouldBe(["madrid", "asturias"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortsByUsernameDescending()
+    {
+        await sut.CreateAsync(CreateRequest("alice"), "admin");
+        await sut.CreateAsync(CreateRequest("bob"), "admin");
+        await sut.CreateAsync(CreateRequest("carl"), "admin");
+
+        var result = await sut.GetPageAsync(1, 25, null, null, PersonSortColumn.Username, descending: true, null);
+
+        result.People.Select(p => p.Username).ShouldBe(["carl", "bob", "alice"]);
+    }
+
+    // Vacation days aren't a database column, so sorting by that column has its own code
+    // path (see PersonService.GetStatsSortedPageAsync) that has to page correctly too, not
+    // just sort the first page it's handed - this pins that down with a page size that
+    // splits the three people across two requests.
+    [Fact]
+    public async Task GetPageAsync_SortedByVacation_OrdersAcrossPagesByThatYearsStats()
+    {
+        var noVacation = await sut.CreateAsync(CreateRequestNamed("noVacation", "No Vacation"), "admin");
+        var oneWeek = await sut.CreateAsync(CreateRequestNamed("oneWeek", "One Week"), "admin");
+        var twoWeeks = await sut.CreateAsync(CreateRequestNamed("twoWeeks", "Two Weeks"), "admin");
+
+        var person = await Db.People.FindAsync(oneWeek.Id);
+        await absences.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 6), AbsenceType.Vacation, null));
+
+        person = await Db.People.FindAsync(twoWeeks.Id);
+        await absences.CreateAsync(
+            person,
+            new CreateAbsenceRequest(new DateOnly(2026, 4, 6), new DateOnly(2026, 4, 17), AbsenceType.Vacation, null));
+
+        var firstPage = await sut.GetPageAsync(1, 2, null, null, PersonSortColumn.Vacation, false, 2026);
+        var secondPage = await sut.GetPageAsync(2, 2, null, null, PersonSortColumn.Vacation, false, 2026);
+
+        firstPage.Total.ShouldBe(3);
+        firstPage.People.Select(p => p.Username).ShouldBe(["noVacation", "oneWeek"]);
+        secondPage.People.Select(p => p.Username).ShouldBe(["twoWeeks"]);
     }
 }

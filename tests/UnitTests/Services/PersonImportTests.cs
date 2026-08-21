@@ -21,7 +21,8 @@ public sealed class PersonImportTests : SqliteTestBase
         Db,
         teamRegions,
         new RegionLabels(NullLogger<RegionLabels>.Instance),
-        audit);
+        audit,
+        TestAbsenceService.Create(Db));
 
     private Person AddPerson(string username)
     {

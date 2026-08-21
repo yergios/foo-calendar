@@ -3,6 +3,7 @@
 using Api.Configuration;
 using Api.Dtos;
 using Api.Interfaces;
+using Api.Services;
 
 using Microsoft.Extensions.Options;
 
@@ -55,19 +56,43 @@ public static class PeopleEndpoints
     private const int DefaultPeoplePageSize = 25;
     private const int MaxPeoplePageSize = 200;
 
-    // Same authorization as GetAll above (just RequireAuthorization on the group, no
+    // Same base authorization as GetAll above (just RequireAuthorization on the group, no
     // specific permission): the admin people page is reachable with either PeopleManage or
-    // ReportsRead (see ADMIN_SECTIONS on the frontend), and this returns nothing GetAll
-    // doesn't already hand any signed-in user today.
+    // ReportsRead (see ADMIN_SECTIONS on the frontend), and search/region-filter/paging
+    // return nothing GetAll doesn't already hand any signed-in user today. Sorting by a
+    // stats column is the one exception - see the ReportsRead check below.
     private static async Task<IResult> GetPaged(
         int? page,
         int? pageSize,
+        string search,
+        string[] regions,
+        string sortBy,
+        string sortDir,
+        int? year,
+        ClaimsPrincipal user,
+        IOptions<AuthOptions> authOptions,
         IPersonService people,
         CancellationToken ct)
     {
+        var sort = sortBy ?? PersonSortColumn.Name;
+
+        // Vacation/sick/other are the same per-year numbers the ReportsRead-gated stats
+        // endpoint hands out; sorting by one would otherwise let PeopleManage alone infer
+        // them a page at a time.
+        if (PersonSortColumn.StatsColumns.Contains(sort) && !user.HasAnyPermission(
+                authOptions.Value.ClaimTypes.Permissions, authOptions.Value.ValuesFor(Permissions.ReportsRead)))
+        {
+            return Results.Forbid();
+        }
+
         var result = await people.GetPageAsync(
             Math.Max(page ?? 1, 1),
             Math.Clamp(pageSize ?? DefaultPeoplePageSize, 1, MaxPeoplePageSize),
+            search,
+            regions,
+            sort,
+            sortDir == "desc",
+            year,
             ct);
 
         return Results.Ok(result);
