@@ -145,7 +145,7 @@
         </div>
       </div>
 
-      <div v-if="canManagePeople" class="min-w-0 border border-border rounded-12 p-4">
+      <div v-if="canManagePeople" class="min-w-0 border border-border rounded-12 p-4 mr-8">
         <h5>{{ editingId ? "Edit person" : "Add person" }}</h5>
         <div class="grid grid-cols-1 gap-3 mt-3">
           <div v-if="!editingId" class="flex flex-col gap-1.5">
