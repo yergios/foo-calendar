@@ -7,24 +7,22 @@
     </p>
 
     <div class="border border-border rounded-12 p-4 mt-4">
-      <div class="flex items-center justify-between gap-3 flex-wrap min-h-9">
-        <div class="flex items-center gap-3 flex-wrap">
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Search by user…"
-            class="h-9 w-56 border border-border-strong rounded-8 px-3 text-sm bg-background"
-          />
-          <select
-            v-model="actionFilter"
-            class="h-9 border border-border-strong rounded-8 px-2 text-sm bg-background"
-          >
-            <option value="">All actions</option>
-            <option v-for="action in AUDIT_ACTIONS" :key="action" :value="action">
-              {{ action }}
-            </option>
-          </select>
-        </div>
+      <div class="flex items-center gap-3 flex-wrap min-h-9">
+        <input
+          v-model="search"
+          type="text"
+          placeholder="Search by user…"
+          class="h-9 w-56 border border-border-strong rounded-8 px-3 text-sm bg-background"
+        />
+        <select
+          v-model="actionFilter"
+          class="h-9 border border-border-strong rounded-8 px-2 text-sm bg-background"
+        >
+          <option value="">All actions</option>
+          <option v-for="action in AUDIT_ACTIONS" :key="action" :value="action">
+            {{ action }}
+          </option>
+        </select>
         <div class="flex items-center gap-2">
           <input
             v-model="fromDate"

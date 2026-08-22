@@ -698,14 +698,14 @@ function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackgroun
   return plainBackground;
 }
 
-// Today's column is outlined (and tinted) by an overlay pseudo-element rather than by a
-// border/background on the cell itself. A real border takes up space in the cell's box,
-// which pushed the day number off-centre and made today's column wider than its
-// neighbours. The overlay is absolutely positioned, so it costs no layout and still
-// paints above a filled-in absence block instead of being hidden underneath it.
+// Today's column is outlined by an overlay pseudo-element rather than by a border on the
+// cell itself. A real border takes up space in the cell's box, which pushed the day number
+// off-centre and made today's column wider than its neighbours. The overlay is absolutely
+// positioned, so it costs no layout and still paints above a filled-in absence block
+// instead of being hidden underneath it.
 const TODAY_OUTLINE =
   "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
-  "after:border-l-2 after:border-r-2 after:border-today after:bg-today/10";
+  "after:border-l-2 after:border-r-2 after:border-today";
 
 // The header row is always the top of the outline; only the last row has to close it off.
 function todayColumnClass(isToday: boolean, edge: "top" | "middle" | "bottom"): string {
