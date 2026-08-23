@@ -617,9 +617,47 @@ function cellsForPerson(person: PersonDto) {
   });
 }
 
-const cellsByPersonId = computed(
-  () => new Map(props.people.map((person) => [person.id, cellsForPerson(person)])),
-);
+// Cells are cached per person id and survive a change in who's visible. Filtering the team
+// - by region, or by the home page's name search - only ever adds and removes people, and
+// whoever stays has exactly the cells they had a moment ago.
+//
+// The array identity is the whole point. Handing a surviving row back the *same* cells
+// array is what lets the v-memo on the row template compare equal and skip the row
+// outright; rebuilding the Map from scratch handed every row a fresh array instead, so
+// Vue re-diffed a year of <td>s per person to confirm nothing had changed. With the cache
+// the only rows touched are the ones that actually came or went.
+//
+// Nothing about a person other than their id feeds cellsForPerson, so a changed name or
+// region can't stale an entry. Cell *content* comes from absenceMap and dayRenderInfo, and
+// those two are replaced wholesale when they change, so comparing their identities is
+// enough to know the cache is still good. days needs no check of its own: dayRenderInfo is
+// built by mapping it, so a new year gives that a new identity too.
+//
+// Entries for people currently filtered out are kept. The ceiling is the whole roster,
+// which is what's already in memory on first paint anyway, and it's what makes backspacing
+// through a query instant instead of recomputing everyone who reappears.
+let cellCache = new Map<number, ReturnType<typeof cellsForPerson>>();
+let cachedAbsenceMap: typeof absenceMap.value | null = null;
+let cachedDayRenderInfo: typeof dayRenderInfo.value | null = null;
+
+const cellsByPersonId = computed(() => {
+  if (absenceMap.value !== cachedAbsenceMap || dayRenderInfo.value !== cachedDayRenderInfo) {
+    cellCache = new Map();
+    cachedAbsenceMap = absenceMap.value;
+    cachedDayRenderInfo = dayRenderInfo.value;
+  }
+
+  const visible = new Map<number, ReturnType<typeof cellsForPerson>>();
+  for (const person of props.people) {
+    let cells = cellCache.get(person.id);
+    if (cells === undefined) {
+      cells = cellsForPerson(person);
+      cellCache.set(person.id, cells);
+    }
+    visible.set(person.id, cells);
+  }
+  return visible;
+});
 
 const personById = computed(() => new Map(props.people.map((person) => [person.id, person])));
 

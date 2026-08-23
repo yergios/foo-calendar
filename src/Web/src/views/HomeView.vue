@@ -34,6 +34,18 @@
 
       <div class="flex-1 flex items-center justify-end gap-3 flex-wrap">
         <div class="flex items-center gap-1.5">
+          <label for="personSearch" class="text-xs font-semibold text-secondary">Search</label>
+          <input
+            id="personSearch"
+            v-model="searchQuery"
+            type="search"
+            placeholder="Search people…"
+            class="h-9 w-56 border border-border-strong rounded-8 px-3 text-sm bg-background"
+            @keydown.escape="searchQuery = ''"
+          />
+        </div>
+
+        <div class="flex items-center gap-1.5">
           <label for="sortMode" class="text-xs font-semibold text-secondary">Sort by</label>
           <select
             id="sortMode"
@@ -58,6 +70,10 @@
         </YearPicker>
       </div>
     </header>
+
+    <p v-if="searchScores && filteredPeople.length === 0" class="text-sm text-secondary">
+      Nobody matches “{{ searchQuery.trim() }}”.
+    </p>
 
     <CalendarGrid
       ref="calendarGridRef"
@@ -152,6 +168,7 @@ import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
+import { fuzzyScore, normalizeForSearch } from "@/lib/fuzzy";
 import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
@@ -198,6 +215,9 @@ const regionFilter = ref<string[]>(Array.isArray(cachedRegionFilter) ? cachedReg
 // applyRegionFilter below.
 const appliedRegionFilter = ref<string[]>(regionFilter.value);
 const customOrder = ref<number[]>(readCache<number[]>("teamCustomOrder") ?? []);
+// Not cached across reloads, unlike the sort mode and region filter: a half-typed name is
+// about what you're doing right now, not how you like the grid set up.
+const searchQuery = ref("");
 
 watch(sortMode, (mode) => writeCache("teamSortMode", mode));
 watch(regionFilter, (regions) => writeCache("teamRegionFilter", regions));
@@ -324,26 +344,84 @@ function primaryRank(): (person: PersonDto) => number {
   return () => 0; // by name alone
 }
 
+// Normalized once per roster rather than once per keystroke: the names don't change while
+// someone is typing, and stripping diacritics off every name on every character would be
+// the most expensive thing the search does.
+const searchKeys = computed(
+  () => new Map(people.value.map((p) => [p.id, normalizeForSearch(p.displayName ?? p.username)])),
+);
+
+// null means "no query": filtering and ranking both skip out entirely rather than scoring
+// everyone against an empty string. Unlike the region filter this is read live, with no
+// debounce and no skeleton frame - the cells behind a row that stays visible are cached in
+// CalendarGrid now, so a keystroke costs this scan plus a keyed list diff, and lagging it
+// behind a skeleton would only make it feel slower.
+const searchScores = computed<Map<number, number> | null>(() => {
+  const needle = normalizeForSearch(searchQuery.value.trim());
+  if (!needle) return null;
+
+  const scores = new Map<number, number>();
+  for (const person of people.value) {
+    const score = fuzzyScore(searchKeys.value.get(person.id)!, needle);
+    if (score !== null) scores.set(person.id, score);
+  }
+  return scores;
+});
+
 // Filtering only, no sorting: CalendarGrid keys its (expensive, a year of cells per
 // person) content off this list, so switching sort mode - which only ever changes display
 // order, never membership - doesn't force it to rebuild that content from scratch. See
 // visibleOrder below for the cheap part that does change with sort mode.
-const filteredPeople = computed(() => people.value.filter((p) => matchesRegionFilter(p.homeCity)));
+const filteredPeople = computed(() => {
+  const scores = searchScores.value;
+  return people.value.filter(
+    (p) => matchesRegionFilter(p.homeCity) && (scores === null || scores.has(p.id)),
+  );
+});
 
 // Just the ids, in display order. Recomputed on every sort mode change, but that's cheap:
 // sorting person records, not rebuilding anyone's cells.
+//
+// A live search takes the sort mode's place while it's running: scoring the matches is
+// only worth doing if the best one is at the top, and "region, then name" isn't what
+// anyone wants back when they've typed most of a name. Clearing the box hands the order
+// straight back to the chosen mode.
 const visibleOrder = computed(() => {
-  const rank = primaryRank();
+  const scores = searchScores.value;
+  const rank = scores === null ? primaryRank() : (p: PersonDto) => -(scores.get(p.id) ?? 0);
+
   return [...filteredPeople.value]
     .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)))
     .map((p) => p.id);
 });
 
-// Reordering starts from the order you currently see, not the saved customOrder array
-// (that one can be empty or out of date for newer team members). That way a drag
-// always works, no matter which sort mode was active beforehand.
+// The whole team's running order, including everyone the region filter or the search box
+// is currently hiding. A saved custom order leads (minus anyone who has since left the
+// team), then whoever it doesn't mention yet, in the order the current sort mode would have
+// shown them - so a first-ever drag starts from what's on screen rather than jumping
+// everything to alphabetical. Derived on each drag rather than kept in state, so a new
+// teammate can't go missing from it.
+function fullOrder(): number[] {
+  const stillHere = new Set(people.value.map((p) => p.id));
+  const saved = customOrder.value.filter((id) => stillHere.has(id));
+  const placed = new Set(saved);
+  const rank = primaryRank();
+
+  const rest = people.value
+    .filter((p) => !placed.has(p.id))
+    .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)))
+    .map((p) => p.id);
+
+  return [...saved, ...rest];
+}
+
+// Reordering works on the full team, not on the rows you can currently see. Seeding this
+// from the visible order instead used to write that subset back as the entire custom
+// order, so one drag while filtering silently threw away the saved position of everyone
+// hidden. Hidden people sit between the two rows in the full order, so dropping onto a row
+// still lands exactly where it looks like it will.
 function handleReorder(personId: number, targetPersonId: number) {
-  const order = [...visibleOrder.value];
+  const order = fullOrder();
   const fromIndex = order.indexOf(personId);
   const toIndex = order.indexOf(targetPersonId);
   if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
