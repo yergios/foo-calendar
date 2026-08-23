@@ -31,6 +31,36 @@ export function toDisplayTime(time: string | null | undefined): string {
   return time?.slice(0, 5) ?? "";
 }
 
+/** A short "dd/MM", for a date sitting next to a label that already supplies the context. */
+export function formatDayMonth(isoDate: string): string {
+  const date = parse(isoDate);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}
+
+/** isoDate shifted by whole days, forward or back. */
+export function addDays(isoDate: string, days: number): string {
+  const date = parse(isoDate);
+  // setDate walks the local calendar, so a DST boundary in between doesn't shift the day.
+  date.setDate(date.getDate() + days);
+  return toIso(date);
+}
+
+/** The first work day strictly after isoDate: a weekday that isHoliday doesn't reject.
+ * Callers with no holiday calendar to hand omit isHoliday and get weekdays only. */
+export function nextWorkingDay(isoDate: string, isHoliday?: (iso: string) => boolean): string {
+  const date = parse(isoDate);
+  // Bounded: a region with every weekday marked a holiday would otherwise spin forever.
+  for (let i = 0; i < 366; i++) {
+    date.setDate(date.getDate() + 1);
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+    const iso = toIso(date);
+    if (!isHoliday?.(iso)) return iso;
+  }
+  return toIso(date);
+}
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",

@@ -35,7 +35,14 @@ import { computed, onMounted, ref } from "vue";
 import { getAbsences } from "@/api/absences";
 import { getCatalogHolidays } from "@/api/bankHolidays";
 import AppModal from "@/components/AppModal.vue";
-import { formatLongDate, toDisplayTime, today } from "@/lib/dates";
+import {
+  addDays,
+  formatDayMonth,
+  formatLongDate,
+  nextWorkingDay,
+  toDisplayTime,
+  today,
+} from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto, type AbsenceType } from "@/types/absence";
@@ -59,10 +66,9 @@ onMounted(() => {
 // global question, not scoped to whatever the grid currently happens to be narrowed to.
 const { people } = storeToRefs(usePeopleStore());
 
-// Fetched fresh for exactly today rather than reused from HomeView's year-scoped
-// `absences`/`holidays`: those only actually cover today when the grid happens to be
-// showing the current year, and this should answer correctly no matter which year is on
-// screen.
+// Fetched fresh rather than reused from HomeView's year-scoped `absences`/`holidays`: those
+// only actually cover today when the grid happens to be showing the current year, and this
+// should answer correctly no matter which year is on screen.
 const loading = ref(true);
 const error = ref<string | null>(null);
 const absences = ref<AbsenceDto[]>([]);
@@ -71,11 +77,18 @@ const holidays = ref<BankHolidayDto[]>([]);
 const todayIso = today();
 const todayLabel = formatLongDate(todayIso);
 
+// Absences are asked for exactly today, but holidays reach forward: the "back on" date has
+// to skip a bank holiday, not just a weekend. Wide enough to cover the return date of any
+// realistic absence someone is in the middle of, and fetched in one go so it still costs a
+// single round trip. An absence running past the horizon falls back to skipping weekends
+// only, which is what this did before.
+const HOLIDAY_HORIZON_DAYS = 120;
+
 onMounted(async () => {
   try {
     const [absencesRes, holidaysRes] = await Promise.all([
       getAbsences(todayIso, todayIso),
-      getCatalogHolidays(todayIso, todayIso),
+      getCatalogHolidays(todayIso, addDays(todayIso, HOLIDAY_HORIZON_DAYS)),
     ]);
     absences.value = absencesRes.absences;
     holidays.value = holidaysRes.holidays;
@@ -93,7 +106,8 @@ interface Entry {
   badgeInitial: string;
   badgeClass: string;
   typeLabel: string;
-  /** Time range for a time-based absence, the holiday's name, or "" for a whole-day one. */
+  /** Time range for a time-based absence, the return date for a whole-day one, or the
+   * holiday's name. */
   detail: string;
   category: number;
 }
@@ -126,6 +140,16 @@ function holidayAppliesToPerson(holidayRegion: string, personHomeCity: string): 
   return holidayIsNationwide && personCountry === holidayRegion;
 }
 
+// Someone with no home city set has no holiday calendar to check against, so their return
+// date only skips weekends. The linear scan is over one horizon's worth of holidays and
+// runs a handful of times per person, so an index per person would cost more than it saves.
+function holidayCheckFor(person: PersonDto): ((iso: string) => boolean) | undefined {
+  const homeCity = person.homeCity;
+  if (!homeCity) return undefined;
+  return (iso) =>
+    holidays.value.some((h) => h.date === iso && holidayAppliesToPerson(h.region, homeCity));
+}
+
 // Approved only, same distinction the weekly digest email draws: a still-pending request
 // hasn't actually been granted, so it isn't yet "off" in the sense this list means.
 const entries = computed<Entry[]>(() => {
@@ -136,9 +160,11 @@ const entries = computed<Entry[]>(() => {
     .map((absence): Entry | null => {
       const person = peopleById.get(absence.personId);
       if (!person) return null;
+      // GetOverlappingAsync doesn't clip rows to the queried window, so endDate here is the
+      // absence's real last day even though we only asked about today.
       const detail = absence.startTime
         ? `${toDisplayTime(absence.startTime)}–${toDisplayTime(absence.endTime)}`
-        : "";
+        : `Back on the ${formatDayMonth(nextWorkingDay(absence.endDate, holidayCheckFor(person)))}`;
       return {
         key: `absence-${absence.id}`,
         person,
@@ -158,7 +184,11 @@ const entries = computed<Entry[]>(() => {
   const holidayEntries: Entry[] = people.value.flatMap((person) => {
     const homeCity = person.homeCity;
     if (alreadyListed.has(person.id) || !homeCity) return [];
-    const holiday = holidays.value.find((h) => holidayAppliesToPerson(h.region, homeCity));
+    // The date check matters now that the fetch reaches past today for the "back on" dates:
+    // a holiday three weeks out must not put anyone on today's list.
+    const holiday = holidays.value.find(
+      (h) => h.date === todayIso && holidayAppliesToPerson(h.region, homeCity),
+    );
     if (!holiday) return [];
     return [
       {
