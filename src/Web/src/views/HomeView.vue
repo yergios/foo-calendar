@@ -139,7 +139,7 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from "vue";
 
 import { getAbsences } from "@/api/absences";
 import { getCatalogHolidays } from "@/api/bankHolidays";
@@ -172,8 +172,11 @@ const configStore = useConfigStore();
 const regionGroups = computed(() => groupRegions(regionLabels.value));
 
 const year = ref(new Date().getFullYear());
-const absences = ref<AbsenceDto[]>([]);
-const holidays = ref<BankHolidayDto[]>([]);
+// shallowRef: both are only ever replaced wholesale by loadYear, never mutated in place,
+// and a deep ref would wrap a whole year of absence objects in reactive proxies - memory
+// spent on tracking nothing, plus proxy overhead in every computed that iterates them.
+const absences = shallowRef<AbsenceDto[]>([]);
+const holidays = shallowRef<BankHolidayDto[]>([]);
 const loading = ref(false);
 const calendarGridRef = ref<InstanceType<typeof CalendarGrid> | null>(null);
 const showAbsenceModal = ref(false);

@@ -1,4 +1,4 @@
-import { type Ref, ref } from "vue";
+import { type Ref, shallowRef } from "vue";
 
 import { readCache, writeCache } from "@/lib/browserCache";
 
@@ -13,7 +13,10 @@ import { readCache, writeCache } from "@/lib/browserCache";
  */
 export function createLoadOnce<T>(fetcher: () => Promise<T>, cacheKey?: string) {
   const cached = cacheKey ? readCache<T>(cacheKey) : null;
-  const data = ref(cached) as Ref<T | null>;
+  // shallowRef: the value is only ever replaced wholesale (see the assignment below),
+  // never mutated in place, so deep-proxying every object inside a fetched list (like
+  // the whole team's people) would cost memory and proxy overhead for nothing.
+  const data = shallowRef(cached) as Ref<T | null>;
   let loaded = cached !== null;
   let pending: Promise<T> | null = null;
 

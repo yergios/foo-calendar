@@ -138,11 +138,10 @@
 
             <td
               v-for="(cell, cellIndex) in row.cells"
-              :key="`${row.person.id}-${cell.day.iso}`"
+              :key="cell.day.iso"
               class="relative h-9 p-0 align-middle border-b border-border"
               :class="[
-                dayHeaderClass(cell.day),
-                columnSideBorderClass(cell.day),
+                cell.info.bodyClass,
                 todayColumnClass(
                   cell.day.isToday,
                   row.person.id === lastRowPersonId ? 'bottom' : 'middle',
@@ -150,7 +149,11 @@
                 mineRowClass(row.isMine, cellIndex === row.cells.length - 1 ? 'end' : 'middle'),
                 row.isMine ? 'cursor-pointer hover:bg-primary-text/15' : '',
               ]"
-              :title="cell.absences.length === 0 ? emptyCellTitle(row.person, cell.day) : undefined"
+              :title="
+                cell.absences.length === 0
+                  ? emptyCellTitle(row.isMine, cell.info.holidayTitle)
+                  : undefined
+              "
               :data-iso="cell.day.iso"
               @click="handleCellClick(row.person, cell)"
             >
@@ -180,12 +183,11 @@
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
             />
             <td
-              v-for="day in days"
+              v-for="(day, dayIndex) in days"
               :key="day.iso"
               class="h-9 p-0 align-middle border-b border-border"
               :class="[
-                dayHeaderClass(day),
-                columnSideBorderClass(day),
+                dayRenderInfo[dayIndex]!.bodyClass,
                 todayColumnClass(day.isToday, filler.isLast ? 'bottom' : 'middle'),
               ]"
             />
@@ -456,12 +458,17 @@ const regionLabels = computed(() => {
 
 const days = computed(() => {
   const weekdayFmt = new Intl.DateTimeFormat(navigator.language, { weekday: "short" });
-  const start = new Date(props.year, 0, 1);
+  // Only 7 distinct labels exist, so format each weekday once and index by getDay()
+  // instead of paying an Intl format call per day. January 2023 starts on a Sunday,
+  // matching getDay()'s Sunday-is-0 indexing.
+  const weekdayLabels = Array.from({ length: 7 }, (_, weekday) =>
+    weekdayFmt.format(new Date(2023, 0, 1 + weekday)),
+  );
   const end = new Date(props.year, 11, 31);
   const today = toIso(new Date());
 
   const result = [];
-  for (let d = start; d <= end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+  for (const d = new Date(props.year, 0, 1); d <= end; d.setDate(d.getDate() + 1)) {
     const iso = toIso(d);
     result.push({
       iso,
@@ -469,7 +476,7 @@ const days = computed(() => {
       dayNum: d.getDate(),
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
       isToday: iso === today,
-      weekdayLabel: weekdayFmt.format(d),
+      weekdayLabel: weekdayLabels[d.getDay()],
     });
   }
   return result;
@@ -517,8 +524,9 @@ const absenceMap = computed(() => {
       byDate = new Map();
       map.set(a.personId, byDate);
     }
-    for (let d = parse(a.startDate); toIso(d) <= a.endDate; d.setDate(d.getDate() + 1)) {
+    for (const d = parse(a.startDate); ; d.setDate(d.getDate() + 1)) {
       const iso = toIso(d);
+      if (iso > a.endDate) break;
       const list = byDate.get(iso);
       if (list) list.push(a);
       else byDate.set(iso, [a]);
@@ -534,6 +542,23 @@ const absenceMap = computed(() => {
 function isPaintDay(day: { isWeekend: boolean }): boolean {
   return !day.isWeekend;
 }
+
+// The day-level part of every body cell's rendering: the weekend/holiday background, the
+// month-boundary side border, and the holiday tooltip are the same for every row, so
+// they're resolved once per day here instead of once per cell in the template. Threaded
+// into each cell by cellsForPerson below, which also makes a holiday change reach the
+// cells through row.cells - and so through the rows' v-memo - instead of bypassing it.
+const dayRenderInfo = computed(() =>
+  days.value.map((day) => ({
+    bodyClass: `${dayHeaderClass(day)} ${columnSideBorderClass(day)}`,
+    holidayTitle: holidayName(day.iso),
+  })),
+);
+
+// Most cells hold no absence at all, so the empty case is a fast path that allocates
+// nothing: one shared empty array instead of a fresh [] (and a fresh .filter() result)
+// per empty cell, per person.
+const NO_ABSENCES: AbsenceDto[] = [];
 
 // This precomputes each visible person's per-day absences once. Otherwise the template
 // would look it up up to four times per cell (v-if, opacity, title, label). Now it's
@@ -553,22 +578,39 @@ function isPaintDay(day: { isWeekend: boolean }): boolean {
 // wholeDay absence.
 function cellsForPerson(person: PersonDto) {
   const byDate = absenceMap.value.get(person.id);
+  const infos = dayRenderInfo.value;
   let previousPaintedAbsence: AbsenceDto | undefined;
 
-  return days.value.map((day) => {
-    const absences = byDate?.get(day.iso) ?? [];
+  return days.value.map((day, dayIndex) => {
+    // Non-null: dayRenderInfo maps over the same days array this does.
+    const info = infos[dayIndex]!;
+    const absences = byDate?.get(day.iso);
+
+    if (absences === undefined) {
+      previousPaintedAbsence = undefined;
+      return {
+        day,
+        info,
+        absences: NO_ABSENCES,
+        wholeDay: undefined as AbsenceDto | undefined,
+        timeBased: NO_ABSENCES,
+        painted: false,
+        isLabelCell: false,
+      };
+    }
+
     const wholeDay = absences.find((a) => !a.startTime);
     const timeBased = absences.filter((a) => a.startTime);
 
-    const hasContent = wholeDay !== undefined || timeBased.length > 0;
-    const painted = hasContent && isPaintDay(day);
+    // absences is never empty here, so "has content" is already established: a cell
+    // without a whole-day absence holds only time-based ones and always labels itself
+    // on a painted day.
+    const painted = isPaintDay(day);
     const isLabelCell =
-      wholeDay !== undefined
-        ? painted && wholeDay !== previousPaintedAbsence
-        : painted && timeBased.length > 0;
+      wholeDay !== undefined ? painted && wholeDay !== previousPaintedAbsence : painted;
     previousPaintedAbsence = painted && wholeDay !== undefined ? wholeDay : undefined;
 
-    return { day, absences, wholeDay, timeBased, painted, isLabelCell };
+    return { day, info, absences, wholeDay, timeBased, painted, isLabelCell };
   });
 }
 
@@ -828,10 +870,9 @@ function cellTitle(person: PersonDto, absences: AbsenceDto[]): string {
   return lines.join("\n");
 }
 
-function emptyCellTitle(person: PersonDto, day: { iso: string }): string {
-  const holiday = holidayName(day.iso);
-  if (!isMyRow(person)) return holiday;
-  return holiday ? `${holiday} (click to add absence)` : "Click to add absence";
+function emptyCellTitle(isMine: boolean, holidayTitle: string): string {
+  if (!isMine) return holidayTitle;
+  return holidayTitle ? `${holidayTitle} (click to add absence)` : "Click to add absence";
 }
 
 const tableMinWidth = computed(() => `${160 + days.value.length * 28}px`);

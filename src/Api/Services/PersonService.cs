@@ -84,9 +84,12 @@ public sealed class PersonService(
     {
         var query = db.People.AsQueryable();
 
+        // DisplayName ?? Username, matching how names are displayed and sorted everywhere
+        // else: DisplayName can legitimately be null, and LIKE against NULL matches
+        // nothing, which would make such a person unfindable by search.
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p =>
-                EF.Functions.Like(p.DisplayName, SqlLikePattern.Contains(search), SqlLikePattern.EscapeChar));
+                EF.Functions.Like(p.DisplayName ?? p.Username, SqlLikePattern.Contains(search), SqlLikePattern.EscapeChar));
 
         if (regions is { Count: > 0 })
         {

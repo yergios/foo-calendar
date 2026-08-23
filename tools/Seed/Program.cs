@@ -190,7 +190,15 @@ internal static class Program
             Task.CompletedTask;
 
         public Task<AuditEntriesResponse> ReadAsync(
-            int limit, int offset, CancellationToken ct = default) =>
+            int limit,
+            int offset,
+            string search = null,
+            string action = null,
+            DateTime? from = null,
+            DateTime? to = null,
+            string sortBy = AuditSortColumn.OccurredAt,
+            bool descending = true,
+            CancellationToken ct = default) =>
             throw new NotSupportedException("The seed script never reads the audit log.");
     }
 
