@@ -3,7 +3,114 @@
     class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] h-full flex flex-col gap-4 min-h-0"
   >
     <header class="flex items-center gap-3 flex-wrap">
-      <div class="flex-1 flex items-center gap-2">
+      <!-- Everything that changes what the grid shows, or in what order. Only the search
+           box is always out: the rest sit behind an icon each, so the header costs the
+           width of what you're actually using. Each toggle carries a dot when its control
+           is away from its default, since a filter you can't see is otherwise a filter you
+           can't tell is on. -->
+      <div class="flex-1 flex items-center gap-2 flex-wrap">
+        <div class="relative">
+          <!-- The input comes first so the icon can be a `peer-focus:` sibling of it;
+               it's absolutely positioned, so DOM order costs nothing visually. -->
+          <input
+            id="personSearch"
+            ref="searchInput"
+            v-model="searchQuery"
+            type="search"
+            aria-label="Search people"
+            :placeholder="searchPlaceholder"
+            class="peer h-9 w-56 border border-border-strong rounded-8 pl-9 pr-3 text-sm bg-background hover:border-secondary focus:outline-none focus:border-primary"
+            @keydown.escape="searchQuery = ''"
+          />
+          <svg
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary peer-focus:text-primary pointer-events-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+
+        <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'name'" :min-width="230">
+          <template #icon>
+            <svg
+              class="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M8 20V4" />
+              <path d="M4 8l4-4 4 4" />
+              <path d="M16 4v16" />
+              <path d="M20 16l-4 4-4-4" />
+            </svg>
+          </template>
+
+          <button
+            v-for="option in SORT_OPTIONS"
+            :key="option.value"
+            type="button"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left text-ink hover:bg-surface"
+            :class="sortMode === option.value ? 'font-semibold' : undefined"
+            @click="selectSort(option.value)"
+          >
+            <span class="w-3 shrink-0 text-accent">{{ sortMode === option.value ? "✓" : "" }}</span>
+            {{ option.label }}
+          </button>
+        </IconPopover>
+
+        <IconPopover
+          title="Region and year"
+          :active="regionFilter.length > 0 || year !== currentYear"
+          :min-width="260"
+        >
+          <template #icon>
+            <svg
+              class="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+            </svg>
+          </template>
+
+          <div class="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border">
+            <span class="text-xs font-semibold text-secondary uppercase tracking-wide">Year</span>
+            <YearPicker v-model="year">
+              <span class="text-sm font-semibold px-1 tabular-nums">{{ year }}</span>
+            </YearPicker>
+          </div>
+
+          <p class="px-3 pt-2 pb-1 text-xs font-semibold text-secondary uppercase tracking-wide">
+            Region
+          </p>
+          <!-- The list itself, not RegionFilterSelect: its own dropdown inside this panel
+               would be a floating panel opening out of a floating panel. -->
+          <RegionCheckboxList v-model="regionFilter" :groups="regionGroups" />
+        </IconPopover>
+      </div>
+
+      <button
+        type="button"
+        class="shrink-0 h-9 flex items-center justify-center border border-primary-text text-primary-text rounded-8 px-3 text-sm font-semibold hover:bg-primary-text/10 transition-colors"
+        @click="showWhosOffModal = true"
+      >
+        Who's off today
+      </button>
+
+      <div class="flex-1 flex items-center justify-end gap-2">
         <button
           type="button"
           class="h-9 w-42 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
@@ -23,57 +130,9 @@
           + Add bank holiday
         </button>
       </div>
-
-      <button
-        type="button"
-        class="shrink-0 h-9 flex items-center justify-center border border-primary-text text-primary-text rounded-8 px-3 text-sm font-semibold hover:bg-primary-text/10 transition-colors"
-        @click="showWhosOffModal = true"
-      >
-        Who's off today
-      </button>
-
-      <div class="flex-1 flex items-center justify-end gap-3 flex-wrap">
-        <div class="flex items-center gap-1.5">
-          <label for="personSearch" class="text-xs font-semibold text-secondary">Search</label>
-          <input
-            id="personSearch"
-            v-model="searchQuery"
-            type="search"
-            placeholder="Search people…"
-            class="h-9 w-56 border border-border-strong rounded-8 px-3 text-sm bg-background"
-            @keydown.escape="searchQuery = ''"
-          />
-        </div>
-
-        <div class="flex items-center gap-1.5">
-          <label for="sortMode" class="text-xs font-semibold text-secondary">Sort by</label>
-          <select
-            id="sortMode"
-            v-model="sortMode"
-            class="h-9 border border-border-strong rounded-8 px-2 text-sm bg-background"
-          >
-            <option value="name">Name</option>
-            <option value="mine">Me first, then name</option>
-            <option value="absentToday">Absent today, then name</option>
-            <option value="region">Region, then name</option>
-            <option value="custom">Custom order</option>
-          </select>
-        </div>
-
-        <div class="flex items-center gap-1.5">
-          <label for="regionFilter" class="text-xs font-semibold text-secondary">Region</label>
-          <RegionFilterSelect id="regionFilter" v-model="regionFilter" :groups="regionGroups" />
-        </div>
-
-        <YearPicker v-model="year">
-          <span class="text-sm font-semibold px-1 tabular-nums">{{ year }}</span>
-        </YearPicker>
-      </div>
     </header>
 
-    <p v-if="searchScores && filteredPeople.length === 0" class="text-sm text-secondary">
-      Nobody matches “{{ searchQuery.trim() }}”.
-    </p>
+    <p v-if="emptyMessage" class="text-sm text-secondary">{{ emptyMessage }}</p>
 
     <CalendarGrid
       ref="calendarGridRef"
@@ -155,14 +214,15 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { computed, nextTick, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 
 import { getAbsences } from "@/api/absences";
 import { getCatalogHolidays } from "@/api/bankHolidays";
 import AddAbsenceModal from "@/components/AddAbsenceModal.vue";
 import AddBankHolidayModal from "@/components/AddBankHolidayModal.vue";
 import CalendarGrid from "@/components/CalendarGrid.vue";
-import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
+import IconPopover from "@/components/IconPopover.vue";
+import RegionCheckboxList from "@/components/RegionCheckboxList.vue";
 import WhosOffTodayModal from "@/components/WhosOffTodayModal.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
@@ -179,6 +239,16 @@ import type { PersonDto } from "@/types/person";
 
 type SortMode = "name" | "mine" | "absentToday" | "region" | "custom";
 
+// A list rather than <option>s now that the sort control lives in a popover. Order here is
+// the order the panel shows them in.
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "name", label: "Name" },
+  { value: "mine", label: "Me first, then name" },
+  { value: "absentToday", label: "Absent today, then name" },
+  { value: "region", label: "Region, then name" },
+  { value: "custom", label: "Custom order" },
+];
+
 const { people, regionLabels } = storeToRefs(usePeopleStore());
 const personStore = usePersonStore();
 const configStore = useConfigStore();
@@ -188,7 +258,10 @@ const configStore = useConfigStore();
 // joining a new region show up here without a redeploy.
 const regionGroups = computed(() => groupRegions(regionLabels.value));
 
-const year = ref(new Date().getFullYear());
+// Fixed at load, and only ever compared against: it's what "the year isn't the default
+// one" means for the filter toggle's dot, not a value anything renders.
+const currentYear = new Date().getFullYear();
+const year = ref(currentYear);
 // shallowRef: both are only ever replaced wholesale by loadYear, never mutated in place,
 // and a deep ref would wrap a whole year of absence objects in reactive proxies - memory
 // spent on tracking nothing, plus proxy overhead in every computed that iterates them.
@@ -379,6 +452,17 @@ const filteredPeople = computed(() => {
   );
 });
 
+// Why the grid is empty, or null when it isn't (or when there's no team loaded yet to be
+// empty of). Naming the search outright is only honest when the search is what emptied it:
+// a query can match someone the region filter then removes, and blaming "nobody matches
+// john" when John is right there but filtered out to another region reads as a bug.
+const emptyMessage = computed<string | null>(() => {
+  if (people.value.length === 0 || filteredPeople.value.length > 0) return null;
+  const scores = searchScores.value;
+  if (scores?.size === 0) return `Nobody matches “${searchQuery.value.trim()}”.`;
+  return "Nobody matches the current filters.";
+});
+
 // Just the ids, in display order. Recomputed on every sort mode change, but that's cheap:
 // sorting person records, not rebuilding anyone's cells.
 //
@@ -395,24 +479,21 @@ const visibleOrder = computed(() => {
     .map((p) => p.id);
 });
 
-// The whole team's running order, including everyone the region filter or the search box
-// is currently hiding. A saved custom order leads (minus anyone who has since left the
-// team), then whoever it doesn't mention yet, in the order the current sort mode would have
-// shown them - so a first-ever drag starts from what's on screen rather than jumping
-// everything to alphabetical. Derived on each drag rather than kept in state, so a new
-// teammate can't go missing from it.
+// The whole team in the order the current sort mode puts them, including everyone the
+// region filter or the search box is hiding. Deliberately the same ranking visibleOrder
+// uses, just without the filtering, so the rows on screen are a subsequence of this and a
+// drop lands where it looks like it will.
+//
+// primaryRank already reads customOrder when that's the active mode, so there's no separate
+// "saved order first" step here. Leading with the saved order regardless of mode was a bug:
+// with a custom order left over from an earlier drag and the grid since switched back to
+// sort-by-name, one drag would reshuffle every row into that stale order instead of moving
+// the row you dragged.
 function fullOrder(): number[] {
-  const stillHere = new Set(people.value.map((p) => p.id));
-  const saved = customOrder.value.filter((id) => stillHere.has(id));
-  const placed = new Set(saved);
   const rank = primaryRank();
-
-  const rest = people.value
-    .filter((p) => !placed.has(p.id))
+  return [...people.value]
     .sort((a, b) => rank(a) - rank(b) || personLabel(a).localeCompare(personLabel(b)))
     .map((p) => p.id);
-
-  return [...saved, ...rest];
 }
 
 // Reordering works on the full team, not on the rows you can currently see. Seeding this
@@ -430,6 +511,42 @@ function handleReorder(personId: number, targetPersonId: number) {
   customOrder.value = order;
   writeCache("teamCustomOrder", order);
   sortMode.value = "custom";
+}
+
+// Ctrl+K (Cmd+K on a Mac, where Ctrl+K is a different habit entirely) jumps to the search
+// box from anywhere on the page. Bound on the window rather than the input for the obvious
+// reason - the point is to reach it without clicking it first - and preventDefault because
+// the browser's own Ctrl+K would otherwise steal focus to the address bar.
+const searchInput = ref<HTMLInputElement | null>(null);
+
+function onSearchShortcut(event: KeyboardEvent) {
+  if (event.key !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  // A modal owns the keyboard while it's up. Yanking focus out of a half-filled absence
+  // form, to a search box the user can't even see behind the modal, is worse than the
+  // shortcut simply not firing.
+  if (showAbsenceModal.value || showHolidayModal.value || showWhosOffModal.value) return;
+  event.preventDefault();
+  searchInput.value?.focus();
+  searchInput.value?.select();
+}
+
+onMounted(() => window.addEventListener("keydown", onSearchShortcut));
+onUnmounted(() => window.removeEventListener("keydown", onSearchShortcut));
+
+// Spelled out in the placeholder, since a shortcut nobody can see is a shortcut nobody
+// uses. Named for the key the reader's own machine actually wants: the handler above takes
+// either modifier, but telling a Mac user to press Ctrl would just be wrong.
+const searchPlaceholder = `Search people… (${
+  navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl+K"
+})`;
+
+// Picking a sort mode is a one-off choice, so the panel gets out of the way afterwards.
+// The region checkboxes deliberately don't do this - those are picked several at a time.
+const sortPopover = ref<InstanceType<typeof IconPopover> | null>(null);
+
+function selectSort(mode: SortMode) {
+  sortMode.value = mode;
+  sortPopover.value?.close();
 }
 
 function goToToday() {
