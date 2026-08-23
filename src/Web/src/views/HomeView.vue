@@ -68,6 +68,7 @@
         </IconPopover>
 
         <IconPopover
+          ref="regionPopover"
           title="Region and year"
           :active="regionFilter.length > 0 || year !== currentYear"
           :min-width="260"
@@ -142,6 +143,7 @@
       :holidays="holidays"
       :year="year"
       :loading="loading"
+      :reorderable="searchScores === null"
       @add-absence="openAddAbsence"
       @edit-absence="openEditAbsence"
       @edit-holiday="openEditHoliday"
@@ -229,6 +231,7 @@ import { useStaleGuard } from "@/composables/useStaleGuard";
 import { readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
 import { fuzzyScore, normalizeForSearch } from "@/lib/fuzzy";
+import { afterPaint } from "@/lib/paint";
 import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
@@ -291,6 +294,30 @@ const customOrder = ref<number[]>(readCache<number[]>("teamCustomOrder") ?? []);
 // Not cached across reloads, unlike the sort mode and region filter: a half-typed name is
 // about what you're doing right now, not how you like the grid set up.
 const searchQuery = ref("");
+// What the search actually filters by, lagging searchQuery by one painted frame. The
+// keystroke echo and the grid's reaction used to share a frame: v-model wrote
+// searchQuery, Vue's microtask flush then patched the grid before the browser could
+// paint - and a keystroke changes *membership*, so departing rows swap against filler
+// rows, hundreds of <td>s created and destroyed while the typed character waits. Applying
+// the query after the paint keeps typing at native speed; the grid follows a frame later,
+// where the same work is invisible. No skeleton, unlike applyRegionFilter: surviving rows
+// keep their cached cells (see CalendarGrid), so the update lands fast enough that a
+// skeleton would read as flicker, not feedback.
+const appliedSearchQuery = ref("");
+
+const isLatestSearchApply = useStaleGuard();
+
+async function applySearchQuery() {
+  const isCurrent = isLatestSearchApply();
+  await afterPaint();
+  // Not a debounce: the window is the frame this waits on, so anything typed at human
+  // speed applies on its own keystroke. It only collapses keys arriving faster than a
+  // frame - held backspace, or a paste-like burst - where the strands dropped here are
+  // scans of a query that was already superseded before the grid could show it.
+  if (isCurrent()) appliedSearchQuery.value = searchQuery.value;
+}
+
+watch(searchQuery, applySearchQuery);
 
 watch(sortMode, (mode) => writeCache("teamSortMode", mode));
 watch(regionFilter, (regions) => writeCache("teamRegionFilter", regions));
@@ -352,14 +379,10 @@ const isLatestFilterApply = useStaleGuard();
 async function applyRegionFilter() {
   const isCurrent = isLatestFilterApply();
   loading.value = true;
-  // Two animation frames, not nextTick: nextTick only flushes Vue's own patch, still
-  // inside the same microtask turn as the loading=true write above, before the browser
-  // has had any chance to actually paint the skeleton. A single rAF fires before its own
-  // frame's paint too - only a second, nested one is guaranteed to run after the skeleton
-  // from the *previous* frame has actually been painted.
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
+  // afterPaint, not nextTick: the skeleton from the loading=true write above has to be
+  // actually on screen before the expensive membership change lands (see paint.ts for
+  // why nextTick or a single rAF wouldn't get it there).
+  await afterPaint();
   if (!isCurrent()) return;
   appliedRegionFilter.value = regionFilter.value;
   await nextTick();
@@ -425,12 +448,10 @@ const searchKeys = computed(
 );
 
 // null means "no query": filtering and ranking both skip out entirely rather than scoring
-// everyone against an empty string. Unlike the region filter this is read live, with no
-// debounce and no skeleton frame - the cells behind a row that stays visible are cached in
-// CalendarGrid now, so a keystroke costs this scan plus a keyed list diff, and lagging it
-// behind a skeleton would only make it feel slower.
+// everyone against an empty string. Reads the applied query, not searchQuery itself, so
+// the grid's update runs after the keystroke's own paint - see appliedSearchQuery above.
 const searchScores = computed<Map<number, number> | null>(() => {
-  const needle = normalizeForSearch(searchQuery.value.trim());
+  const needle = normalizeForSearch(appliedSearchQuery.value.trim());
   if (!needle) return null;
 
   const scores = new Map<number, number>();
@@ -459,7 +480,9 @@ const filteredPeople = computed(() => {
 const emptyMessage = computed<string | null>(() => {
   if (people.value.length === 0 || filteredPeople.value.length > 0) return null;
   const scores = searchScores.value;
-  if (scores?.size === 0) return `Nobody matches “${searchQuery.value.trim()}”.`;
+  // The applied query, same as searchScores reads: quoting the live searchQuery here
+  // could blame a query the grid hasn't actually filtered by yet.
+  if (scores?.size === 0) return `Nobody matches “${appliedSearchQuery.value.trim()}”.`;
   return "Nobody matches the current filters.";
 });
 
@@ -520,12 +543,20 @@ function handleReorder(personId: number, targetPersonId: number) {
 const searchInput = ref<HTMLInputElement | null>(null);
 
 function onSearchShortcut(event: KeyboardEvent) {
-  if (event.key !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  // Lower-cased because Caps Lock (or Shift) makes this "K", and bailing on that would
+  // leave the browser's own Ctrl+K to take focus to the address bar instead.
+  if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
   // A modal owns the keyboard while it's up. Yanking focus out of a half-filled absence
   // form, to a search box the user can't even see behind the modal, is worse than the
   // shortcut simply not firing.
   if (showAbsenceModal.value || showHolidayModal.value || showWhosOffModal.value) return;
   event.preventDefault();
+  // A header popover is a menu, not a modal, so the shortcut still goes through - but it
+  // takes the panel down on the way. Leaving it open would strand a floating panel over
+  // the header with the focus it was holding now gone, and only a click outside or Escape
+  // would shift it. Closing one already shut is a no-op.
+  sortPopover.value?.close();
+  regionPopover.value?.close();
   searchInput.value?.focus();
   searchInput.value?.select();
 }
@@ -542,7 +573,9 @@ const searchPlaceholder = `Search people… (${
 
 // Picking a sort mode is a one-off choice, so the panel gets out of the way afterwards.
 // The region checkboxes deliberately don't do this - those are picked several at a time.
+// Both are held here regardless, so the search shortcut above can dismiss whichever is up.
 const sortPopover = ref<InstanceType<typeof IconPopover> | null>(null);
+const regionPopover = ref<InstanceType<typeof IconPopover> | null>(null);
 
 function selectSort(mode: SortMode) {
   sortMode.value = mode;

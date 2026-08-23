@@ -16,6 +16,7 @@
     <div
       ref="containerRef"
       class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-card"
+      :class="reorderable ? undefined : 'reorder-off'"
       @mouseover="handleGridHover"
       @mouseleave="clearHoverColumn"
       @scroll="updateScrollButtons"
@@ -115,13 +116,20 @@
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 text-sm font-normal text-left align-middle cursor-grab active:cursor-grabbing"
               :class="mineRowClass(row.isMine, 'start')"
               draggable="true"
-              title="Drag to reorder"
-              @dragstart="handleDragStart(row.person.id)"
+              @dragstart="handleDragStart($event, row.person.id)"
               @dragover.prevent
               @drop="handleDrop(row.person.id)"
             >
               <div class="flex items-center gap-2">
-                <span class="text-secondary/40 select-none text-xs leading-none shrink-0">⠿</span>
+                <!-- The tooltip sits on the grip rather than the whole cell so that
+                     hiding the grip takes the promise with it: a cell that still offered
+                     "drag to reorder" while a search had the drag disabled would be
+                     advertising something the drop then silently ignores. -->
+                <span
+                  class="drag-grip text-secondary/40 select-none text-xs leading-none shrink-0"
+                  title="Drag to reorder"
+                  >⠿</span
+                >
                 <span
                   class="truncate min-w-0"
                   :class="row.isMine ? 'text-primary-text font-semibold' : 'text-ink'"
@@ -235,6 +243,10 @@ const props = defineProps<{
   holidays: BankHolidayDto[];
   year: number;
   loading: boolean;
+  /** Whether rows can be dragged into a new order. False while something other than the
+   * sort mode decides the order - a live search ranks by match score, so a drop would
+   * write a custom order the grid then refuses to show. */
+  reorderable: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -270,13 +282,25 @@ function handleCellClick(
 
 // Native HTML5 drag-and-drop rather than a library: reordering a handful of rows
 // doesn't need anything fancier, and it keeps this already-heavy component lean.
+//
+// Both handlers read props.reorderable at call time rather than the template gating the
+// `draggable` attribute on it. The rows carry a v-memo that deliberately doesn't list
+// this prop: adding it would re-render every surviving row the moment a search starts,
+// which is exactly the year-of-cells rebuild the cell cache below exists to avoid. So the
+// attribute stays put and the drag is cancelled here instead, with the affordances
+// (cursor and grip) turned off in CSS - neither of which needs the row re-rendered.
 let draggedPersonId: number | null = null;
 
-function handleDragStart(personId: number) {
+function handleDragStart(event: DragEvent, personId: number) {
+  if (!props.reorderable) {
+    event.preventDefault();
+    return;
+  }
   draggedPersonId = personId;
 }
 
 function handleDrop(targetPersonId: number) {
+  if (!props.reorderable) return;
   if (draggedPersonId !== null && draggedPersonId !== targetPersonId) {
     emit("reorder", draggedPersonId, targetPersonId);
   }
@@ -932,6 +956,21 @@ const tableMinWidth = computed(() => `${160 + days.value.length * 28}px`);
 
 [data-col-hover][data-row-hover] {
   box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--color-primary-text) 20%, transparent);
+}
+
+/* Rows keep their `draggable` attribute and their grab cursor class when reordering is
+   off (see handleDragStart's comment: gating those in the template would cost every
+   surviving row a re-render on the first keystroke of a search). Both affordances are
+   withdrawn here instead, where the browser applies them to the existing DOM without Vue
+   patching anything. visibility rather than display for the grip, so the name column
+   doesn't reflow as you start and stop typing - and, unlike opacity, it also takes the
+   grip out of hit-testing, so its "Drag to reorder" tooltip goes quiet with it. */
+.reorder-off tbody tr > th {
+  cursor: default;
+}
+
+.reorder-off .drag-grip {
+  visibility: hidden;
 }
 
 /* Zebra striping and the "mine" row highlight live here instead of a per-row JS class:
