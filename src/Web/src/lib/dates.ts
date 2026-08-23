@@ -31,12 +31,13 @@ export function toDisplayTime(time: string | null | undefined): string {
   return time?.slice(0, 5) ?? "";
 }
 
-/** A short "dd/MM", for a date sitting next to a label that already supplies the context. */
-export function formatDayMonth(isoDate: string): string {
+/** A short "dd/MM", for a date sitting next to a label that already supplies the context,
+ * or "dd/MM/yyyy" when the year can't be taken for granted. */
+export function formatDayMonth(isoDate: string, includeYear = false): string {
   const date = parse(isoDate);
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}`;
+  return includeYear ? `${day}/${month}/${date.getFullYear()}` : `${day}/${month}`;
 }
 
 /** isoDate shifted by whole days, forward or back. */
@@ -62,11 +63,13 @@ export function nextWorkingDay(isoDate: string, isHoliday?: (iso: string) => boo
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// prettier-ignore
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
+// prettier-ignore
 function ordinal(n: number): string {
   const rem100 = n % 100;
   if (rem100 >= 11 && rem100 <= 13) return `${n}th`;

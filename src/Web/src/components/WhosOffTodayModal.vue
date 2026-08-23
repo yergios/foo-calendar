@@ -77,18 +77,20 @@ const holidays = ref<BankHolidayDto[]>([]);
 const todayIso = today();
 const todayLabel = formatLongDate(todayIso);
 
-// Absences are asked for exactly today, but holidays reach forward: the "back on" date has
-// to skip a bank holiday, not just a weekend. Wide enough to cover the return date of any
-// realistic absence someone is in the middle of, and fetched in one go so it still costs a
-// single round trip. An absence running past the horizon falls back to skipping weekends
-// only, which is what this did before.
-const HOLIDAY_HORIZON_DAYS = 120;
+// Both fetches reach forward rather than asking about today alone, because the "back on"
+// date has to skip whatever else is already in the way: a bank holiday, and any absence
+// that picks up where this one leaves off. Wide enough to cover the return date of any
+// realistic absence someone is in the middle of, and both are fetched in one go so this
+// still costs a single round trip. Anything running past the horizon falls back to
+// skipping weekends only.
+const HORIZON_DAYS = 120;
+const horizonIso = addDays(todayIso, HORIZON_DAYS);
 
 onMounted(async () => {
   try {
     const [absencesRes, holidaysRes] = await Promise.all([
-      getAbsences(todayIso, todayIso),
-      getCatalogHolidays(todayIso, addDays(todayIso, HOLIDAY_HORIZON_DAYS)),
+      getAbsences(todayIso, horizonIso),
+      getCatalogHolidays(todayIso, horizonIso),
     ]);
     absences.value = absencesRes.absences;
     holidays.value = holidaysRes.holidays;
@@ -140,14 +142,47 @@ function holidayAppliesToPerson(holidayRegion: string, personHomeCity: string): 
   return holidayIsNationwide && personCountry === holidayRegion;
 }
 
-// Someone with no home city set has no holiday calendar to check against, so their return
-// date only skips weekends. The linear scan is over one horizon's worth of holidays and
-// runs a handful of times per person, so an index per person would cost more than it saves.
-function holidayCheckFor(person: PersonDto): ((iso: string) => boolean) | undefined {
+// Every date each person is already booked off again, from the approved whole-day absences
+// in the fetched window. A second absence starting the day after the first ends is
+// perfectly legal - the server rejects overlapping absences, not adjacent ones - so without
+// this the "back on" date would announce a return that the next absence immediately
+// cancels. Time-based absences are left out on purpose: an appointment doesn't stop someone
+// being back that day.
+const wholeDayAbsenceDates = computed(() => {
+  const byPerson = new Map<number, Set<string>>();
+
+  for (const absence of absences.value) {
+    if (absence.status !== "Approved" || absence.startTime) continue;
+
+    let dates = byPerson.get(absence.personId);
+    if (dates === undefined) {
+      dates = new Set();
+      byPerson.set(absence.personId, dates);
+    }
+    // Capped at the horizon rather than the absence's own end: a year-long leave would
+    // otherwise expand into hundreds of entries nobody reads past the first few of.
+    for (let iso = absence.startDate; iso <= absence.endDate && iso <= horizonIso; ) {
+      dates.add(iso);
+      iso = addDays(iso, 1);
+    }
+  }
+
+  return byPerson;
+});
+
+// What stops a given date counting as this person's first day back: their own region's
+// bank holidays, and any whole-day absence already covering it. Someone with no home city
+// set has no holiday calendar to check against, so only the absences apply. The linear scan
+// is over one horizon's worth of holidays and runs a handful of times per person, so an
+// index per person would cost more than it saves.
+function unavailableCheckFor(person: PersonDto): (iso: string) => boolean {
   const homeCity = person.homeCity;
-  if (!homeCity) return undefined;
+  const bookedOff = wholeDayAbsenceDates.value.get(person.id);
+
   return (iso) =>
-    holidays.value.some((h) => h.date === iso && holidayAppliesToPerson(h.region, homeCity));
+    bookedOff?.has(iso) === true ||
+    (homeCity !== null &&
+      holidays.value.some((h) => h.date === iso && holidayAppliesToPerson(h.region, homeCity)));
 }
 
 // Approved only, same distinction the weekly digest email draws: a still-pending request
@@ -156,15 +191,23 @@ const entries = computed<Entry[]>(() => {
   const peopleById = new Map(people.value.map((person) => [person.id, person]));
 
   const absenceEntries: Entry[] = absences.value
-    .filter((absence) => absence.status === "Approved")
+    // The date check matters now that the fetch reaches forward for the "back on" dates:
+    // an absence starting next month must not put anyone on today's list.
+    .filter(
+      (absence) =>
+        absence.status === "Approved" &&
+        absence.startDate <= todayIso &&
+        absence.endDate >= todayIso,
+    )
     .map((absence): Entry | null => {
       const person = peopleById.get(absence.personId);
       if (!person) return null;
-      // GetOverlappingAsync doesn't clip rows to the queried window, so endDate here is the
-      // absence's real last day even though we only asked about today.
+      const backOn = nextWorkingDay(absence.endDate, unavailableCheckFor(person));
+      // The year is worth spelling out once the return date crosses into the next one:
+      // "02/01" on its own reads as a date that has already been and gone.
       const detail = absence.startTime
         ? `${toDisplayTime(absence.startTime)}–${toDisplayTime(absence.endTime)}`
-        : `Back on the ${formatDayMonth(nextWorkingDay(absence.endDate, holidayCheckFor(person)))}`;
+        : `Back on the ${formatDayMonth(backOn, backOn.slice(0, 4) !== todayIso.slice(0, 4))}`;
       return {
         key: `absence-${absence.id}`,
         person,
