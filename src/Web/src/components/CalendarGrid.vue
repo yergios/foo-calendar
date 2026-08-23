@@ -464,7 +464,10 @@ const days = computed(() => {
   const weekdayLabels = Array.from({ length: 7 }, (_, weekday) =>
     weekdayFmt.format(new Date(2023, 0, 1 + weekday)),
   );
-  const end = new Date(props.year, 11, 31);
+  // Midday, not midnight: where a DST jump lands on 00:00 (America/Santiago, Asia/Beirut)
+  // that midnight doesn't exist, so `d` gets pushed to 01:00 and setDate keeps it there for
+  // the rest of the year. Against a midnight `end` that silently drops December 31.
+  const end = new Date(props.year, 11, 31, 12);
   const today = toIso(new Date());
 
   const result = [];
