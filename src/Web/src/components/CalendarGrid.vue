@@ -31,12 +31,12 @@
     >
       <div class="relative" :style="{ width: `${contentWidth}px` }">
         <div
-          class="sticky top-0 z-20 bg-background border-b border-border"
+          class="sticky top-0 z-20 bg-background"
           :style="{ height: `${HEADER_H}px` }"
           role="row"
         >
           <div
-            class="sticky left-0 z-30 h-full bg-background shadow-[2px_0_0_0_var(--color-border)] flex items-center justify-center text-xs font-semibold text-secondary"
+            class="sticky left-0 z-30 h-full bg-background border-b border-border shadow-[2px_0_0_0_var(--color-border)] flex items-center justify-center text-xs font-semibold text-secondary"
             :style="{ width: `${NAME_W}px` }"
             role="columnheader"
           >
@@ -59,7 +59,7 @@
           <div
             v-for="(day, i) in days"
             :key="day.iso"
-            class="absolute flex flex-col items-center justify-center text-xs"
+            class="absolute border-b border-border flex flex-col items-center justify-center text-xs"
             :class="[
               dayRenderInfo[i]!.headerClass,
               todayColumnClass(day.isToday, 'top'),
@@ -202,10 +202,15 @@
                is now one element moved with a transform: nothing under it changes.
                Stacking is DOM order, except the name column (sticky, z-10) and the two
                row-wide overlays that have to sit above it (z-11). -->
+          <!-- Inset past the column's own (transparent) left divider, so it lines up with
+               the header cell's outline, which is a pseudo-element inside that border. -->
           <div
             v-if="todayIdx >= 0"
             class="absolute top-0 bottom-0 border-l-2 border-r-2 border-b-2 border-today pointer-events-none"
-            :style="{ left: `${NAME_W + todayIdx * COL_W}px`, width: `${COL_W}px` }"
+            :style="{
+              left: `${NAME_W + todayIdx * COL_W + todayDividerWidth}px`,
+              width: `${COL_W - todayDividerWidth}px`,
+            }"
           />
           <div
             ref="hoverColRef"
@@ -618,6 +623,9 @@ const days = computed(() => {
 
 const dayIndex = computed(() => dayIndexOf(days.value));
 const todayIdx = computed(() => days.value.findIndex((day) => day.isToday));
+// The width of today's own left divider (see columnSideBorderClass): a month start gets
+// the thicker one.
+const todayDividerWidth = computed(() => (days.value[todayIdx.value]?.dayNum === 1 ? 2 : 1));
 const contentWidth = computed(() => NAME_W + days.value.length * COL_W);
 
 const monthGroups = computed(() => {
@@ -838,9 +846,11 @@ function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackgroun
 
 // Today's column is outlined by an overlay in the body (see the template) and, for the
 // header cell, by a pseudo-element rather than a real border: a real border would take
-// up space in the cell's box and push the day number off-centre.
+// up space in the cell's box and push the day number off-centre. No `relative` here: the
+// header cell is already positioned (absolute), and adding a second position utility
+// would let whichever comes later in the stylesheet win.
 const TODAY_OUTLINE =
-  "relative after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
+  "after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
   "after:border-l-2 after:border-r-2 after:border-today";
 
 function todayColumnClass(isToday: boolean, edge: "top"): string {
