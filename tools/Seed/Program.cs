@@ -14,14 +14,21 @@ using Microsoft.Extensions.Options;
 namespace Seed;
 
 // Repeatable local dev seed: wipes the SQLite database, re-applies migrations, then
-// creates 50 people spread across 10 regions with a mixed set of absences for 2026.
+// creates people spread across regions with a mixed set of absences for 2026. Sizes
+// default to 50 people over 10 regions and are overridable, see PrintUsage.
 // Run with `dotnet run --project tools/Seed` (or `scripts/seed.sh`), never against a
 // deployment that matters, see EnsureDeletedAsync below.
 internal static class Program
 {
     private const int Year = 2026;
-    private const int PeopleCount = 50;
+    private const int DefaultPeopleCount = 50;
+    private const int DefaultRegionCount = 10;
 
+    // --regions takes a prefix of this list, so raising the count only adds regions and
+    // never renames the ones a smaller run already produced. The first ten are the
+    // long-standing default set, which is why they aren't sorted with the rest.
+    // Every code is ISO 3166-2 as found in src/Api/Data/regions.json, and every country
+    // behind one is covered by Nager, so the holiday sync has something to return.
     private static readonly string[] Regions =
     [
         "CH-ZH", // Zurich
@@ -34,6 +41,56 @@ internal static class Program
         "JP-13", // Tokyo
         "AU-NSW", // New South Wales
         "CA-ON", // Ontario
+        "AR-C", // Buenos Aires
+        "AT-9", // Vienna
+        "AT-1", // Burgenland
+        "BE-BRU", // Brussels
+        "BG-22", // Sofia
+        "BR-SP", // Sao Paulo
+        "CA-BC", // British Columbia
+        "CA-QC", // Quebec
+        "CH-GE", // Geneva
+        "CL-RM", // Santiago Metropolitan
+        "CO-DC", // Bogota
+        "CZ-10", // Prague
+        "DE-BY", // Bavaria
+        "DE-NW", // North Rhine-Westphalia
+        "DK-84", // Capital Region
+        "EC-P", // Pichincha
+        "EE-37", // Harju
+        "ES-CT", // Catalonia
+        "FI-18", // Uusimaa
+        "FR-PAC", // Provence-Alpes-Cote d'Azur
+        "GB-SCT", // Scotland
+        "GB-WLS", // Wales
+        "GR-A", // East Macedonia and Thrace
+        "HR-21", // Zagreb
+        "HU-BU", // Budapest
+        "IE-D", // Dublin
+        "IS", // Iceland
+        "IT-25", // Lombardy
+        "KR-11", // Seoul
+        "LT-VL", // Vilnius County
+        "LU", // Luxembourg
+        "LV-RIX", // Riga
+        "MX-CMX", // Mexico City
+        "NL-NH", // North Holland
+        "NO-03", // Oslo
+        "NZ-AUK", // Auckland
+        "PE-LMA", // Lima
+        "PL-14", // Mazovia
+        "PT-11", // Lisbon
+        "RO-B", // Bucharest
+        "SE-AB", // Stockholm
+        "SG", // Singapore
+        "SI-061", // Ljubljana
+        "SK-BL", // Bratislava
+        "TR-34", // Istanbul
+        "UA-30", // Kyiv
+        "US-TX", // Texas
+        "US-WA", // Washington
+        "UY-MO", // Montevideo
+        "ZA-GP", // Gauteng
     ];
 
     private static readonly string[] FirstNames =
@@ -84,11 +141,45 @@ internal static class Program
         (AbsenceType.Appointment, 26, 1, 1),
     ];
 
-    private static async Task Main()
+    // Every absence is placed inside the same year for everybody, so the candidate days are
+    // built once here instead of per person.
+    private static readonly DateOnly[] YearDays =
+    [
+        .. Enumerable.Range(0, DateTime.IsLeapYear(Year) ? 366 : 365)
+            .Select(offset => new DateOnly(Year, 1, 1).AddDays(offset))
+    ];
+
+    // Distinct first/last pairs available to BuildPeople, and so the ceiling on --people.
+    private static readonly int MaxPeopleCount = FirstNames.Length * LastNames.Length;
+
+    private static async Task<int> Main(string[] args)
     {
+        (int People, int Regions)? parsed;
+        try
+        {
+            parsed = ParseArgs(args);
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            Console.Error.WriteLine();
+            PrintUsage(Console.Error);
+            return 2;
+        }
+
+        if (parsed is null) // --help
+        {
+            PrintUsage(Console.Out);
+            return 0;
+        }
+
+        var (peopleCount, regionCount) = parsed.Value;
+
         // Fixed on purpose: re-running the script must produce the exact same dataset,
         // not a new random one each time.
         var rng = new Random(20260101);
+
+        var regions = Regions[..regionCount];
 
         var repoRoot = FindRepoRoot();
         var apiDir = Path.Combine(repoRoot, "src", "Api");
@@ -123,12 +214,18 @@ internal static class Program
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
 
-        Console.WriteLine($"Seeding {PeopleCount} people across {Regions.Length} regions ...");
-        var people = BuildPeople(rng);
+        // A large --people run inserts six figures of rows in two batches. Change detection
+        // rescans everything already tracked on each AddRange, which turns that into
+        // quadratic work for no benefit here: nothing below mutates an entity after adding
+        // it. Both settings are put back before the holiday sync, which does rely on them.
+        db.ChangeTracker.AutoDetectChangesEnabled = false;
+
+        Console.WriteLine($"Seeding {peopleCount} people across {regionCount} regions ...");
+        var people = BuildPeople(peopleCount, regions, rng);
         db.People.AddRange(people);
         await db.SaveChangesAsync();
 
-        Console.WriteLine("Seeding absences for 2026 ...");
+        Console.WriteLine($"Seeding absences for {Year} ...");
         var absenceCount = 0;
         foreach (var person in people)
         {
@@ -138,6 +235,9 @@ internal static class Program
         }
         await db.SaveChangesAsync();
 
+        db.ChangeTracker.Clear();
+        db.ChangeTracker.AutoDetectChangesEnabled = true;
+
         Console.WriteLine($"Done: {people.Count} people, {absenceCount} absences "
             + $"(avg {absenceCount / (double)people.Count:F1} per person).");
 
@@ -146,12 +246,77 @@ internal static class Program
         // side effect of saving. Nothing does that here, so without this the seeded people
         // would show up with none of their regions' bank holidays until the next scheduled
         // sync (up to a week later, see HolidayOptions.SyncInterval).
-        await SyncHolidaysAsync(db, configuration);
+        await SyncHolidaysAsync(db, configuration, regions);
+        return 0;
     }
 
-    private static async Task SyncHolidaysAsync(AppDbContext db, IConfiguration configuration)
+    // Named flags rather than positionals: "seed.sh 200 20" reads the same either way round,
+    // and getting it backwards is silent.
+    private static (int People, int Regions)? ParseArgs(string[] args)
     {
-        var regions = Regions.Distinct(StringComparer.Ordinal).ToList();
+        var people = DefaultPeopleCount;
+        var regions = DefaultRegionCount;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--people" or "-p":
+                    people = ReadCount(args, ref i);
+                    break;
+                case "--regions" or "-r":
+                    regions = ReadCount(args, ref i);
+                    break;
+                case "--help" or "-h":
+                    return null;
+                default:
+                    throw new ArgumentException($"Unknown argument '{args[i]}'.");
+            }
+        }
+
+        if (people < 1 || people > MaxPeopleCount)
+            throw new ArgumentException(
+                $"--people must be between 1 and {MaxPeopleCount} (the number of distinct "
+                + "first/last name pairs available); add names to Program.cs to raise it.");
+
+        if (regions < 1 || regions > Regions.Length)
+            throw new ArgumentException(
+                $"--regions must be between 1 and {Regions.Length} (the region codes known to "
+                + "Program.cs).");
+
+        return (people, regions);
+    }
+
+    private static int ReadCount(string[] args, ref int i)
+    {
+        var name = args[i];
+        if (++i == args.Length)
+            throw new ArgumentException($"{name} needs a number, e.g. \"{name} 50\".");
+
+        return int.TryParse(args[i], out var count)
+            ? count
+            : throw new ArgumentException($"{name} needs a whole number, got '{args[i]}'.");
+    }
+
+    private static void PrintUsage(TextWriter output)
+    {
+        output.WriteLine("Usage: dotnet run --project tools/Seed -- [options]");
+        output.WriteLine("   or: scripts/seed.sh [options]");
+        output.WriteLine();
+        output.WriteLine($"  -p, --people N   people to create (default {DefaultPeopleCount}, "
+            + $"max {MaxPeopleCount})");
+        output.WriteLine($"  -r, --regions N  regions to spread them across (default "
+            + $"{DefaultRegionCount}, max {Regions.Length})");
+        output.WriteLine("  -h, --help       show this message");
+        output.WriteLine();
+        output.WriteLine("Every run empties the database first, so the same options always");
+        output.WriteLine("produce the same dataset.");
+    }
+
+    private static async Task SyncHolidaysAsync(
+        AppDbContext db, IConfiguration configuration, IReadOnlyList<string> selected)
+    {
+        var regions = selected.Distinct(StringComparer.Ordinal).ToList();
         Console.WriteLine($"Syncing bank holidays for {regions.Count} region(s) ...");
 
         var holidayOptions = configuration.GetSection(HolidayOptions.SectionName).Get<HolidayOptions>()
@@ -212,17 +377,21 @@ internal static class Program
             ?? throw new InvalidOperationException("Could not locate repo root (FooCalendar.slnx not found).");
     }
 
-    private static List<Person> BuildPeople(Random rng)
+    private static List<Person> BuildPeople(int count, IReadOnlyList<string> regions, Random rng)
     {
         var shuffledLastNames = LastNames.OrderBy(_ => rng.Next()).ToArray();
-        var people = new List<Person>(PeopleCount);
+        var people = new List<Person>(count);
+        var usernames = new HashSet<string>(count, StringComparer.Ordinal);
 
-        for (var i = 0; i < PeopleCount; i++)
+        for (var i = 0; i < count; i++)
         {
-            var firstName = FirstNames[i];
-            var lastName = shuffledLastNames[i];
-            var username = $"{firstName[..1]}{lastName}".ToLowerInvariant();
-            var region = Regions[i % Regions.Length]; // 5 people per region, evenly spread
+            // Walking the last names one step further on every pass through the first names
+            // pairs each first name with a different last name in each pass, so all
+            // FirstNames.Length * LastNames.Length combinations are distinct.
+            var firstName = FirstNames[i % FirstNames.Length];
+            var lastName = shuffledLastNames[(i + i / FirstNames.Length) % LastNames.Length];
+            var username = MakeUsername(firstName, lastName, usernames);
+            var region = regions[i % regions.Count]; // evenly spread
 
             people.Add(new Person
             {
@@ -240,11 +409,22 @@ internal static class Program
         return people;
     }
 
+    // First initial plus last name, which is unique across the default 50 but starts to
+    // collide once the name pool wraps ("Olivia Smith" and "Owen Smith" both want "osmith"),
+    // and Person.Username is uniquely indexed.
+    private static string MakeUsername(string firstName, string lastName, HashSet<string> taken)
+    {
+        var stem = $"{firstName[..1]}{lastName}".ToLowerInvariant();
+
+        var username = stem;
+        for (var suffix = 2; !taken.Add(username); suffix++)
+            username = $"{stem}{suffix}";
+
+        return username;
+    }
+
     private static List<Absence> BuildAbsencesFor(Person person, Random rng)
     {
-        var yearDays = Enumerable.Range(0, DateTime.IsLeapYear(Year) ? 366 : 365)
-            .Select(offset => new DateOnly(Year, 1, 1).AddDays(offset))
-            .ToList();
         var usedDates = new HashSet<DateOnly>();
 
         var absences = new List<Absence>();
@@ -254,7 +434,7 @@ internal static class Program
             for (var i = 0; i < count; i++)
             {
                 var length = rng.Next(minDays, maxDays + 1);
-                var start = TryPlaceBlock(yearDays, usedDates, length, rng);
+                var start = TryPlaceBlock(usedDates, length, rng);
                 if (start is null)
                     continue; // year's full for this person; skip rather than overlap
 
@@ -265,14 +445,13 @@ internal static class Program
         return absences;
     }
 
-    private static DateOnly? TryPlaceBlock(
-        List<DateOnly> yearDays, HashSet<DateOnly> usedDates, int length, Random rng)
+    private static DateOnly? TryPlaceBlock(HashSet<DateOnly> usedDates, int length, Random rng)
     {
         for (var attempt = 0; attempt < 200; attempt++)
         {
-            var startIndex = rng.Next(0, yearDays.Count - length + 1);
-            var candidate = yearDays.GetRange(startIndex, length);
-            if (candidate.Any(usedDates.Contains))
+            var startIndex = rng.Next(0, YearDays.Length - length + 1);
+            var candidate = YearDays.AsSpan(startIndex, length);
+            if (Overlaps(candidate, usedDates))
                 continue;
 
             foreach (var date in candidate)
@@ -282,6 +461,15 @@ internal static class Program
         }
 
         return null;
+    }
+
+    private static bool Overlaps(ReadOnlySpan<DateOnly> candidate, HashSet<DateOnly> usedDates)
+    {
+        foreach (var date in candidate)
+            if (usedDates.Contains(date))
+                return true;
+
+        return false;
     }
 
     private static Absence BuildAbsence(Person person, AbsenceType type, DateOnly start, int length, Random rng)
