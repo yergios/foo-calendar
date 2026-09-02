@@ -392,7 +392,7 @@ Grant the values to a user in your OIDC provider's dashboard. Locally, the dev b
 
 The API's policies and the SPA's gating read the same map — served to the browser at startup — so they cannot disagree.
 
-**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, `/healthchecks`, and — only on a deployment with no identity provider — `/api/identity`.
+**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, `/healthchecks`, and — only on a deployment with no identity provider — `POST`/`DELETE /api/identity`, which set and clear the claimed name and read nothing back.
 
 **Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable. Put it in `Permissions.Optional` instead if it gates a feature that is itself off by default (`AbsencesApprove` is the example): it still gets a policy and still has to be one of the recognized names, it just isn't required to be configured.
 
@@ -411,16 +411,22 @@ dotnet run --project src/Api
 Both settings are required outside Development. `Provider=None` on its own is also what a
 half-finished deployment looks like, so the second flag is how you say you meant it.
 
-**What you get.** Nobody signs in. On first visit the app asks who you are, listing the
-people it already knows plus a box to type a new username; the answer goes in a cookie and
-decides which calendar row is yours. A standing banner across the top says the deployment
-has no sign-in, and doubles as the way to switch identity.
+**What you get.** Nobody signs in, and there is no sign-in screen. A visitor who hasn't
+said who they are is resolved as an identity that owns no profile, which puts them in front
+of the same "set up your profile" form a new hire on an OIDC deployment sees — with one
+extra field, a username. Claiming that username *is* the sign-in: type one nobody has and
+you get a new profile, type one that exists and you get that profile back, which is how
+someone who cleared their cookie returns to their own. A standing banner says the
+deployment has no sign-in, and doubles as the way to switch identity.
 
-**What you give up.** Everything. Anyone who can reach the app can pick any identity,
-including ones holding every permission, and the roster of names is readable before
-choosing. There is no password, no token and nothing to verify. Permission settings still
-apply — `Auth:DevUser:GrantAllPermissions=false` runs the whole deployment as plain members
-— but they are not a security control here, since anyone can simply pick a different name.
+Because claiming a name is the whole interaction, the app never publishes a list of who you
+could be — nothing anonymous reads any names back.
+
+**What you give up.** Everything. Anyone who can reach the app can claim any identity,
+including one holding every permission. There is no password, no token and nothing to
+verify. Permission settings still apply — `Auth:DevUser:GrantAllPermissions=false` runs the
+whole deployment as plain members — but they are not a security control here, since anyone
+can simply claim a different name.
 
 **When that is fine.** When reaching the app is already the access control: a private LAN,
 a VPN, a Tailscale tailnet, a machine that is not routable from the internet. In that

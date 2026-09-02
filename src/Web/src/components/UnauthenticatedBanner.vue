@@ -28,7 +28,7 @@ const personStore = usePersonStore();
 const unauthenticated = bootstrapConfig().auth.unauthenticatedDeployment;
 
 const currentName = computed(
-  () => personStore.person?.displayName ?? personStore.person?.username ?? "whoever they say",
+  () => personStore.person?.displayName ?? personStore.person?.username ?? "anyone",
 );
 
 function switchIdentity() {

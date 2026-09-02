@@ -4,6 +4,7 @@
       Set up your profile to start using the calendar.
     </p>
     <ProfileForm
+      is-onboarding
       submit-label="Get started"
       @submit="(payload, done) => $emit('submit', payload, done)"
     />
@@ -18,8 +19,10 @@ import ProfileForm from "./ProfileForm.vue";
 defineEmits<{
   submit: [
     payload: {
+      username: string | null;
       displayName: string | null;
       homeCity: string | null;
+      email: string | null;
       emailOnAbsenceReviewed: boolean;
       emailOnNewAbsenceRequest: boolean;
       emailOnWeeklyDigest: boolean;

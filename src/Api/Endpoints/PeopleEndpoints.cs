@@ -2,6 +2,7 @@
 
 using Api.Configuration;
 using Api.Dtos;
+using Api.Infrastructure;
 using Api.Interfaces;
 using Api.Services;
 
@@ -32,13 +33,26 @@ public static class PeopleEndpoints
         CancellationToken ct)
     {
         var claimTypes = authOptions.Value.ClaimTypes;
+        var username = user.FindFirstValue(claimTypes.UserName);
+
+        // Belt and braces on a deployment with no identity provider: the identity endpoint
+        // already refuses to claim this name, so reaching here with it means the profile
+        // form was submitted before one was claimed at all.
+        if (username == UnauthenticatedAuthHandler.AnonymousUsername)
+            return Results.BadRequest("Choose a username before setting up a profile.");
+
         var create = new CreatePersonRequest(
-            user.FindFirstValue(claimTypes.UserName),
+            username,
             user.FindFirstValue(claimTypes.FirstName),
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
             request.HomeCity,
-            user.FindFirstValue(claimTypes.Email),
+            // What they typed wins over the claim: the form is prefilled from the claim, so
+            // an unchanged value is the claim, and a changed one is a correction. An empty
+            // string is someone deliberately having no address, not a fall back to the claim.
+            string.IsNullOrWhiteSpace(request.Email)
+                ? request.Email is null ? user.FindFirstValue(claimTypes.Email) : null
+                : request.Email,
             request.EmailOnAbsenceReviewed,
             request.EmailOnNewAbsenceRequest,
             request.EmailOnWeeklyDigest);

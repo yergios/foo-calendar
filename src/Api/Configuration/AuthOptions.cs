@@ -25,9 +25,8 @@ public sealed class AuthOptions
     /// things: one is "no IdP configured", which is also what a half-finished deployment
     /// looks like, and this one is "I know what that means here". What it means is that
     /// anyone who can reach the app is anyone they choose to be, including whoever holds
-    /// the permissions, and that the roster of names is readable before signing in. On a
-    /// network where that is not true of everything else already, it is the wrong
-    /// setting.</summary>
+    /// the permissions. On a network where that is not true of everything else already, it
+    /// is the wrong setting.</summary>
     public bool AllowUnauthenticatedDeployment { get; init; }
 
     public string Authority { get; init; } = "";

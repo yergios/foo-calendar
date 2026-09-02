@@ -2,8 +2,9 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 import { createMe, tryGetMe } from "@/api/people";
+import { chooseIdentity } from "@/auth";
 import { clearCache, readCache, writeCache } from "@/lib/browserCache";
-import type { PersonDto, UpdatePersonRequest } from "@/types/person";
+import type { OnboardingRequest, PersonDto } from "@/types/person";
 
 const CACHE_KEY = "person";
 
@@ -79,8 +80,32 @@ export const usePersonStore = defineStore("person", () => {
     });
   }
 
-  async function completeOnboarding(payload: UpdatePersonRequest) {
-    const created = await createMe(payload);
+  /**
+   * Finishes onboarding, which on a deployment with no identity provider is also where
+   * identity is decided: the username the form collected is claimed first, because every
+   * request after it - including the two below - is resolved as whoever that cookie names.
+   *
+   * Claiming a name that already has a profile is how someone who cleared their cookie
+   * gets back to their own, so an existing profile is adopted rather than treated as a
+   * collision. That is the whole of "signing in" here.
+   */
+  async function completeOnboarding({ username, ...profile }: OnboardingRequest) {
+    if (username) {
+      await chooseIdentity(username);
+      hydrated.value = false;
+      person.value = null;
+
+      const existing = await tryGetMe();
+      if (existing) {
+        setPerson(existing);
+        showOnboarding.value = false;
+        resolveOnboarding?.(existing);
+        resolveOnboarding = null;
+        return;
+      }
+    }
+
+    const created = await createMe(profile);
     setPerson(created);
     showOnboarding.value = false;
     resolveOnboarding?.(created);

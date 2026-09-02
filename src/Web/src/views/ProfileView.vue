@@ -26,6 +26,7 @@
         <ProfileForm
           :initial-display-name="person.displayName"
           :initial-home-city="person.homeCity"
+          :initial-email="person.email"
           :initial-email-on-absence-reviewed="person.emailOnAbsenceReviewed"
           :initial-email-on-new-absence-request="person.emailOnNewAbsenceRequest"
           :initial-email-on-weekly-digest="person.emailOnWeeklyDigest"
@@ -89,7 +90,7 @@ import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
 import { useConfigStore } from "@/stores/config";
 import { usePersonStore } from "@/stores/person";
-import type { AbsenceStatsResponse, UpdatePersonRequest } from "@/types/person";
+import type { AbsenceStatsResponse, OnboardingRequest } from "@/types/person";
 
 const personStore = usePersonStore();
 const { person } = storeToRefs(personStore);
@@ -145,9 +146,18 @@ onMounted(async () => {
   }
 });
 
-async function handleSave(payload: UpdatePersonRequest, done: (error?: string | null) => void) {
+async function handleSave(payload: OnboardingRequest, done: (error?: string | null) => void) {
   try {
-    const updated = await updateMe(payload);
+    // The form emits a username alongside the profile because onboarding needs one to
+    // claim; editing never does - it is fixed once claimed - so only the profile is sent.
+    const updated = await updateMe({
+      displayName: payload.displayName,
+      homeCity: payload.homeCity,
+      email: payload.email,
+      emailOnAbsenceReviewed: payload.emailOnAbsenceReviewed,
+      emailOnNewAbsenceRequest: payload.emailOnNewAbsenceRequest,
+      emailOnWeeklyDigest: payload.emailOnWeeklyDigest,
+    });
     personStore.setPerson(updated);
 
     clearTimeout(savedTimeout);

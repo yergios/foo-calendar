@@ -6,7 +6,6 @@ import { appUrl } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import { clearCache } from "@/lib/browserCache";
 import type { BootstrapAuthConfig } from "@/types/config";
-import type { IdentityOption, IdentityState } from "@/types/identity";
 import type { Permission } from "@/types/permission";
 
 // The API reports Auth:Provider=None when there is no identity provider at all: local
@@ -20,30 +19,16 @@ let userManager: UserManager | null = null;
 let isDevMode = false;
 let devToken = "";
 
-const identityState = ref<IdentityState | null>(null);
-
-/** True when this deployment has no identity provider, so identity is self-asserted. */
+/** True when this deployment has no identity provider, so a visitor says who they are
+ * instead of signing in. What the profile form keys off to ask for a username. */
 export function usesSelfAssertedIdentity(): boolean {
   return isDevMode;
 }
 
-/** The names a visitor can claim, for the picker. Empty until the state has loaded. */
-export function identityOptions(): IdentityOption[] {
-  return identityState.value?.people ?? [];
-}
-
-async function fetchIdentityState(): Promise<IdentityState> {
-  const res = await fetch(appUrl("/api/identity"), { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-  return (await res.json()) as IdentityState;
-}
-
 /**
- * Claims a name for this browser, then reloads. A reload rather than patching state in
- * place because identity decides everything downstream - which person the API resolves,
- * which permissions the interface offers, and the profile cached in localStorage - and
- * re-deriving all of that by hand is a longer list than it looks, with a wrong answer
- * that shows up as someone else's calendar row.
+ * Claims a name for this browser. Only meaningful when there is no identity provider; the
+ * cookie it sets is what the API resolves every later request as, so it has to land before
+ * the profile behind it is read or created.
  */
 export async function chooseIdentity(username: string): Promise<void> {
   const res = await fetch(appUrl("/api/identity"), {
@@ -55,10 +40,15 @@ export async function chooseIdentity(username: string): Promise<void> {
 
   // The previous visitor's profile, cached under a key that doesn't mention who it was.
   clearCache("person");
-  window.location.reload();
 }
 
-/** Gives up the claimed name, so the picker asks again. */
+/**
+ * Gives up the claimed name and reloads, so the app comes back as nobody and asks again.
+ * A reload rather than unpicking the state by hand: identity decides which person the API
+ * resolves, which permissions the interface offers, and what is cached in localStorage,
+ * and re-deriving all of that is a longer list than it looks with a wrong answer that
+ * shows up as someone else's calendar row.
+ */
 export async function forgetIdentity(): Promise<void> {
   await fetch(appUrl("/api/identity"), { method: "DELETE" });
   clearCache("person");
@@ -101,22 +91,12 @@ export function initAuth(auth: BootstrapAuthConfig): void {
       }),
     )}.dev`;
 
-    // Not blocking the mount, same as the OIDC branch below: the guard waits on
-    // isAuthLoading, and everything up to the first guarded route can render meanwhile.
-    // "Authenticated" here means this browser has claimed a name; when it hasn't, the
-    // guard sends it to the picker instead of to an IdP.
-    fetchIdentityState()
-      .then((state) => {
-        identityState.value = state;
-        isAuthenticated.value = state.current !== null;
-      })
-      .catch((error: unknown) => {
-        console.error("ERROR => Failed to load the identity state:", error);
-        isAuthenticated.value = false;
-      })
-      .finally(() => {
-        isAuthLoading.value = false;
-      });
+    // Always "authenticated", because there is nothing to authenticate against: a visitor
+    // who hasn't named themselves is resolved by the API as an identity that owns no
+    // profile, which lands them on the same "set up your profile" form a new hire sees.
+    // Claiming a name is part of filling that form in, not a gate in front of it.
+    isAuthenticated.value = true;
+    isAuthLoading.value = false;
     return;
   }
 
@@ -229,6 +209,13 @@ export const useAuthStore = defineStore("auth", () => {
     return parts.length > 0 ? parts.join(" ") : null;
   };
 
+  /** The signed-in user's address as the identity provider stated it, for prefilling the
+   * profile form. Null when there is no provider, or when it sent no email claim. */
+  const getEmail = (): string | null => {
+    const claim = currentUser.value?.email;
+    return typeof claim === "string" && claim.length > 0 ? claim : null;
+  };
+
   // Case-insensitive to match the API's own check: group identifiers are often GUIDs
   // whose casing differs between a provider's dashboard and its tokens.
   const holdsAnyOf = (accepted: string[]): boolean =>
@@ -267,6 +254,7 @@ export const useAuthStore = defineStore("auth", () => {
     setToken,
     setUser,
     getFullName,
+    getEmail,
     getCachedToken,
     reset,
   };

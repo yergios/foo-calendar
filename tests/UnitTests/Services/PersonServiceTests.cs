@@ -162,6 +162,61 @@ public sealed class PersonServiceTests : SqliteTestBase
         entry.Details.ShouldBe("name Jane D. → Jane R.");
     }
 
+    [Fact]
+    public async Task UpdateAsync_SetsTheEmailAddress()
+    {
+        var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
+
+        await sut.UpdateAsync(
+            person.Id, new UpdatePersonRequest("Jane D.", "ES-MD", "jane@example.com"), "jdoe");
+
+        Db.People.Single().Email.ShouldBe("jane@example.com");
+    }
+
+    // The admin people page sends a name and a region and nothing else. Applying the
+    // omitted address would delete the contact details of whoever an admin renamed.
+    [Fact]
+    public async Task UpdateAsync_WhenNoEmailIsSupplied_LeavesTheStoredOneAlone()
+    {
+        var person = await sut.CreateAsync(
+            new CreatePersonRequest("jdoe", "Jane", "Doe", "Jane D.", "ES-MD", "jane@example.com"),
+            "jdoe");
+
+        await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane R.", "ES-MD"), "admin");
+
+        Db.People.Single().Email.ShouldBe("jane@example.com");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenTheEmailIsEmptied_ClearsIt()
+    {
+        var person = await sut.CreateAsync(
+            new CreatePersonRequest("jdoe", "Jane", "Doe", "Jane D.", "ES-MD", "jane@example.com"),
+            "jdoe");
+
+        await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane D.", "ES-MD", ""), "jdoe");
+
+        Db.People.Single().Email.ShouldBeNull();
+    }
+
+    // The log says an address moved, never what it moved to: it is readable by anyone
+    // holding AuditRead and outlives the profile it describes.
+    [Fact]
+    public async Task UpdateAsync_LogsThatTheEmailChangedWithoutRecordingIt()
+    {
+        var person = await sut.CreateAsync(
+            new CreatePersonRequest("jdoe", "Jane", "Doe", "Jane D.", "ES-MD", "jane@example.com"),
+            "jdoe");
+        audit.Entries.Clear();
+
+        await sut.UpdateAsync(
+            person.Id, new UpdatePersonRequest("Jane D.", "ES-MD", "new@example.com"), "jdoe");
+
+        var entry = audit.Entries.ShouldHaveSingleItem();
+        entry.Details.ShouldBe("email changed");
+        entry.Details.ShouldNotContain("@");
+    }
+
     // A save that changed nothing is still a save. Logging it would bury the ones that did.
     [Fact]
     public async Task UpdateAsync_WhenNothingChanged_LogsNothing()

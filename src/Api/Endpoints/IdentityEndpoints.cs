@@ -1,62 +1,50 @@
-using Api.Data;
 using Api.Infrastructure;
 
-using Microsoft.EntityFrameworkCore;
-
 namespace Api.Endpoints;
-
-/// <summary>One name a visitor can claim on an unauthenticated deployment.</summary>
-public sealed record IdentityOption(string Username, string DisplayName);
-
-/// <summary>Who the visitor currently is, and who else they could be.</summary>
-public sealed record IdentityStateResponse(string Current, List<IdentityOption> People);
 
 public sealed record ChooseIdentityRequest(string Username);
 
 /// <summary>Identity for deployments with no identity provider (Auth:Provider=None): the
 /// visitor says who they are and the app takes their word for it.
 ///
-/// Mapped only in that mode, so on an OIDC deployment these routes do not exist at all
-/// rather than existing and refusing - there is no configuration in which both an IdP and
-/// a self-asserted name are accepted.
+/// There is no endpoint here that reads anything back. Claiming a name is the whole
+/// interaction, and it happens inside the same "set up your profile" form every new person
+/// fills in - so the app never needs a roster of who it could be, and never hands one to
+/// someone who hasn't said who they are. Whether the claimed name already has a profile is
+/// answered by GET /api/people/me afterwards, which is authenticated by the very cookie
+/// this sets.
 ///
-/// Anonymous by necessity: this is what runs before anyone has an identity. It does hand
-/// the roster of names to whoever can reach the app, which is not a leak in the setting it
-/// is meant for - a deployment with no authentication is already showing that visitor the
-/// whole calendar - but it is the reason this mode is opt-in and warned about.</summary>
+/// Mapped only in that mode, so on an OIDC deployment these routes do not exist at all
+/// rather than existing and refusing: there is no configuration in which both an IdP and a
+/// self-asserted name are accepted.</summary>
 public static class IdentityEndpoints
 {
     public static void MapIdentityEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/identity").AllowAnonymous().WithTags("Identity");
 
-        group.MapGet("", GetIdentity);
         group.MapPost("", ChooseIdentity);
         group.MapDelete("", ForgetIdentity);
     }
 
-    private static async Task<IResult> GetIdentity(HttpContext http, AppDbContext db)
-    {
-        var people = await db.People
-            .OrderBy(p => p.DisplayName)
-            .Select(p => new IdentityOption(p.Username, p.DisplayName))
-            .ToListAsync(http.RequestAborted);
-
-        return Results.Ok(new IdentityStateResponse(
-            http.Request.Cookies[UnauthenticatedAuthHandler.IdentityCookie],
-            people));
-    }
-
     private static IResult ChooseIdentity(HttpContext http, ChooseIdentityRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.Username))
+        var username = request?.Username?.Trim();
+
+        if (string.IsNullOrEmpty(username))
             return Results.BadRequest("A username is required.");
 
-        // Not checked against the people table on purpose: choosing a name nobody has yet
-        // is how the first person on a fresh deployment gets one, and the onboarding form
-        // creates the profile immediately afterwards.
+        // The name the handler gives a visitor who hasn't chosen one. Claiming it would put
+        // them on the same row as everyone who hasn't chosen either.
+        if (username == UnauthenticatedAuthHandler.AnonymousUsername)
+            return Results.BadRequest("That username is reserved.");
+
+        // Not checked against the people table on purpose: a name nobody has yet is how the
+        // first person on a fresh deployment gets one, and a name that already exists is how
+        // someone who cleared their cookie gets back to their own profile. Both are the same
+        // request, and which one happened is something the caller finds out next.
         http.Response.Cookies.Append(
-            UnauthenticatedAuthHandler.IdentityCookie, request.Username, CookieOptions(http));
+            UnauthenticatedAuthHandler.IdentityCookie, username, CookieOptions(http));
 
         return Results.NoContent();
     }
@@ -71,8 +59,8 @@ public static class IdentityEndpoints
 
     private static CookieOptions CookieOptions(HttpContext http) => new()
     {
-        // HttpOnly even though this is not a credential: nothing in the SPA reads it back
-        // (GET above reports it instead), so there is no reason for script to reach it.
+        // HttpOnly even though this is not a credential: nothing in the SPA reads it back,
+        // so there is no reason for script to reach it.
         HttpOnly = true,
         SameSite = SameSiteMode.Lax,
         // Only over HTTPS when the request itself came over HTTPS: this mode's whole point

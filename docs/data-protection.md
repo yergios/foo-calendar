@@ -26,7 +26,7 @@ SMTP provider, your webhook receiver, your hosting.
 |---|---|
 | `Username` | Identity. Comes from your identity provider's configured username claim, or is self-asserted when the deployment runs without one. |
 | `FirstName`, `LastName`, `DisplayName` | Shown on the calendar row and anywhere a person is named. |
-| `Email` | Notification delivery, and nothing else. Optional — a person with no address simply gets no email. |
+| `Email` | Notification delivery, and nothing else. Optional — a person with no address simply gets no email. Prefilled from the identity provider's email claim where there is one, and editable on the profile page, so a wrong or missing address can be corrected. |
 | `HomeCity` | An ISO 3166-2 region code, e.g. `CH-ZH`. Decides which public holidays apply to them. Not an address. |
 | `CreatedAt`, `UpdatedAt`, `CreatedBy`, `UpdatedBy` | Who set this record up and when. |
 | `EmailOn…` (three flags) | Per-person email preferences. **Off by default**; nobody is subscribed to anything without asking. |
@@ -116,7 +116,8 @@ guarantee.
 - **Access / portability (Art. 15, 20).** A person's own data is on their profile page and
   their calendar row. Admins can export the people list as CSV. For a complete extract,
   query the SQLite database directly — it is one file.
-- **Rectification (Art. 16).** Everyone can edit their own profile; admins can edit anyone's.
+- **Rectification (Art. 16).** Everyone can edit their own profile, including their email
+  address; admins can edit anyone's.
 - **Erasure (Art. 17).** Deleting a person from the admin people page **cascades to their
   absences and notifications** — this is declared explicitly in `AppDbContext`, not left to
   a framework default. Their audit entries survive, per the section above. If you have
@@ -133,10 +134,13 @@ guarantee.
   interface *offers*; they are not the gate.
 - `Auth:Provider=None` turns authentication off entirely and needs
   `Auth:AllowUnauthenticatedDeployment=true` to run outside development. In that mode
-  **anyone who can reach the app is anyone they choose to be**, and the roster of names is
-  readable before choosing. It exists for networks where reaching the app is already the
-  access control — a private LAN, a VPN, a tailnet. If that is not true of your network, it
-  is the wrong setting, and running it there is a breach waiting to be written up.
+  **anyone who can reach the app is anyone they choose to be**: they type a username and
+  the app believes them. Nothing anonymous reads any names back, so the app never hands a
+  roster to someone who hasn't claimed one — but that is a courtesy, not a boundary, since
+  claiming a name takes one form. It exists for networks where reaching the app is already
+  the access control — a private LAN, a VPN, a tailnet. If that is not true of your
+  network, it is the wrong setting, and running it there is a breach waiting to be written
+  up.
 - Data at rest is a single SQLite file. Encrypting it is your host's job — disk encryption,
   a volume, whatever you already do.
 - The app has no password of its own to leak: it stores no credentials.

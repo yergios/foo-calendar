@@ -20,6 +20,17 @@ public sealed class PersonService(
     private static string Describe(Person person) =>
         person.HomeCity is null ? person.Username : $"{person.Username}, {person.HomeCity}";
 
+    // Says that an address changed without saying to what. The audit log is readable by
+    // anyone holding AuditRead and outlives the profile it describes, so it records that a
+    // contact detail moved, not a history of everyone's contact details.
+    private static string DescribeEmailChange(string before, string after) =>
+        (string.IsNullOrWhiteSpace(before), string.IsNullOrWhiteSpace(after)) switch
+        {
+            (true, false) => "email set",
+            (false, true) => "email cleared",
+            _ => "email changed",
+        };
+
 
     public async Task<PersonDto> CreateAsync(
         CreatePersonRequest request, string actorUsername, CancellationToken ct = default)
@@ -212,11 +223,20 @@ public sealed class PersonService(
         var changes = new List<string>();
         if (person.DisplayName != request.DisplayName)
             changes.Add($"name {person.DisplayName} → {request.DisplayName}");
+        // Null is "not supplied": the admin people page sends a name and a region, and an
+        // omitted address there must not delete one. An empty string is "clear it".
+        var editsEmail = request.Email is not null;
+        // Logged as "set"/"changed"/"cleared" rather than with the addresses in it: the
+        // audit log is readable by anyone holding AuditRead and outlives the profile, and
+        // a trail of everyone's email addresses is not what it is for.
+        if (editsEmail && !string.Equals(person.Email, request.Email, StringComparison.OrdinalIgnoreCase))
+            changes.Add(DescribeEmailChange(person.Email, request.Email));
         if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
             changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");
 
         person.DisplayName = request.DisplayName;
         person.HomeCity = request.HomeCity;
+        if (editsEmail) person.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email;
         person.EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed;
         person.EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest;
         person.EmailOnWeeklyDigest = request.EmailOnWeeklyDigest;

@@ -32,9 +32,9 @@ export interface PersonDto {
   username: string;
   displayName: string;
   homeCity: string | null;
-  // Only present on the /me responses (GetMe/CreateMe/UpdateMe serialize the raw entity);
-  // the colleagues list from getAllPeople() never carries these, same as it never carries
-  // email itself.
+  // Only present on the /me responses; the colleagues list from getAllPeople() carries
+  // none of these, an address being as much someone's own as their preferences are.
+  email?: string | null;
   emailOnAbsenceReviewed?: boolean;
   emailOnNewAbsenceRequest?: boolean;
   emailOnWeeklyDigest?: boolean;
@@ -48,9 +48,20 @@ export interface CreatePersonRequest {
   homeCity?: string | null;
 }
 
+/** What onboarding collects: a profile, plus the username to claim first on a deployment
+ * with no identity provider (null anywhere else, where the token already says who you
+ * are). The username is not part of the profile request itself - the API reads it from the
+ * identity the request arrives under. */
+export interface OnboardingRequest extends UpdatePersonRequest {
+  username: string | null;
+}
+
 export interface UpdatePersonRequest {
   displayName?: string | null;
   homeCity?: string | null;
+  /** Where this person's notifications go. Prefilled from the identity provider's email
+   * claim when there is one, but stored on the person and editable either way. */
+  email?: string | null;
   emailOnAbsenceReviewed?: boolean;
   emailOnNewAbsenceRequest?: boolean;
   emailOnWeeklyDigest?: boolean;

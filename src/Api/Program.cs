@@ -467,9 +467,9 @@ if (authConfig.Provider == AuthOptions.ProviderNone)
         app.Logger.LogCritical(
             "Auth:Provider=None with Auth:AllowUnauthenticatedDeployment=true in the "
             + "{Environment} environment: THIS DEPLOYMENT HAS NO AUTHENTICATION. Anyone who "
-            + "can reach it picks any identity, including ones holding [{Permissions}], and "
-            + "the list of everyone's names is readable before choosing. Only run this where "
-            + "network access is already the access control.",
+            + "can reach it claims any identity they type, including ones holding "
+            + "[{Permissions}]. Only run this where network access is already the access "
+            + "control.",
             app.Environment.EnvironmentName,
             string.Join(", ", authConfig.EffectiveDevPermissions()));
 }
