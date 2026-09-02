@@ -185,7 +185,12 @@
           <!-- Padding rows so a small team's grid still fills the container instead of
         leaving bare space below the last person, keeping the day columns' borders and
         shading running the full height. -->
-          <tr v-for="filler in fillerRows" :key="`filler-${filler.rowIndex}`" aria-hidden="true">
+          <tr
+            v-for="filler in fillerRows"
+            :key="`filler-${filler.index}`"
+            v-memo="[dayRenderInfo, filler.isLast]"
+            aria-hidden="true"
+          >
             <th
               scope="row"
               class="sticky left-0 z-10 border-b border-border shadow-[2px_0_0_0_var(--color-border)] px-2 py-1.5 align-middle"
@@ -376,6 +381,9 @@ onMounted(() => {
   if (containerRef.value) {
     resizeObserver = new ResizeObserver(scheduleRowCapacityUpdate);
     resizeObserver.observe(containerRef.value);
+    // The header too: its height feeds the capacity math and can change independently of
+    // the container, e.g. when the month labels wrap differently after a font load.
+    if (theadRef.value) resizeObserver.observe(theadRef.value);
   }
 });
 
@@ -472,13 +480,11 @@ function handlePageClick(direction: 1 | -1) {
 // region/country code -> display name, e.g. "CH-ZH" -> "Zürich", "CH" -> "Switzerland".
 // Comes from the people payload rather than config: it covers wherever the team is now,
 // which is also the only place holidays are stored for.
-const regionLabels = computed(() => {
-  const map = new Map<string, string>();
-  for (const [code, label] of Object.entries(peopleRegionLabels.value)) {
-    map.set(code, label);
-  }
-  return map;
-});
+//
+// This Map sits in every row's v-memo, but needs no identity guard of its own: the
+// people store's reconcilePeople keeps the labels object's identity across a refetch
+// that changed nothing, so this only ever recomputes when the labels genuinely changed.
+const regionLabels = computed(() => new Map(Object.entries(peopleRegionLabels.value)));
 
 const days = computed(() => {
   const weekdayFmt = new Intl.DateTimeFormat(navigator.language, { weekday: "short" });
@@ -539,27 +545,32 @@ const holidayMap = computed(() => {
   return map;
 });
 
-// personId -> iso date -> every absence touching that day. An array rather than a single
-// absence: a whole-day absence and a time-based one are mutually exclusive server-side, so
-// a day holds at most one whole-day absence, but any number of same-day time-based ones
-// can stack (see AbsenceService.OverlapCandidates).
-const absenceMap = computed(() => {
-  const map = new Map<number, Map<string, AbsenceDto[]>>();
+// personId -> that person's absences, flat and in props order. The per-day expansion
+// happens later, inside cellsForPerson, so it only runs for people whose cells actually
+// rebuild - this pass is just a cheap group-by over the year's list.
+//
+// Each person's array keeps its previous identity while its contents are element-
+// identical. That works because HomeView never mutates DTOs in place: a save patches in
+// one replaced object, and a background refetch reconciles unchanged DTOs back to their
+// previous objects (see lib/reconcile.ts). Identity per person's array is what the cell
+// cache below compares, so this is what makes one changed absence rebuild one row.
+let prevAbsencesByPerson = new Map<number, AbsenceDto[]>();
+
+const absencesByPerson = computed(() => {
+  const grouped = new Map<number, AbsenceDto[]>();
   for (const a of props.absences) {
-    let byDate = map.get(a.personId);
-    if (!byDate) {
-      byDate = new Map();
-      map.set(a.personId, byDate);
-    }
-    for (const d = parse(a.startDate); ; d.setDate(d.getDate() + 1)) {
-      const iso = toIso(d);
-      if (iso > a.endDate) break;
-      const list = byDate.get(iso);
-      if (list) list.push(a);
-      else byDate.set(iso, [a]);
+    const list = grouped.get(a.personId);
+    if (list) list.push(a);
+    else grouped.set(a.personId, [a]);
+  }
+  for (const [personId, list] of grouped) {
+    const prev = prevAbsencesByPerson.get(personId);
+    if (prev && prev.length === list.length && prev.every((a, i) => a === list[i])) {
+      grouped.set(personId, prev);
     }
   }
-  return map;
+  prevAbsencesByPerson = grouped;
+  return grouped;
 });
 
 // A weekend isn't a work day, so an absence stretch doesn't paint over it: the day keeps
@@ -603,9 +614,27 @@ const NO_ABSENCES: AbsenceDto[] = [];
 // each is inherently single-day, so a cell holding one always shows its own label on any
 // painted day, independently of its neighbors, and none on an unpainted one, same as a
 // wholeDay absence.
-function cellsForPerson(person: PersonDto) {
-  const byDate = absenceMap.value.get(person.id);
+function cellsForPerson(personAbsences: AbsenceDto[] | undefined) {
   const infos = dayRenderInfo.value;
+
+  // iso date -> every absence touching that day. An array rather than a single absence: a
+  // whole-day absence and a time-based one are mutually exclusive server-side, so a day
+  // holds at most one whole-day absence, but any number of same-day time-based ones can
+  // stack (see AbsenceService.OverlapCandidates).
+  let byDate: Map<string, AbsenceDto[]> | undefined;
+  if (personAbsences) {
+    byDate = new Map();
+    for (const a of personAbsences) {
+      for (const d = parse(a.startDate); ; d.setDate(d.getDate() + 1)) {
+        const iso = toIso(d);
+        if (iso > a.endDate) break;
+        const list = byDate.get(iso);
+        if (list) list.push(a);
+        else byDate.set(iso, [a]);
+      }
+    }
+  }
+
   let previousPaintedAbsence: AbsenceDto | undefined;
 
   return days.value.map((day, dayIndex) => {
@@ -651,33 +680,39 @@ function cellsForPerson(person: PersonDto) {
 // Vue re-diffed a year of <td>s per person to confirm nothing had changed. With the cache
 // the only rows touched are the ones that actually came or went.
 //
-// Nothing about a person other than their id feeds cellsForPerson, so a changed name or
-// region can't stale an entry. Cell *content* comes from absenceMap and dayRenderInfo, and
-// those two are replaced wholesale when they change, so comparing their identities is
-// enough to know the cache is still good. days needs no check of its own: dayRenderInfo is
-// built by mapping it, so a new year gives that a new identity too.
+// Nothing about a person feeds cellsForPerson beyond their own absences, so a changed
+// name or region can't stale an entry. Each entry records the two inputs its cells were
+// built from and is valid while both still match by identity: absencesByPerson hands a
+// person the same array while their absences are unchanged, so one edited absence
+// invalidates exactly one entry instead of (as the wholesale nuke this replaces did)
+// every row in the grid. A holiday or year change gives dayRenderInfo a new identity and
+// correctly rebuilds everyone - holidays color every row's column.
 //
 // Entries for people currently filtered out are kept. The ceiling is the whole roster,
 // which is what's already in memory on first paint anyway, and it's what makes backspacing
 // through a query instant instead of recomputing everyone who reappears.
-let cellCache = new Map<number, ReturnType<typeof cellsForPerson>>();
-let cachedAbsenceMap: typeof absenceMap.value | null = null;
-let cachedDayRenderInfo: typeof dayRenderInfo.value | null = null;
+interface CellCacheEntry {
+  cells: ReturnType<typeof cellsForPerson>;
+  /** undefined when the person had no absences at all - still a valid, comparable input. */
+  sourceAbsences: AbsenceDto[] | undefined;
+  sourceDayInfo: (typeof dayRenderInfo)["value"];
+}
+const cellCache = new Map<number, CellCacheEntry>();
 
 const cellsByPersonId = computed(() => {
-  if (absenceMap.value !== cachedAbsenceMap || dayRenderInfo.value !== cachedDayRenderInfo) {
-    cellCache = new Map();
-    cachedAbsenceMap = absenceMap.value;
-    cachedDayRenderInfo = dayRenderInfo.value;
-  }
+  const infos = dayRenderInfo.value;
+  const byPerson = absencesByPerson.value;
 
-  const visible = new Map<number, ReturnType<typeof cellsForPerson>>();
+  const visible = new Map<number, CellCacheEntry["cells"]>();
   for (const person of props.people) {
-    let cells = cellCache.get(person.id);
-    if (cells === undefined) {
-      cells = cellsForPerson(person);
-      cellCache.set(person.id, cells);
+    const source = byPerson.get(person.id);
+    const entry = cellCache.get(person.id);
+    if (entry && entry.sourceAbsences === source && entry.sourceDayInfo === infos) {
+      visible.set(person.id, entry.cells);
+      continue;
     }
+    const cells = cellsForPerson(source);
+    cellCache.set(person.id, { cells, sourceAbsences: source, sourceDayInfo: infos });
     visible.set(person.id, cells);
   }
   return visible;
@@ -759,7 +794,14 @@ function scheduleRowCapacityUpdate() {
   });
 }
 
-watch([rows, () => props.loading], scheduleRowCapacityUpdate);
+// Not watched on rows or loading: capacity depends only on the container's and header's
+// own boxes, which the ResizeObserver in onMounted watches directly, and rows changing
+// cannot change either - watching rows here meant a forced layout read against the whole
+// grid on every applied search keystroke. The year is the one data change worth a pass of
+// its own: it resizes the table (and so scrollWidth) without moving scrollLeft, which the
+// scroll listener alone wouldn't catch, and the header can change height when day labels
+// re-wrap.
+watch(() => props.year, scheduleRowCapacityUpdate);
 
 // At least one row even before the first measurement lands, so the skeleton never
 // flashes empty.
@@ -771,10 +813,15 @@ const fillerRowCount = computed(() => Math.max(0, rowCapacity.value - rows.value
 // `todayColumnClass`'s "is this the closing row" check below: it only needs to happen
 // once, not once per day cell in that row.
 const fillerRows = computed(() => {
-  const bodyRowCount = rows.value.length;
-  return Array.from({ length: fillerRowCount.value }, (_, i) => ({
-    rowIndex: bodyRowCount + i,
-    isLast: i === fillerRowCount.value - 1,
+  // Keyed (and identified) by position within the fillers, not within the table: keys
+  // that included the body row count meant filtering 30 people down to 3 renamed every
+  // filler and rebuilt thousands of identical <td>s from scratch. With stable keys a
+  // count change only appends or drops fillers at the end, and the survivors just move
+  // up - a DOM move the :nth-child zebra striping restripes for free.
+  const count = fillerRowCount.value;
+  return Array.from({ length: count }, (_, i) => ({
+    index: i,
+    isLast: i === count - 1,
   }));
 });
 

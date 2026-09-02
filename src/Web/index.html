@@ -6,6 +6,15 @@
          rewrites it when ReverseProxy:PathBase is set (see SpaShell.cs), which is what
          lets one build be served from a sub-path without being rebuilt. -->
     <base href="/" />
+    <!-- Starts the one request the app cannot mount without (see loadRuntimeConfig) while
+         the bundle is still downloading, instead of after it has parsed and executed. A
+         classic script, not a module, so it runs during HTML parse. Resolved against the
+         base tag above, so it follows a sub-path deployment's rewritten href. -->
+    <script>
+      window.__earlyBootstrapConfig = fetch(new URL("api/config/bootstrap", document.baseURI), {
+        headers: { Accept: "application/json" },
+      });
+    </script>
     <link
       rel="icon"
       type="image/svg+xml"

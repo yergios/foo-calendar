@@ -46,13 +46,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { defineAsyncComponent, ref } from "vue";
 
 import AppModal from "@/components/AppModal.vue";
-import MarkdownContent from "@/components/MarkdownContent.vue";
 import changelogDoc from "@/docs/changelog.md";
 import helpDoc from "@/docs/help.md";
 import { runtimeConfig } from "@/lib/runtimeConfig";
+
+// Async so `marked` (which only this component's modals need) gets its own chunk instead
+// of riding in the main bundle; it loads the first time someone opens Help or What's new.
+const MarkdownContent = defineAsyncComponent(() => import("@/components/MarkdownContent.vue"));
 
 const { appName, supportUrl, issueUrl } = runtimeConfig();
 const version = __APP_VERSION__;

@@ -469,7 +469,18 @@ app.UseStatusCodePages();
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(
-        Path.Combine(app.Environment.ContentRootPath, "wwwroot"))
+        Path.Combine(app.Environment.ContentRootPath, "wwwroot")),
+    OnPrepareResponse = ctx =>
+    {
+        // Vite writes every bundled file under assets/ with a content hash in its name, so
+        // a changed file always ships under a new URL. That is what makes immutable safe:
+        // the shell (served no-store by SpaShell) is the only mutable entry point, and it
+        // names which hashed files to load. Without this, browsers revalidate each asset
+        // with a 304 round trip on every cold load. Path is post-UsePathBase, so this
+        // matches under sub-path deployments too. favicon.svg is unhashed and gets nothing.
+        if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+            ctx.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+    }
 });
 
 // Explicit, and deliberately placed here. Left implicit, WebApplication inserts routing at

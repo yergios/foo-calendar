@@ -62,45 +62,30 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
-import { getNotifications, markNotificationsRead } from "@/api/notifications";
-import type { NotificationDto, NotificationType } from "@/types/notification";
+import { useNotificationsStore } from "@/stores/notifications";
+import type { NotificationType } from "@/types/notification";
+
+// The feed lives in the store (loaded from AppHeader, before this component exists);
+// this component is just the panel.
+const store = useNotificationsStore();
+const { notifications, unreadCount, loading } = storeToRefs(store);
 
 const rootRef = ref<HTMLDivElement | null>(null);
 const open = ref(false);
-const loading = ref(false);
-const notifications = ref<NotificationDto[]>([]);
-const unreadCount = ref(0);
-
-async function load() {
-  loading.value = true;
-  try {
-    const response = await getNotifications();
-    notifications.value = response.notifications;
-    unreadCount.value = response.unreadCount;
-  } catch (error: unknown) {
-    console.error("ERROR => Failed to load notifications:", error);
-  } finally {
-    loading.value = false;
-  }
-}
 
 async function toggle() {
   open.value = !open.value;
   if (!open.value) return;
 
-  await load();
+  await store.load();
   if (unreadCount.value === 0) return;
 
   // Read on open, not per-item: the feed is short enough that "seen the panel" is a fine
   // stand-in for "seen each one".
-  try {
-    await markNotificationsRead();
-    unreadCount.value = 0;
-  } catch (error: unknown) {
-    console.error("ERROR => Failed to mark notifications read:", error);
-  }
+  await store.markAllRead();
 }
 
 function handleOutsideClick(event: MouseEvent) {
@@ -110,7 +95,6 @@ function handleOutsideClick(event: MouseEvent) {
 }
 
 onMounted(() => {
-  load();
   document.addEventListener("click", handleOutsideClick);
 });
 

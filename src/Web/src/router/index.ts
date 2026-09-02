@@ -9,7 +9,6 @@ import {
   useAuth,
   useAuthStore,
 } from "@/auth";
-import AdminLayout from "@/layouts/AdminLayout.vue";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { basePath } from "@/lib/appUrl";
 import { ADMIN_SECTIONS } from "@/router/adminSections";
@@ -18,7 +17,6 @@ import ErrorView from "@/views/ErrorView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
 import HomeView from "@/views/HomeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
-import ProfileView from "@/views/ProfileView.vue";
 import UnauthorizedView from "@/views/UnauthorizedView.vue";
 
 const router = createRouter({
@@ -31,11 +29,14 @@ const router = createRouter({
       component: AppLayout,
       meta: { requiresAuth: true },
       children: [
+        // HomeView stays a static import: it is the critical path itself, so splitting it
+        // would only add a round trip. The error views below stay static too - they must
+        // render when the network is exactly what's broken. Everything else is lazy.
         { path: "", component: HomeView },
-        { path: "profile", component: ProfileView },
+        { path: "profile", component: () => import("@/views/ProfileView.vue") },
         {
           path: "admin",
-          component: AdminLayout,
+          component: () => import("@/layouts/AdminLayout.vue"),
           // Keeps out someone who would find every section hidden; which sections they
           // actually see is then up to each child route's own requiresPermissions below.
           meta: { requiresAnyPermission: true },
@@ -92,6 +93,15 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
 
   const guardAction = async () => {
     if (isAuthenticated.value) {
+      // Only the permission checks below read the token's claims, so routes without any
+      // are let through without awaiting it: every apiFetch resolves the same
+      // single-flighted token on its own, and awaiting it here would put an IdP round
+      // trip (two, when a silent renew is due) in front of a view that never looks at it.
+      const needsPermissions = to.matched.some(
+        (r) => r.meta.requiresAnyPermission || r.meta.requiresPermissions,
+      );
+      if (!needsPermissions) return true;
+
       try {
         // Shares the same cached token and in-flight request as App.vue's own sync and
         // every apiFetch call, so a direct or hard navigation doesn't trigger its own

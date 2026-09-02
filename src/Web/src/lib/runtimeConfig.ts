@@ -12,7 +12,13 @@ import type { RuntimeConfig } from "@/types/config";
 let config: RuntimeConfig | null = null;
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
-  const res = await fetch(appUrl("/api/config/bootstrap"), {
+  // index.html starts this fetch during HTML parse so it overlaps the bundle download.
+  // A failed early fetch falls back to a fresh request rather than surfacing an error the
+  // retry would have absorbed; a non-OK response still throws below, unchanged.
+  const early = window.__earlyBootstrapConfig;
+  window.__earlyBootstrapConfig = undefined;
+  let res = early ? await early.catch(() => null) : null;
+  res ??= await fetch(appUrl("/api/config/bootstrap"), {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);

@@ -1,16 +1,15 @@
 import type { Component } from "vue";
 
-import AdminApprovalsView from "@/views/admin/AdminApprovalsView.vue";
-import AdminAuditView from "@/views/admin/AdminAuditView.vue";
-import AdminBankHolidaysView from "@/views/admin/AdminBankHolidaysView.vue";
-import AdminPeopleView from "@/views/admin/AdminPeopleView.vue";
 import { Permission } from "@/types/permission";
 
 export interface AdminSection {
   /** Appended to "/admin/" for the route and used as the sidebar link's key. */
   path: string;
   label: string;
-  component: Component;
+  /** Lazy loaders so the admin views (and whatever only they import) stay out of the
+   * main chunk - the calendar is the critical path and most sessions never open admin.
+   * vue-router accepts a loader wherever it accepts a component. */
+  component: Component | (() => Promise<{ default: Component }>);
   /** Held if the signed-in user has any one of these - the People page, for instance,
    * is worth reaching with just ReportsRead even without PeopleManage. */
   permissions: Permission[];
@@ -23,25 +22,25 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   {
     path: "people",
     label: "People",
-    component: AdminPeopleView,
+    component: () => import("@/views/admin/AdminPeopleView.vue"),
     permissions: [Permission.peopleManage, Permission.reportsRead],
   },
   {
     path: "bank-holidays",
     label: "Bank holidays",
-    component: AdminBankHolidaysView,
+    component: () => import("@/views/admin/AdminBankHolidaysView.vue"),
     permissions: [Permission.holidaysSync],
   },
   {
     path: "approvals",
     label: "Absence approvals",
-    component: AdminApprovalsView,
+    component: () => import("@/views/admin/AdminApprovalsView.vue"),
     permissions: [Permission.absencesApprove],
   },
   {
     path: "audit",
     label: "Audit log",
-    component: AdminAuditView,
+    component: () => import("@/views/admin/AdminAuditView.vue"),
     permissions: [Permission.auditRead],
   },
 ];

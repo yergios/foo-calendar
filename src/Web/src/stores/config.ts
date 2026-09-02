@@ -4,13 +4,12 @@ import { getAppConfig } from "@/api/config";
 import { createLoadOnce } from "@/lib/loadOnce";
 import type { AppConfig } from "@/types/config";
 
-// Deliberately no localStorage cacheKey (contrast usePersonStore/usePeopleStore, which
-// have one): AppConfig is entirely server-authoritative and its shape has already changed
-// across a redeploy once, silently stranding a browser's stale cached copy with a missing
-// field indefinitely (createLoadOnce trusts a cached value outright, with no TTL or
-// version to invalidate it against). In-memory dedup for the session is enough; the
-// request itself is small and cheap enough that losing the cross-reload instant-paint
-// isn't worth reintroducing that failure mode.
+// Deliberately no localStorage cacheKey: AppConfig's shape once changed across a
+// redeploy and silently stranded a browser's stale cached copy with a missing field
+// indefinitely. Version-suffixed keys plus stale-while-revalidate (what usePeopleStore
+// does now, see PEOPLE_CACHE_KEY) are the fix for exactly that failure mode, but this
+// request is small and cheap enough that the cross-reload instant-paint isn't worth even
+// the key-bumping discipline. In-memory dedup for the session is enough.
 export const useConfigStore = defineStore("config", () => {
   const { data: config, loadOnce } = createLoadOnce<AppConfig>(getAppConfig);
   return { config, loadOnce };

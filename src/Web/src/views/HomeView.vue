@@ -199,16 +199,16 @@
       :initial-date="prefillDate"
       :day-absences="dayAbsences"
       @close="showAbsenceModal = false"
-      @saved="closeAbsenceModal"
-      @deleted="closeAbsenceModal"
+      @saved="handleAbsenceSaved"
+      @deleted="handleAbsenceDeleted"
     />
     <AddBankHolidayModal
       v-if="showHolidayModal"
       :holiday="editingHoliday"
       :initial-date="prefillHolidayDate"
       @close="showHolidayModal = false"
-      @saved="closeHolidayModal"
-      @deleted="closeHolidayModal"
+      @saved="handleHolidaySaved"
+      @deleted="handleHolidayDeleted"
     />
     <WhosOffTodayModal v-if="showWhosOffModal" @close="showWhosOffModal = false" />
   </div>
@@ -228,10 +228,11 @@ import RegionCheckboxList from "@/components/RegionCheckboxList.vue";
 import WhosOffTodayModal from "@/components/WhosOffTodayModal.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
-import { readCache, writeCache } from "@/lib/browserCache";
+import { clearCacheGroup, readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
 import { fuzzyScore, normalizeForSearch } from "@/lib/fuzzy";
 import { afterPaint } from "@/lib/paint";
+import { reconcileList } from "@/lib/reconcile";
 import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
@@ -589,18 +590,65 @@ function goToToday() {
 
 const isLatestYearLoad = useStaleGuard();
 
+// Bump the version suffix whenever AbsenceDto/BankHolidayDto's shape changes: the key
+// carries it, so an old browser's copy simply misses and refetches instead of being
+// trusted with fields it predates (the incident stores/config.ts describes).
+const ABSENCES_CACHE_GROUP = "absences:";
+const HOLIDAYS_CACHE_GROUP = "holidays:";
+const absencesCacheKey = (y: number) => `${ABSENCES_CACHE_GROUP}${y}.v1`;
+const holidaysCacheKey = (y: number) => `${HOLIDAYS_CACHE_GROUP}${y}.v1`;
+
+// One cached year per type: the sweep before the write is also what evicts other years
+// and any stale schema version, since every key shares its group's prefix.
+function writeYearCache() {
+  clearCacheGroup(ABSENCES_CACHE_GROUP);
+  clearCacheGroup(HOLIDAYS_CACHE_GROUP);
+  writeCache(absencesCacheKey(year.value), absences.value);
+  writeCache(holidaysCacheKey(year.value), holidays.value);
+}
+
 async function loadYear() {
   const isCurrent = isLatestYearLoad();
-  loading.value = true;
+  const { from, to } = yearRange.value;
+
+  const cachedAbsences = readCache<AbsenceDto[]>(absencesCacheKey(year.value));
+  const cachedHolidays = readCache<BankHolidayDto[]>(holidaysCacheKey(year.value));
+  const fromCache = cachedAbsences !== null && cachedHolidays !== null;
+  if (fromCache) {
+    // Paint straight from the cache and revalidate behind it: no skeleton, and the
+    // reconcile below patches in only what actually changed since the cache was written.
+    // Reconciled rather than assigned, for the callers that reuse loadYear as a
+    // revalidate-in-place (recurring holiday saves): the parsed copy is content-equal to
+    // what's already on screen, and handing the grid fresh identities for it would
+    // rebuild every row just to show the same pixels.
+    absences.value = reconcileList(absences.value, cachedAbsences);
+    holidays.value = reconcileList(holidays.value, cachedHolidays);
+  } else {
+    loading.value = true;
+  }
+
   try {
-    const { from, to } = yearRange.value;
     const [absencesRes, holidaysRes] = await Promise.all([
       getAbsences(from, to),
       getCatalogHolidays(from, to),
     ]);
     if (!isCurrent()) return;
-    absences.value = absencesRes.absences;
-    holidays.value = holidaysRes.holidays;
+    // reconcileList hands back the previous objects (and, when nothing changed at all,
+    // the previous arrays) wherever the fresh copies are field-for-field equal, so a
+    // revalidate that confirms the cache re-renders nothing: the grid's cell cache and
+    // v-memo compare exactly these identities. See lib/reconcile.ts.
+    const nextAbsences = reconcileList(absences.value, absencesRes.absences);
+    const nextHolidays = reconcileList(holidays.value, holidaysRes.holidays);
+    // The expected steady state is a revalidate that confirms the cache; skipping the
+    // rewrite then saves two localStorage sweeps and two year-sized JSON.stringify calls
+    // that would store bytes identical to what readCache just parsed. isCurrent above
+    // also guards the write: year.value still is the year this call captured, since a
+    // change would have started a newer loadYear.
+    const unchanged =
+      fromCache && nextAbsences === absences.value && nextHolidays === holidays.value;
+    absences.value = nextAbsences;
+    holidays.value = nextHolidays;
+    if (!unchanged) writeYearCache();
   } catch (error: unknown) {
     console.error("ERROR => Failed to load absences/holidays for year:", error);
   } finally {
@@ -621,19 +669,63 @@ onMounted(() => {
   });
 });
 
-// Saving and deleting leave the same thing to do: drop the modal state and reload the
-// year. The reloaded data is what tells the grid which of the two actually happened.
-function closeAbsenceModal() {
+// Saving and deleting no longer reload the year: one absence edit cannot change the
+// bank-holiday catalog or anyone else's row, and the mutation endpoints return the
+// affected record, so the response is patched in directly. The grid's per-person cell
+// cache then rebuilds exactly one row instead of the whole grid.
+function resetAbsenceModal() {
   showAbsenceModal.value = false;
   dayAbsences.value = [];
   prefillDate.value = null;
-  loadYear();
 }
 
-function closeHolidayModal() {
+function handleAbsenceSaved(saved: AbsenceDto) {
+  resetAbsenceModal();
+  const { from, to } = yearRange.value;
+  const next = absences.value.filter((a) => a.id !== saved.id);
+  // A save dated entirely outside the viewed year has no cell to paint here, and the
+  // year that owns it refetches on entry anyway. Same overlap rule the API's date filter
+  // uses; plain string compares, both sides ISO dates.
+  if (saved.endDate >= from && saved.startDate <= to) next.push(saved);
+  absences.value = next;
+  writeYearCache();
+}
+
+function handleAbsenceDeleted(id: number) {
+  resetAbsenceModal();
+  absences.value = absences.value.filter((a) => a.id !== id);
+  writeYearCache();
+}
+
+function resetHolidayModal() {
   showHolidayModal.value = false;
   editingHoliday.value = null;
   prefillHolidayDate.value = null;
-  loadYear();
+}
+
+function handleHolidaySaved(saved: BankHolidayDto) {
+  resetHolidayModal();
+  // A recurring holiday can't be patched in from the response: the catalog projects its
+  // stored month/day onto the viewed year (see BankHolidayService), and replicating that
+  // projection here, leap days and all, isn't worth it for a rare admin action. The
+  // reload keeps the current data on screen (the cache hit skips the skeleton) and the
+  // refetch reconciles the projected entry in.
+  if (saved.isRecurringAnnually) {
+    loadYear();
+    return;
+  }
+  const { from, to } = yearRange.value;
+  const next = holidays.value.filter((h) => h.id !== saved.id);
+  if (saved.date >= from && saved.date <= to) next.push(saved);
+  holidays.value = next;
+  writeYearCache();
+}
+
+function handleHolidayDeleted(id: number) {
+  resetHolidayModal();
+  // Works for recurring holidays too: the viewed year holds at most one projected entry,
+  // and it carries the stored record's id.
+  holidays.value = holidays.value.filter((h) => h.id !== id);
+  writeYearCache();
 }
 </script>

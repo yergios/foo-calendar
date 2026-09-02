@@ -46,9 +46,11 @@ import { useRoute } from "vue-router";
 import { useAuthStore } from "@/auth";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { runtimeConfig } from "@/lib/runtimeConfig";
+import { useNotificationsStore } from "@/stores/notifications";
 import { usePersonStore } from "@/stores/person";
 
 const personStore = usePersonStore();
+const notificationsStore = useNotificationsStore();
 const authStore = useAuthStore();
 const route = useRoute();
 const appName = runtimeConfig().appName;
@@ -73,5 +75,8 @@ onMounted(() => {
   personStore.checkOnce().catch((error: unknown) => {
     console.error("ERROR => Failed to check for an existing profile:", error);
   });
+  // In parallel with the person check, not from the bell's own mount - see the store for
+  // why that matters and why firing it before the person resolves is safe.
+  notificationsStore.load();
 });
 </script>

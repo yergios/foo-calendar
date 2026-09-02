@@ -9,6 +9,8 @@
     "build": "vite build",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -42,6 +44,7 @@
     "typescript-eslint": "8.61.1",
     "vite": "8.0.8",
     "vite-plugin-vue-devtools": "8.1.1",
+    "vitest": "^4.1.11",
     "vue-tsc": "3.2.6"
   },
   "engines": {
