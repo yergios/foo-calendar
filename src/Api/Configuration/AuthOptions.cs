@@ -7,12 +7,28 @@ public sealed class AuthOptions
     /// <summary>Value of <see cref="Provider"/> that validates real bearer tokens.</summary>
     public const string ProviderOidc = "Oidc";
 
-    /// <summary>Value of <see cref="Provider"/> that turns on the dev-only bypass.</summary>
+    /// <summary>Value of <see cref="Provider"/> that turns authentication off.</summary>
     public const string ProviderNone = "None";
 
-    /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" is a
-    /// dev-only bypass (see DevAuthHandler) that skips SSO entirely.</summary>
+    /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" skips
+    /// authentication entirely (see UnauthenticatedAuthHandler): visitors say who they are
+    /// and the app believes them. Outside Development that also needs
+    /// <see cref="AllowUnauthenticatedDeployment"/>.</summary>
     public string Provider { get; init; } = ProviderOidc;
+
+    /// <summary>Permits Provider=None outside Development, for a team on a network where
+    /// reaching the app is already the access control - a private LAN, a VPN, a Tailscale
+    /// tailnet - and standing up an identity provider would be the only thing standing
+    /// between them and a shared calendar.
+    ///
+    /// A second switch rather than Provider=None alone, because the two say different
+    /// things: one is "no IdP configured", which is also what a half-finished deployment
+    /// looks like, and this one is "I know what that means here". What it means is that
+    /// anyone who can reach the app is anyone they choose to be, including whoever holds
+    /// the permissions, and that the roster of names is readable before signing in. On a
+    /// network where that is not true of everything else already, it is the wrong
+    /// setting.</summary>
+    public bool AllowUnauthenticatedDeployment { get; init; }
 
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
@@ -54,9 +70,9 @@ public sealed class AuthOptions
     public List<string> AllPermissionValues() =>
         [.. Permissions.Values.SelectMany(values => values).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>What the dev identity actually holds. Resolved here rather than at each
-    /// use so the API's DevAuthHandler and the SPA's bootstrap config can't disagree about
-    /// what the bypass is signed in as.</summary>
+    /// <summary>What an unauthenticated visitor actually holds. Resolved here rather than
+    /// at each use so the API's UnauthenticatedAuthHandler and the SPA's bootstrap config
+    /// can't disagree about it.</summary>
     public List<string> EffectiveDevPermissions() =>
         DevUser.GrantAllPermissions ? AllPermissionValues() : DevUser.Permissions;
 

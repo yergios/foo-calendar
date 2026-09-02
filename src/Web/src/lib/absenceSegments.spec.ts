@@ -58,10 +58,10 @@ describe("segmentsForPerson", () => {
 
   it("keeps two different whole-day absences apart even when adjacent", () => {
     const v = absence("2026-01-05", "2026-01-06");
-    const s = absence("2026-01-07", "2026-01-08", { type: "Sick" });
+    const s = absence("2026-01-07", "2026-01-08", { type: "Other" });
     expect(segments(v, s).map((x) => [x.start, x.end, x.label])).toEqual([
       [4, 5, "V"],
-      [6, 7, "S"],
+      [6, 7, "O"],
     ]);
   });
 

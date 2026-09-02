@@ -47,19 +47,14 @@
         <YearPicker v-model="statsYear" class="justify-center">
           <h5>Absence stats {{ statsYear }}</h5>
         </YearPicker>
-        <div v-if="statsLoading" class="grid grid-cols-3 gap-3 mt-3">
-          <AppSkeleton class="h-20" />
+        <div v-if="statsLoading" class="grid grid-cols-2 gap-3 mt-3">
           <AppSkeleton class="h-20" />
           <AppSkeleton class="h-20" />
         </div>
-        <div v-else-if="stats" class="grid grid-cols-3 gap-3 mt-3">
+        <div v-else-if="stats" class="grid grid-cols-2 gap-3 mt-3">
           <div class="bg-surface rounded-12 p-4 text-center">
             <div class="text-2xl font-bold text-ink">{{ stats.vacationDays }}</div>
             <div class="text-xs text-secondary mt-1">Vacation</div>
-          </div>
-          <div class="bg-surface rounded-12 p-4 text-center">
-            <div class="text-2xl font-bold text-ink">{{ stats.sickDays }}</div>
-            <div class="text-xs text-secondary mt-1">Sick</div>
           </div>
           <div class="bg-surface rounded-12 p-4 text-center">
             <div class="text-2xl font-bold text-ink">{{ stats.otherDays }}</div>

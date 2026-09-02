@@ -196,10 +196,12 @@ public sealed class WebhookPublisherTests
         handler.Requests.ShouldBeEmpty();
     }
 
-    // A note on a sick leave is health information, and a webhook is usually pointed at a
-    // chat channel far wider than the people it was written for.
+    // A note is free text its author wrote for their own team, and a webhook is usually
+    // pointed at a chat channel far wider than that - possibly at a third party. There is
+    // no setting that turns this off, which is the point of the test: the day someone adds
+    // one back, this fails.
     [Fact]
-    public async Task DeliverAsync_LeavesTheAbsenceNoteOutByDefault()
+    public async Task DeliverAsync_NeverSendsTheAbsenceNote()
     {
         var (publisher, handler) = CreatePublisher();
 
@@ -213,22 +215,10 @@ public sealed class WebhookPublisherTests
         absence.GetProperty("type").GetString().ShouldBe("Vacation");
     }
 
-    [Fact]
-    public async Task DeliverAsync_WhenNotesAreOptedIn_SendsTheNote()
-    {
-        var (publisher, handler) = CreatePublisher(
-            new WebhookOptions { Url = Url, IncludeAbsenceNote = true });
-
-        await publisher.DeliverAsync(SampleEvent());
-
-        using var body = JsonDocument.Parse(handler.Requests.Single().Body);
-        body.RootElement.GetProperty("absence").GetProperty("note").GetString().ShouldBe("Trip");
-    }
-
     // Same reasoning as the requester's own note: a reviewer's reason can reference the
-    // same private circumstances back, so it rides on the same toggle.
+    // same private circumstances back.
     [Fact]
-    public async Task DeliverAsync_LeavesTheReviewNoteOutByDefault()
+    public async Task DeliverAsync_NeverSendsTheReviewNote()
     {
         var (publisher, handler) = CreatePublisher();
 
@@ -239,16 +229,19 @@ public sealed class WebhookPublisherTests
             .ShouldBe(JsonValueKind.Null);
     }
 
+    // Every configuration, not just the default one: there is no combination of settings
+    // that puts a note on the wire.
     [Fact]
-    public async Task DeliverAsync_WhenNotesAreOptedIn_SendsTheReviewNote()
+    public async Task DeliverAsync_NeverSendsNotes_WhateverElseIsConfigured()
     {
         var (publisher, handler) = CreatePublisher(
-            new WebhookOptions { Url = Url, IncludeAbsenceNote = true });
+            new WebhookOptions { Url = Url, Secret = "s3cret", MaxAttempts = 1 });
 
         await publisher.DeliverAsync(SampleEvent(reviewNote: "Not enough coverage."));
 
         using var body = JsonDocument.Parse(handler.Requests.Single().Body);
-        body.RootElement.GetProperty("absence").GetProperty("reviewNote").GetString()
-            .ShouldBe("Not enough coverage.");
+        var absence = body.RootElement.GetProperty("absence");
+        absence.GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+        absence.GetProperty("reviewNote").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 }

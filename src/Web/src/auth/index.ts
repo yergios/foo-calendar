@@ -3,18 +3,67 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import { appUrl } from "@/lib/appUrl";
-import { runtimeConfig } from "@/lib/runtimeConfig";
-import type { RuntimeAuthConfig } from "@/types/config";
+import { bootstrapConfig } from "@/lib/bootstrapConfig";
+import { clearCache } from "@/lib/browserCache";
+import type { BootstrapAuthConfig } from "@/types/config";
+import type { IdentityOption, IdentityState } from "@/types/identity";
 import type { Permission } from "@/types/permission";
 
-// The API reports Auth:Provider=None when SSO is bypassed entirely, which Program.cs
-// refuses outside Development. It lets the app run with zero external IdP dependency
-// when no real OIDC tenant is available (see DevAuthHandler on the API side).
-const DEV_PROVIDER = "None";
+// The API reports Auth:Provider=None when there is no identity provider at all: local
+// development, or a deployment that opted into running unauthenticated on a trusted
+// network (see UnauthenticatedAuthHandler on the API side). In that mode nobody signs in;
+// they say who they are and the app believes them, which is what the identity state below
+// tracks instead of a token.
+const NO_IDP_PROVIDER = "None";
 
 let userManager: UserManager | null = null;
 let isDevMode = false;
 let devToken = "";
+
+const identityState = ref<IdentityState | null>(null);
+
+/** True when this deployment has no identity provider, so identity is self-asserted. */
+export function usesSelfAssertedIdentity(): boolean {
+  return isDevMode;
+}
+
+/** The names a visitor can claim, for the picker. Empty until the state has loaded. */
+export function identityOptions(): IdentityOption[] {
+  return identityState.value?.people ?? [];
+}
+
+async function fetchIdentityState(): Promise<IdentityState> {
+  const res = await fetch(appUrl("/api/identity"), { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+  return (await res.json()) as IdentityState;
+}
+
+/**
+ * Claims a name for this browser, then reloads. A reload rather than patching state in
+ * place because identity decides everything downstream - which person the API resolves,
+ * which permissions the interface offers, and the profile cached in localStorage - and
+ * re-deriving all of that by hand is a longer list than it looks, with a wrong answer
+ * that shows up as someone else's calendar row.
+ */
+export async function chooseIdentity(username: string): Promise<void> {
+  const res = await fetch(appUrl("/api/identity"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+
+  // The previous visitor's profile, cached under a key that doesn't mention who it was.
+  clearCache("person");
+  window.location.reload();
+}
+
+/** Gives up the claimed name, so the picker asks again. */
+export async function forgetIdentity(): Promise<void> {
+  await fetch(appUrl("/api/identity"), { method: "DELETE" });
+  clearCache("person");
+  window.location.reload();
+}
 
 const oidcUser = ref<OidcUser | null>(null);
 const devProfile = ref<Record<string, unknown> | null>(null);
@@ -29,8 +78,8 @@ const currentProfile = computed(() =>
  * Wires up authentication from the config the API served. Called once by main.ts before
  * the app mounts, so nothing in this module works until it has run.
  */
-export function initAuth(auth: RuntimeAuthConfig): void {
-  isDevMode = auth.provider === DEV_PROVIDER;
+export function initAuth(auth: BootstrapAuthConfig): void {
+  isDevMode = auth.provider === NO_IDP_PROVIDER;
 
   if (isDevMode) {
     const devUser = auth.devUser;
@@ -40,20 +89,34 @@ export function initAuth(auth: RuntimeAuthConfig): void {
       email: devUser?.email,
     };
 
-    // The API's DevAuthHandler never inspects the token in dev mode - this only needs a
-    // decodable payload so the existing token/permission plumbing below keeps working.
-    // The permissions come from the same Auth:DevUser the API is authenticating as, so
-    // the UI can't disagree with what the API will actually allow.
+    // The API never inspects this token when there is no IdP - it only needs a decodable
+    // payload so the existing token/permission plumbing below keeps working. The
+    // permissions come from the same Auth:DevUser the API is authenticating as, so the UI
+    // can't disagree with what the API will actually allow.
     devToken = `dev.${btoa(
       JSON.stringify({
-        // Under the first claim name, matching what DevAuthHandler emits.
+        // Under the first claim name, matching what the API's handler emits.
         [auth.permissionsClaims[0] ?? "permissions"]: devUser?.permissions ?? [],
         exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
       }),
     )}.dev`;
 
-    isAuthenticated.value = true;
-    isAuthLoading.value = false;
+    // Not blocking the mount, same as the OIDC branch below: the guard waits on
+    // isAuthLoading, and everything up to the first guarded route can render meanwhile.
+    // "Authenticated" here means this browser has claimed a name; when it hasn't, the
+    // guard sends it to the picker instead of to an IdP.
+    fetchIdentityState()
+      .then((state) => {
+        identityState.value = state;
+        isAuthenticated.value = state.current !== null;
+      })
+      .catch((error: unknown) => {
+        console.error("ERROR => Failed to load the identity state:", error);
+        isAuthenticated.value = false;
+      })
+      .finally(() => {
+        isAuthLoading.value = false;
+      });
     return;
   }
 
@@ -146,7 +209,7 @@ export const useAuthStore = defineStore("auth", () => {
     accessToken.value = newToken;
 
     const payload = decodeJwtPayload(newToken);
-    permissions.value = readPermissions(payload, runtimeConfig().auth.permissionsClaims);
+    permissions.value = readPermissions(payload, bootstrapConfig().auth.permissionsClaims);
     tokenExpiresAt.value = typeof payload.exp === "number" ? payload.exp * 1000 : 0;
   };
 
@@ -176,13 +239,13 @@ export const useAuthStore = defineStore("auth", () => {
   /** Whether the signed-in user holds one named permission. Only ever decides what the
    * interface offers; the API enforces the same map on every request regardless. */
   const can = (permission: Permission): boolean =>
-    holdsAnyOf(runtimeConfig().auth.permissions[permission] ?? []);
+    holdsAnyOf(bootstrapConfig().auth.permissions[permission] ?? []);
 
   /** Whether they hold anything at all, which is what the admin area amounts to: a page
    * of sections, each behind its own permission. */
   const canAnything = computed(() =>
-    Object.keys(runtimeConfig().auth.permissions).some((permission) =>
-      holdsAnyOf(runtimeConfig().auth.permissions[permission] ?? []),
+    Object.keys(bootstrapConfig().auth.permissions).some((permission) =>
+      holdsAnyOf(bootstrapConfig().auth.permissions[permission] ?? []),
     ),
   );
 

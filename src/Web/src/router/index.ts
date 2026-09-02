@@ -8,6 +8,7 @@ import {
   signinRedirect,
   useAuth,
   useAuthStore,
+  usesSelfAssertedIdentity,
 } from "@/auth";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { basePath } from "@/lib/appUrl";
@@ -16,6 +17,7 @@ import type { Permission } from "@/types/permission";
 import ErrorView from "@/views/ErrorView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
 import HomeView from "@/views/HomeView.vue";
+import IdentityView from "@/views/IdentityView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import UnauthorizedView from "@/views/UnauthorizedView.vue";
 
@@ -75,6 +77,9 @@ const router = createRouter({
         return sessionStorage.getItem("auth_redirect") ?? "/";
       },
     },
+    // Only reachable on a deployment with no identity provider; on any other one the
+    // guard never sends anyone here and there is nothing to pick.
+    { path: "/identity", component: IdentityView },
     { path: "/401", component: UnauthorizedView },
     { path: "/403", component: ForbiddenView },
     { path: "/500", component: ErrorView },
@@ -127,6 +132,9 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
 
       return true;
     } else {
+      // No identity provider to redirect to: this deployment asks who you are instead.
+      if (usesSelfAssertedIdentity()) return "/identity";
+
       const targetUrl = to.fullPath;
       sessionStorage.setItem("auth_redirect", targetUrl);
       await signinRedirect({ targetUrl });

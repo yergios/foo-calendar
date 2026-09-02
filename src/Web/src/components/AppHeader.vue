@@ -5,7 +5,7 @@
         to="/"
         class="font-display font-bold text-2xl text-ink hover:text-accent transition shrink-0"
       >
-        {{ appName }}
+        {{ orgName }}
       </RouterLink>
 
       <div v-if="personStore.person" class="flex items-center gap-3">
@@ -45,7 +45,8 @@ import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/auth";
 import NotificationBell from "@/components/NotificationBell.vue";
-import { runtimeConfig } from "@/lib/runtimeConfig";
+import { bootstrapConfig } from "@/lib/bootstrapConfig";
+import { PRODUCT_NAME } from "@/lib/productInfo";
 import { useNotificationsStore } from "@/stores/notifications";
 import { usePersonStore } from "@/stores/person";
 
@@ -53,7 +54,10 @@ const personStore = usePersonStore();
 const notificationsStore = useNotificationsStore();
 const authStore = useAuthStore();
 const route = useRoute();
-const appName = runtimeConfig().appName;
+// The header is the deployment's own: a team that has set Team:OrgName sees itself
+// here. The product's attribution lives in the footer instead, where it isn't something
+// a deployment can configure away.
+const orgName = bootstrapConfig().orgName || PRODUCT_NAME;
 
 const navItems = computed(() => {
   const items = [

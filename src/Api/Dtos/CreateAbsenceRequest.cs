@@ -24,8 +24,8 @@ public sealed record CreateAbsenceRequest(
                 [nameof(EndDate)]);
 
         // Appointment is always time-based. Other is whole-day by default but may become
-        // time-based by supplying either time field; Vacation and Sick are never
-        // time-based, whole-day absences only.
+        // time-based by supplying either time field; Vacation is never time-based,
+        // whole-day absences only.
         var suppliedTime = StartTime is not null || EndTime is not null;
         var isTimeBased = Type == AbsenceType.Appointment || (Type == AbsenceType.Other && suppliedTime);
 

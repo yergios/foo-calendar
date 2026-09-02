@@ -21,6 +21,29 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<Absence>()
             .HasIndex(a => new { a.PersonId, a.StartDate, a.EndDate });
 
+        // Erasure, spelled out rather than inherited. Both of these are what EF already
+        // infers from a required foreign key, so declaring them changes no schema; the
+        // point is that deleting a person is the app's answer to a GDPR Article 17 request
+        // (docs/data-protection.md), which makes "what goes with them" a decision someone
+        // has to have made on purpose, not a default that could shift under a future
+        // EF version or a nullable-ing of the key.
+        modelBuilder.Entity<Absence>()
+            .HasOne(a => a.Person)
+            .WithMany(p => p.Absences)
+            .HasForeignKey(a => a.PersonId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.Person)
+            .WithMany()
+            .HasForeignKey(n => n.PersonId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // AuditEntry deliberately has no relationship to Person at all: it names its actor
+        // and target as free text captured at the time, so it survives the deletion above
+        // and stays readable afterwards, which is the whole point of an audit log. What
+        // bounds it instead is Retention:AuditEntryDays.
+
         modelBuilder.Entity<Person>()
             .Property(p => p.CreatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP");

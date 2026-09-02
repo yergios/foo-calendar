@@ -1,6 +1,10 @@
 ﻿namespace Api.Data.Models;
 
-public enum AbsenceType { Vacation, Sick, Other, Appointment }
+// No Sick: an absence's type is visible to the whole team, and "this person is ill" is
+// health data under GDPR Article 9, which carries a materially higher bar than the rest
+// of what this app stores. Illness is recorded as Other, which says someone is away
+// without saying why. See docs/data-protection.md.
+public enum AbsenceType { Vacation, Other, Appointment }
 public enum AbsenceStatus { Pending, Approved, Rejected }
 
 public sealed class Absence

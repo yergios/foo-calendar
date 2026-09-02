@@ -1,4 +1,7 @@
-export type AbsenceType = "Vacation" | "Sick" | "Other" | "Appointment";
+// No "Sick": an absence's type is visible to the whole team, and "this person is ill"
+// is health data under GDPR Article 9. Illness is recorded as Other, which says someone
+// is away without saying why. Mirrors the API's AbsenceType.
+export type AbsenceType = "Vacation" | "Other" | "Appointment";
 export type AbsenceStatus = "Pending" | "Approved" | "Rejected";
 
 /** Single-letter marker painted into a calendar cell. Keyed by the label the legend shows;
@@ -6,7 +9,6 @@ export type AbsenceStatus = "Pending" | "Approved" | "Rejected";
 export const ABSENCE_TYPE_INITIALS: Record<AbsenceType, string> = {
   Vacation: "V",
   Appointment: "A",
-  Sick: "S",
   Other: "O",
 };
 

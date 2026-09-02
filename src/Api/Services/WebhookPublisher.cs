@@ -80,10 +80,14 @@ public sealed class WebhookPublisher(
     {
         var config = options.Value;
 
-        // Dropped here rather than at each call site: this is the last thing before the
-        // wire, so it is the only place that has to remember. The fields stay in the
-        // payload, they simply arrive null, see WebhookOptions.IncludeAbsenceNote.
-        if (!config.IncludeAbsenceNote && webhookEvent.Absence is not null)
+        // Notes never leave the app, with no setting to say otherwise. A note is free text
+        // its author wrote for their own team, and free text is the one field whose content
+        // nobody can predict - a webhook usually lands in a chat channel far wider than the
+        // people it was written for, and possibly at a third party. Dropped here rather than
+        // at each call site because this is the last thing before the wire, so it is the
+        // only place that has to remember. The fields stay in the payload, so a receiver
+        // parsing them doesn't break; they simply always arrive null.
+        if (webhookEvent.Absence is not null)
             webhookEvent = webhookEvent with
             {
                 Absence = webhookEvent.Absence with { Note = null, ReviewNote = null },

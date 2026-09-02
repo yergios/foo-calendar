@@ -6,13 +6,25 @@
 
 ### Added
 
+- The app can run with no identity provider at all, for a team on a network where reaching the app is already the access control. Set `Auth:Provider=None` **and** `Auth:AllowUnauthenticatedDeployment=true`; the app then asks who you are instead of signing you in, and says so in a banner nobody can dismiss. Anyone who can reach it can be anyone, so it belongs on a private LAN, a VPN or a tailnet and nowhere else. Without the second flag it refuses to start outside development.
+- `Retention:AuditEntryDays` (365), `Retention:NotificationDays` (90) and `Retention:AbsenceDays` (off) delete data that has outlived its purpose, swept daily. Absences are left alone by default — looking back over previous years is what the calendar is for. `0` keeps a table forever.
+- [`docs/data-protection.md`](https://github.com/your-org/foo-calendar/blob/main/docs/data-protection.md): every personal-data field the app stores, everywhere data leaves, and what is the deploying team's own responsibility.
+- `Team:OrgName` puts your team's name in the header.
+
+### Changed
+
+- **The `Sick` absence type is gone.** An absence's type is visible to the whole team, and "this person is ill" is health data, which carries a much higher bar than anything else here. Record illness as `Other`, which says someone is away without saying why — and keep health details out of the note, which is the one field the app can't reason about.
+- Branding is split in two. Colors, fonts and shape are yours to change in `src/Web/src/styles/theme.css` and are compiled in; your team's name and support links are runtime config under `Team:`. The product's own name and mark are neither — they are constants, and the footer attribution is not removable. See TRADEMARK.md.
+- `Branding:AppName` is gone; `Branding:SupportUrl` and `Branding:IssueUrl` are now `Team:SupportUrl` and `Team:IssueUrl`.
+- The API inlines the sign-in configuration into the page it serves, so the app no longer waits on a config request before it can mount.
+
 - Per-job permissions instead of a single admin role: `PeopleManage`, `ReportsRead`, `HolidaysSync`, and `AuditRead`, each configured under `Auth:Permissions` (the claim values that grant it) and enforced by a policy of the same name. The app refuses to start if a permission is left with no values.
 - The admin area is split into its own page per section — People, Bank holidays, Absence approvals, Audit log — reachable from a left sidebar, each gated by its own permission(s). The sidebar, and the nav item leading to it, shows only what you hold; someone who holds none of them never reaches `/admin` at all.
 - An audit log, readable at `/admin` with `AuditRead` or from `GET /api/admin/audit`. It records profile creates/updates/deletes, bulk imports, deleted absences, every hand edit to a manual bank holiday, and hand-triggered syncs — with who did it and when. Append-only, and a person's entries outlive their profile. `/healthchecks/detail` also requires `AuditRead`.
 - `Auth:DevUser:GrantAllPermissions` (default on) holds every configured permission in local development, so the dev bypass never drifts as permissions are added. Set it false to browse as a plain member.
 - The API describes itself as OpenAPI at `/openapi/v1.json` and serves a [Scalar](https://scalar.com/) reference over it at `/scalar`, with a bearer scheme so calls can be made from the page. On by default in development, `ApiDocs:Enabled` elsewhere — both routes are anonymous, so it is off by default.
 - An absence's note is visible only to its author. The team sees the dates and the type; nobody else sees the note, on the calendar, on the admin page, or in the audit log.
-- Webhook payloads don't carry the absence note by default — the `note` field is still there, it just arrives `null`. Set `Webhook:IncludeAbsenceNote` to include it.
+- Webhook payloads never carry the absence note, and there is no setting that sends it — the `note` and `reviewNote` fields are still in the payload, they just always arrive `null`.
 - Regions are tracked automatically: picking one on your profile starts syncing that region's public holidays, for the current year and the next. `Team:HomeRegion`, the team's own locality, is required and always synced, never removed even once nobody's home city matches it.
 - When the last person in a region leaves or is deleted, that region's bank holidays are deleted too, including manually added ones; a country's nationwide holidays go only once nobody is left in any of its regions, and the home region is exempt. The calendar's region filter and the manual bank-holiday form offer only the regions the team occupies — adding a holiday for anywhere else is rejected.
 - The profile page offers every country and region the holiday source knows about, rather than a fixed list. Both fields are searchable, by name or by code, and ignore accents.

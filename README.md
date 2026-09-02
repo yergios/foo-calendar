@@ -1,6 +1,6 @@
 # Foo Calendar
 
-Internal tool for coordinating the team. Tracking vacations, sick leaves, and other absences on a shared, year-at-a-glance calendar with automatic public holiday syncing per region.
+Internal tool for coordinating the team. Tracking vacations, appointments, and other absences on a shared, year-at-a-glance calendar with automatic public holiday syncing per region.
 
 ## Documentation
 
@@ -16,10 +16,14 @@ Foo Calendar is source-available under the [Elastic License 2.0](LICENSE.txt) (`
 
 - **You may** read the source, run it, self-host it, and modify it — including inside a for-profit company, to coordinate that company's own teams.
 - **You may** redistribute it and your modifications, as long as you pass along these terms and mark clearly what you changed.
-- **You may not** offer it to third parties as a hosted or managed service that exposes a substantial part of its functionality.
-- **You may not** strip or obscure the licensing and copyright notices.
+- **You may** re-skin it to match your brand: colors, fonts and shape live in one file, and your team's own name goes in the header via `Team:OrgName`.
+- **You may not** offer it to third parties as a hosted or managed service that exposes a substantial part of its functionality. Running it for your own staff is not this, and your company being profitable changes nothing.
+- **You may not** strip or obscure the licensing and copyright notices, which includes the product name, mark and copyright line in the app's footer.
+- **You may not** rename the product or call your fork "Foo Calendar". The license grants no rights in the name or the mark.
 
-The full text is in [LICENSE.txt](LICENSE.txt) and it is the only thing that governs; the summary above is not legal advice.
+See [TRADEMARK.md](TRADEMARK.md) for what that means in practice, spelled out. The full text is in [LICENSE.txt](LICENSE.txt) and it is the only thing that governs; the summary above is not legal advice.
+
+Handling personal data with this? Read [docs/data-protection.md](docs/data-protection.md) before you deploy it: it lists everything the app stores, everywhere data leaves, and what stays your responsibility as the controller.
 
 ---
 
@@ -35,7 +39,7 @@ src/
 └── Web/          Vue 3 + TypeScript SPA — built into Api/wwwroot at publish time
 
 tests/
-└── UnitTests/    xUnit test project (scaffold — no tests written yet)
+└── UnitTests/    xUnit tests for the API's services, DTOs, and configuration
 ```
 
 The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app serves it as static files. In production there is one process, one port, one deployment artifact — the `Dockerfile` at the repository root builds exactly that, see [Deploying](#deploying).
@@ -44,7 +48,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 - .NET 10 Minimal API with EF Core + SQLite
 - Public holidays from a configurable source — the [Nager.Date](https://date.nager.at/) API by default, or a JSON file, or nothing at all — synced on a background job and on demand from the admin page, see [Where holidays come from](#where-holidays-come-from)
-- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or a zero-setup dev-only bypass, see below
+- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or no authentication at all, for a trusted internal network, see [Running without an identity provider](#running-without-an-identity-provider)
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
 - OpenAPI with a [Scalar](https://scalar.com/) reference UI, on in development and opt-in elsewhere, see [Browsing the API](#browsing-the-api)
 - OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
@@ -95,13 +99,13 @@ The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` request
 
 Everything that differs between one company's deployment and another's is API configuration, read at startup. **The frontend bundle contains no environment-specific values**, so a single build artifact can be deployed anywhere: rebranding it or pointing it at a different identity provider never requires rebuilding the SPA.
 
-At startup the frontend fetches `GET /api/config/bootstrap` (the one anonymous endpoint, since it's what tells the app how to sign in) and configures itself from the response:
+The API serves that configuration two ways. Whatever the app needs *before* anyone has signed in — how to sign in, your team's name, and the two links the error pages offer — is **inlined into the SPA shell** the API serves, so reading it costs no round trip and doesn't gate the mount. `GET /api/config/bootstrap` returns the same payload for the Vite dev server's SPA, which has no shell of ours to read it from. Everything that shapes the signed-in app is on `GET /api/config` instead.
 
 | Setting | Purpose |
 | ------------------------------ | ------------------------------------------------------------------------- |
-| `Branding:AppName` | Name in the header, the footer, and the browser tab title. |
-| `Branding:SupportUrl` | "Contact support" links, including inside the help doc. Any scheme. |
-| `Branding:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
+| `Team:OrgName` | Your team's name, in the header. Empty falls back to the product's name. |
+| `Team:SupportUrl` | "Contact support" links, including inside the help doc. Any scheme. |
+| `Team:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
 | `Auth:Authority` | OIDC issuer. Used by the API to validate tokens and by the SPA to log in. |
 | `Auth:ClientId` | The SPA's OIDC client id. Frontend-only, but required at startup. |
 | `Auth:Audience` | Which API the access token is issued for. |
@@ -113,8 +117,8 @@ At startup the frontend fetches `GET /api/config/bootstrap` (the one anonymous e
 Every one of these is overridable per environment without touching `appsettings.json`, using the standard .NET double-underscore environment variables — which is usually how you'd configure a container:
 
 ```bash
-Branding__AppName="Acme Leave" \
-Branding__SupportUrl="mailto:it@acme.example" \
+Team__OrgName="Acme Engineering" \
+Team__SupportUrl="mailto:it@acme.example" \
 Auth__Authority="https://acme.okta.com" \
 Auth__ClientId="0oa1b2c3" \
 Auth__Audience="https://leave.acme.example/api" \
@@ -123,9 +127,11 @@ ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
 
-The same applies to the `Team` section below, and to `Telemetry`.
+The same applies to the rest of the `Team` section below, and to `Telemetry`.
 
-To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild.
+To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild. That split is the rule, not an accident: anything Tailwind has to bake into the CSS is build-time, and everything a deployer might reasonably change without a Node toolchain is runtime.
+
+What is *neither* is the product's own name and mark. Those are constants in `ProductInfo.cs` and `lib/productInfo.ts`, with no setting that changes them — your name goes in the header, the product's stays in the footer. See [TRADEMARK.md](TRADEMARK.md).
 
 ---
 
@@ -140,14 +146,14 @@ docker compose up -d
 
 That serves the app on `http://localhost:8080` and keeps the SQLite database in the `foo-calendar-data` volume. **That volume is the entire application state** — back it up and you have backed up everything.
 
-To try the app before setting up an identity provider, run it in the Development environment, where SSO is bypassed entirely (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, holding every permission:
+To try the app before setting up an identity provider, run it in the Development environment, where authentication is off (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, holding every permission:
 
 ```bash
 docker build -t foo-calendar:1.0.0 .
 docker run --rm -p 8080:8080 -e ASPNETCORE_ENVIRONMENT=Development foo-calendar:1.0.0
 ```
 
-Nothing persists there — no volume is mounted, and the database goes away with the container. Uncommenting `ASPNETCORE_ENVIRONMENT=Development` in `.env` does the same through compose, keeping the volume. Either way the API refuses to start with `Auth:Provider=None` outside Development, so this can't be deployed by accident.
+Nothing persists there — no volume is mounted, and the database goes away with the container. Uncommenting `ASPNETCORE_ENVIRONMENT=Development` in `.env` does the same through compose, keeping the volume. Outside Development the API refuses to start with `Auth:Provider=None` unless you also set `Auth:AllowUnauthenticatedDeployment=true`, so it can't be deployed unauthenticated by accident — see [Running without an identity provider](#running-without-an-identity-provider) if that is what you actually want.
 
 If the container restarts in a loop, read the logs first: configuration is validated at startup, so a missing `Auth__Authority` or `Auth__ClientId` shows up there as a plain `must be configured` message rather than as a broken page later.
 
@@ -386,9 +392,51 @@ Grant the values to a user in your OIDC provider's dashboard. Locally, the dev b
 
 The API's policies and the SPA's gating read the same map — served to the browser at startup — so they cannot disagree.
 
-**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
+**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, `/healthchecks`, and — only on a deployment with no identity provider — `/api/identity`.
 
 **Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable. Put it in `Permissions.Optional` instead if it gates a feature that is itself off by default (`AbsencesApprove` is the example): it still gets a policy and still has to be one of the recognized names, it just isn't required to be configured.
+
+### Running without an identity provider
+
+Setting up OIDC is the largest piece of work in deploying this, and for a team on a private
+network it can be the only thing standing between them and a shared calendar. So it is
+optional — deliberately, and with the trade stated plainly rather than buried.
+
+```bash
+Auth__Provider=None \
+Auth__AllowUnauthenticatedDeployment=true \
+dotnet run --project src/Api
+```
+
+Both settings are required outside Development. `Provider=None` on its own is also what a
+half-finished deployment looks like, so the second flag is how you say you meant it.
+
+**What you get.** Nobody signs in. On first visit the app asks who you are, listing the
+people it already knows plus a box to type a new username; the answer goes in a cookie and
+decides which calendar row is yours. A standing banner across the top says the deployment
+has no sign-in, and doubles as the way to switch identity.
+
+**What you give up.** Everything. Anyone who can reach the app can pick any identity,
+including ones holding every permission, and the roster of names is readable before
+choosing. There is no password, no token and nothing to verify. Permission settings still
+apply — `Auth:DevUser:GrantAllPermissions=false` runs the whole deployment as plain members
+— but they are not a security control here, since anyone can simply pick a different name.
+
+**When that is fine.** When reaching the app is already the access control: a private LAN,
+a VPN, a Tailscale tailnet, a machine that is not routable from the internet. In that
+setting this is roughly the security model of a whiteboard in the office, which is what a
+team calendar largely is.
+
+**When it is not.** Anything reachable from the internet, anything with contractors or
+guests on the same network, anything where "who marked me absent" needs an answer you can
+stand behind. Use OIDC. The app logs a `Critical` line naming the environment every time it
+starts in this mode, so a deployment that drifted into it is visible in the logs as well as
+on screen.
+
+> A middle path worth knowing about: put the app behind a reverse proxy that authenticates
+> for you — Authelia, oauth2-proxy, Cloudflare Access, Tailscale — and keep OIDC off. That
+> gives real authentication without running an IdP yourself. The app doesn't read a proxy's
+> identity header today; if that is the shape you want, say so.
 
 ### Who changed what
 
@@ -417,9 +465,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 It records profile creates, updates, and deletes; bulk imports; deleted, approved, and rejected absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
 
-An absence's note is never recorded, and neither is a reviewer's reason for rejecting one — neither the log nor the admin page will show you either. The same applies to the actions themselves: an entry says a Sick absence from the 2nd to the 6th was rejected, not why.
+An absence's note is never recorded, and neither is a reviewer's reason for rejecting one — neither the log nor the admin page will show you either. The same applies to the actions themselves: an entry says an Other absence from the 2nd to the 6th was rejected, not why.
 
-> The log grows without bound. At a handful of entries a day that is a few thousand rows a year, which SQLite will not notice; if you need it pruned, it is one `DELETE` against the `AuditEntries` table.
+> Entries are deleted after `Retention:AuditEntryDays` (a year by default). That bound is also what keeps a deleted person's name from surviving in the log indefinitely — see [docs/data-protection.md](docs/data-protection.md). Set it to `0` to keep them forever.
 
 > Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`, `Auth__Permissions__PeopleManage__0=leave-admin`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__Permissions__PeopleManage__1=`). Blank entries are dropped rather than matched.
 
@@ -491,7 +539,7 @@ Five events are sent: `absence.created`, `absence.updated`, `absence.deleted`, `
 
 For a deletion, `absence` describes the absence as it was. `status` is `Pending` on `absence.created` only when approvals are turned on (`Approved` otherwise, same as before); it's what lets a receiver tell a request that needs a look from one that's already settled.
 
-`note` is free text somebody typed about their own absence, and on a sick leave it is health information, so it is **left out by default** — the field is always there, it simply arrives `null`. `reviewNote` is a reviewer's reason for a rejection, and is left out under the same setting, for the same reason. Set `Webhook:IncludeAbsenceNote=true` to send both, and point the hook somewhere you control if you do.
+`note` is free text somebody typed about their own absence, and free text is the one field whose contents nobody can predict. It is **never sent**, and there is no setting that sends it — the field is always in the payload, it simply always arrives `null`. `reviewNote`, a reviewer's reason for a rejection, is treated the same way for the same reason. Everything else here does go out, so point the hook somewhere you have thought about: a chat channel is usually a far wider audience than the people an absence was shared with.
 
 **Headers**
 

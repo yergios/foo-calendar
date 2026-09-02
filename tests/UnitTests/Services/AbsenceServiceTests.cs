@@ -36,7 +36,6 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         notifications,
         emails,
         Options.Create(new AbsenceApprovalOptions { Enabled = enabled }),
-        Options.Create(new BrandingOptions { AppName = "Foo Calendar" }),
         Options.Create(new EmailOptions()));
 
     private Person CreatePerson(
@@ -131,9 +130,9 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
         var updated = await sut.UpdateAsync(
-            person, created.Id, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "updated"));
+            person, created.Id, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "updated"));
 
-        updated.Type.ShouldBe(AbsenceType.Sick);
+        updated.Type.ShouldBe(AbsenceType.Other);
         updated.Note.ShouldBe("updated");
     }
 
@@ -229,13 +228,11 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-02-02", "2026-02-02", AbsenceType.Vacation));
-        await sut.CreateAsync(person, Request("2026-02-03", "2026-02-03", AbsenceType.Sick));
         await sut.CreateAsync(person, Request("2026-02-04", "2026-02-04", AbsenceType.Other));
 
         var stats = await sut.GetStatsAsync(person.Id, 2026);
 
         stats.VacationDays.ShouldBe(1);
-        stats.SickDays.ShouldBe(1);
         stats.OtherDays.ShouldBe(1);
     }
 
@@ -269,7 +266,6 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var personStats = stats.Stats.ShouldHaveSingleItem();
         personStats.PersonId.ShouldBe(person.Id);
         personStats.VacationDays.ShouldBe(0);
-        personStats.SickDays.ShouldBe(0);
         personStats.OtherDays.ShouldBe(0);
     }
 
@@ -297,7 +293,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
             PersonId = person.Id,
             StartDate = new DateOnly(2026, 8, 6),
             EndDate = new DateOnly(2026, 8, 10),
-            Type = AbsenceType.Sick,
+            Type = AbsenceType.Other,
             Status = AbsenceStatus.Pending,
             CreatedBy = person.Username,
         });
@@ -308,7 +304,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         result.Absences.Count.ShouldBe(2);
         result.Absences.ShouldContain(a => a.Type == AbsenceType.Vacation && a.Status == AbsenceStatus.Approved);
-        result.Absences.ShouldContain(a => a.Type == AbsenceType.Sick && a.Status == AbsenceStatus.Pending);
+        result.Absences.ShouldContain(a => a.Type == AbsenceType.Other && a.Status == AbsenceStatus.Pending);
     }
 
     [Fact]
@@ -320,7 +316,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
             PersonId = person.Id,
             StartDate = new DateOnly(2026, 7, 6),
             EndDate = new DateOnly(2026, 7, 10),
-            Type = AbsenceType.Sick,
+            Type = AbsenceType.Other,
             Status = AbsenceStatus.Rejected,
             CreatedBy = person.Username,
         });
@@ -355,11 +351,11 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var person = CreatePerson();
 
-        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceCreated);
         entry.Target.ShouldBe(person.DisplayName);
-        entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
+        entry.Details.ShouldBe("Other, 2026-03-02 → 2026-03-06");
         entry.Details.ShouldNotContain("Flu");
     }
 
@@ -368,7 +364,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var person = CreatePerson();
         var created = await sut.CreateAsync(
-            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         await sut.UpdateAsync(
             person, created.Id, Request("2026-04-02", "2026-04-06", AbsenceType.Vacation, "Trip"));
@@ -391,12 +387,12 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.UpdateAsync(
             person,
             created.Id,
-            new CreateAbsenceRequest(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 2), AbsenceType.Sick, null));
+            new CreateAbsenceRequest(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 2), AbsenceType.Other, null));
 
         var published = webhooks.Published.ShouldHaveSingleItem();
         published.Event.ShouldBe(WebhookEvents.AbsenceUpdated);
         published.Absence.StartDate.ShouldBe(new DateOnly(2026, 6, 1));
-        published.Absence.Type.ShouldBe(AbsenceType.Sick);
+        published.Absence.Type.ShouldBe(AbsenceType.Other);
     }
 
     [Fact]
@@ -427,7 +423,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
         await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
             person,
-            new CreateAbsenceRequest(new DateOnly(2026, 5, 3), new DateOnly(2026, 5, 4), AbsenceType.Sick, null)));
+            new CreateAbsenceRequest(new DateOnly(2026, 5, 3), new DateOnly(2026, 5, 4), AbsenceType.Other, null)));
 
         webhooks.Published.ShouldBeEmpty();
     }
@@ -436,7 +432,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     public async Task GetOverlappingAsync_ReturnsTheViewersOwnNote()
     {
         var person = CreatePerson();
-        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         var result = await sut.GetOverlappingAsync(
             new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), person.Id);
@@ -451,21 +447,21 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var author = CreatePerson("jdoe");
         var viewer = CreatePerson("asmith");
-        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         var result = await sut.GetOverlappingAsync(
             new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), viewer.Id);
 
         var absence = result.Absences.ShouldHaveSingleItem();
         absence.Note.ShouldBeNull();
-        absence.Type.ShouldBe(AbsenceType.Sick);
+        absence.Type.ShouldBe(AbsenceType.Other);
     }
 
     [Fact]
     public async Task GetOverlappingAsync_WhenTheViewerHasNoProfileYet_WithholdsEveryNote()
     {
         var author = CreatePerson();
-        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+        await sut.CreateAsync(author, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         var result = await sut.GetOverlappingAsync(
             new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), viewerPersonId: null);
@@ -478,13 +474,13 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     {
         var person = CreatePerson();
         var created = await sut.CreateAsync(
-            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
 
         await sut.DeleteAsync(person, created.Id);
 
         var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceDeleted);
         entry.Target.ShouldBe(person.DisplayName);
-        entry.Details.ShouldBe("Sick, 2026-03-02 → 2026-03-06");
+        entry.Details.ShouldBe("Other, 2026-03-02 → 2026-03-06");
         entry.Details.ShouldNotContain("Flu");
     }
 
@@ -715,7 +711,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         var reviewer = CreatePerson("reviewer");
         var pending = await approvalSut.CreateAsync(
-            person, Request("2026-03-02", "2026-03-06", AbsenceType.Sick, "Flu"));
+            person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
         var approved = await approvalSut.CreateAsync(person, Request("2026-05-01", "2026-05-05"));
         await approvalSut.ApproveAsync(reviewer, approved.Id);
 

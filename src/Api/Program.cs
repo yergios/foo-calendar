@@ -65,11 +65,6 @@ services.AddOptions<HolidayOptions>()
     .Validate(o => o.SyncInterval > TimeSpan.Zero, "Holidays:SyncInterval must be positive.")
     .ValidateOnStart();
 
-services.AddOptions<BrandingOptions>()
-    .Bind(config.GetSection(BrandingOptions.SectionName))
-    .Validate(o => !string.IsNullOrWhiteSpace(o.AppName), "Branding:AppName must be configured.")
-    .ValidateOnStart();
-
 services.AddOptions<WebhookOptions>()
     .Bind(config.GetSection(WebhookOptions.SectionName))
     .Validate(
@@ -99,6 +94,14 @@ services.AddOptions<EmailOptions>()
 services.AddOptions<ApiDocsOptions>()
     .Bind(config.GetSection(ApiDocsOptions.SectionName))
     .Validate(o => o.RoutePrefix.StartsWith('/'), "ApiDocs:RoutePrefix must start with '/'.")
+    .ValidateOnStart();
+
+services.AddOptions<RetentionOptions>()
+    .Bind(config.GetSection(RetentionOptions.SectionName))
+    .Validate(o => o.AuditEntryDays >= 0, "Retention:AuditEntryDays must not be negative.")
+    .Validate(o => o.NotificationDays >= 0, "Retention:NotificationDays must not be negative.")
+    .Validate(o => o.AbsenceDays >= 0, "Retention:AbsenceDays must not be negative.")
+    .Validate(o => o.SweepInterval > TimeSpan.Zero, "Retention:SweepInterval must be positive.")
     .ValidateOnStart();
 
 services.AddOptions<ReverseProxyOptions>()
@@ -181,6 +184,14 @@ services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
 services.AddScoped<IAuditLog, AuditLog>();
 services.AddScoped<INotificationService, NotificationService>();
 
+// ---- Retention ------------------------------------------------------------
+
+// Always on: the defaults keep audit entries a year and notifications 90 days, and a
+// deployment that wants either kept forever says so with 0 rather than by the job not
+// existing. Absences are the one thing it leaves alone by default, see RetentionOptions.
+services.AddScoped<IRetentionService, RetentionService>();
+services.AddHostedService<RetentionBackgroundService>();
+
 // ---- Email --------------------------------------------------------------
 
 // Same shape as the webhook above: always registered so callers have something to queue
@@ -249,8 +260,14 @@ services.AddOptions<AuthOptions>()
     .PostConfigure(o => o.RemoveBlankEntries())
     .Validate(o => o.Provider is AuthOptions.ProviderOidc or AuthOptions.ProviderNone,
         $"Auth:Provider must be one of {AuthOptions.ProviderOidc}, {AuthOptions.ProviderNone}.")
-    .Validate(o => o.Provider != AuthOptions.ProviderNone || isDevelopment,
-        "Auth:Provider=None is only allowed in Development.")
+    .Validate(o => o.Provider != AuthOptions.ProviderNone
+            || isDevelopment
+            || o.AllowUnauthenticatedDeployment,
+        "Auth:Provider=None turns authentication off entirely: anyone who can reach the app "
+        + "is whoever they say they are. That is supported outside Development only on a "
+        + "network where reaching the app is already the access control, and it has to be "
+        + "said on purpose - set Auth:AllowUnauthenticatedDeployment=true to confirm it, or "
+        + "set Auth:Provider=Oidc and configure an identity provider.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Authority),
         "Auth:Authority must be configured.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Audience),
@@ -310,8 +327,9 @@ services.AddAuthorization(options =>
 
 if (authConfig.Provider == AuthOptions.ProviderNone)
 {
-    services.AddAuthentication(DevAuthHandler.SchemeName)
-        .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, _ => { });
+    services.AddAuthentication(UnauthenticatedAuthHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, UnauthenticatedAuthHandler>(
+            UnauthenticatedAuthHandler.SchemeName, _ => { });
 }
 else
 {
@@ -428,16 +446,33 @@ var app = builder.Build();
 
 // ---- Startup tasks --------------------------------------------------------
 
-// Loud on purpose. This is the one configuration where every request is authenticated as
-// a fixed identity with no token involved; the startup check above keeps it out of other
-// environments, but ASPNETCORE_ENVIRONMENT is the only thing that does, so an accidental
-// Development deployment should be obvious in the logs rather than silent.
+// Loud on purpose, and loudest where it matters least to the person reading it locally:
+// this is the one configuration with no authentication at all, and the difference between
+// "my laptop" and "the office network" is a line in a config file. Saying which one this
+// is, every time it starts, is the cheapest way for a deployment to notice it is the
+// second one by accident.
 if (authConfig.Provider == AuthOptions.ProviderNone)
-    app.Logger.LogWarning(
-        "Auth:Provider=None: authentication is bypassed and every request is '{Username}' "
-        + "holding [{Permissions}]. Development only, never deploy this.",
-        authConfig.DevUser.Username,
-        string.Join(", ", authConfig.DevUser.Permissions));
+{
+    if (app.Environment.IsDevelopment())
+        app.Logger.LogWarning(
+            "Auth:Provider=None: authentication is off. Unnamed requests are '{Username}' "
+            + "holding [{Permissions}]. Development only unless "
+            + "Auth:AllowUnauthenticatedDeployment is set.",
+            authConfig.DevUser.Username,
+            string.Join(", ", authConfig.EffectiveDevPermissions()));
+    // Without the flag this configuration doesn't start at all: options validation rejects
+    // it a moment from now, and saying anything here would be describing a deployment that
+    // is about to not exist - in the wrong tense, since the flag it names isn't set.
+    else if (authConfig.AllowUnauthenticatedDeployment)
+        app.Logger.LogCritical(
+            "Auth:Provider=None with Auth:AllowUnauthenticatedDeployment=true in the "
+            + "{Environment} environment: THIS DEPLOYMENT HAS NO AUTHENTICATION. Anyone who "
+            + "can reach it picks any identity, including ones holding [{Permissions}], and "
+            + "the list of everyone's names is readable before choosing. Only run this where "
+            + "network access is already the access control.",
+            app.Environment.EnvironmentName,
+            string.Join(", ", authConfig.EffectiveDevPermissions()));
+}
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
@@ -541,6 +576,11 @@ app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
+
+// Only in the no-IdP mode: on an OIDC deployment these routes don't exist at all, rather
+// than existing and refusing. See IdentityEndpoints.
+if (authConfig.Provider == AuthOptions.ProviderNone)
+    app.MapIdentityEndpoints();
 app.MapRegionEndpoints();
 app.MapNotificationsEndpoints();
 
@@ -558,7 +598,7 @@ if (apiDocsEnabled)
     // "<pathbase>/openapi/v1.json" at the root and behind a sub-path alike. Spelling it out
     // here, with or without the path base, breaks one of those two.
     app.MapScalarApiReference(apiDocs.RoutePrefix, options => options
-        .WithTitle($"{app.Services.GetRequiredService<IOptions<BrandingOptions>>().Value.AppName} API"))
+        .WithTitle($"{ProductInfo.Name} API"))
         .AllowAnonymous();
 }
 

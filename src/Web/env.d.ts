@@ -2,8 +2,9 @@
 declare const __APP_VERSION__: string;
 
 interface Window {
-  /** Set by the inline script in index.html, which starts the bootstrap config fetch
-   * during HTML parse so it overlaps the bundle download. Consumed (and cleared) by
-   * loadRuntimeConfig. */
-  __earlyBootstrapConfig?: Promise<Response>;
+  /** Inlined into the SPA shell by the API (see SpaShell.cs), so the app knows how to
+   * sign in without a round trip gating its own mount. Absent when the Vite dev server
+   * serves index.html itself, which is what the fetch fallback in bootstrapConfig.ts
+   * covers. */
+  __bootstrap?: import("@/types/config").BootstrapConfig;
 }

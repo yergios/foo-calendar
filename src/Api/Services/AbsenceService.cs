@@ -18,7 +18,6 @@ public sealed class AbsenceService(
     INotificationService notifications,
     IEmailSender emailSender,
     IOptions<AbsenceApprovalOptions> approvalOptions,
-    IOptions<BrandingOptions> branding,
     IOptions<EmailOptions> emailOptions) : IAbsenceService
 {
     // Published after the change is committed, so a receiver can never be told about an
@@ -54,7 +53,7 @@ public sealed class AbsenceService(
             return;
 
         var (subject, html, text) = EmailTemplates.BuildAbsenceReviewed(
-            absence, branding.Value.AppName, emailOptions.Value.AppUrl);
+            absence, ProductInfo.Name, emailOptions.Value.AppUrl);
         emailSender.Send(new EmailMessage(absence.Person.Email, absence.Person.DisplayName, subject, html, text));
     }
 
@@ -71,7 +70,7 @@ public sealed class AbsenceService(
         if (approvers.Count == 0) return;
 
         var (subject, html, text) = EmailTemplates.BuildNewAbsenceRequest(
-            absence, owner.DisplayName, branding.Value.AppName, emailOptions.Value.AppUrl);
+            absence, owner.DisplayName, ProductInfo.Name, emailOptions.Value.AppUrl);
 
         foreach (var approver in approvers)
             emailSender.Send(new EmailMessage(approver.Email, approver.DisplayName, subject, html, text));
@@ -122,7 +121,7 @@ public sealed class AbsenceService(
             {
                 var personStats = ComputeStats(byPerson[id], year, yearStart, yearEnd);
                 return new PersonAbsenceStatsResponse(
-                    id, year, personStats.VacationDays, personStats.SickDays, personStats.OtherDays);
+                    id, year, personStats.VacationDays, personStats.OtherDays);
             })
             .ToList();
 
@@ -419,7 +418,6 @@ public sealed class AbsenceService(
         IEnumerable<Absence> absences, int year, DateOnly yearStart, DateOnly yearEnd)
     {
         var vacationDays = 0;
-        var sickDays = 0;
         var otherDays = 0;
 
         foreach (var absence in absences)
@@ -432,12 +430,11 @@ public sealed class AbsenceService(
             switch (absence.Type)
             {
                 case AbsenceType.Vacation: vacationDays += days; break;
-                case AbsenceType.Sick: sickDays += days; break;
                 case AbsenceType.Other: otherDays += days; break;
             }
         }
 
-        return new AbsenceStatsResponse(year, vacationDays, sickDays, otherDays);
+        return new AbsenceStatsResponse(year, vacationDays, otherDays);
     }
 
     private static int CountWorkingDays(DateOnly start, DateOnly end)

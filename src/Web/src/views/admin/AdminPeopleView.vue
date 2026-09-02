@@ -67,14 +67,6 @@
               </th>
               <th v-if="canReadReports" class="py-2 pr-2 text-center">
                 <SortButton
-                  :active="sortBy === 'sick'"
-                  :descending="descending"
-                  @toggle="toggleSort('sick')"
-                  >Sick</SortButton
-                >
-              </th>
-              <th v-if="canReadReports" class="py-2 pr-2 text-center">
-                <SortButton
                   :active="sortBy === 'other'"
                   :descending="descending"
                   @toggle="toggleSort('other')"
@@ -91,9 +83,6 @@
               <td class="py-2 pr-2 text-secondary">{{ regionLabel(person.homeCity) }}</td>
               <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
                 {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.vacationDays ?? 0) }}
-              </td>
-              <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
-                {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.sickDays ?? 0) }}
               </td>
               <td v-if="canReadReports" class="py-2 pr-2 text-center text-secondary">
                 {{ statsLoading ? "…" : (statsByPerson.get(person.id)?.otherDays ?? 0) }}
@@ -289,7 +278,7 @@ const search = ref("");
 const regionFilter = ref<string[]>([]);
 const sortBy = ref<PeopleSortColumn>("name");
 const descending = ref(false);
-const STATS_SORT_COLUMNS: PeopleSortColumn[] = ["vacation", "sick", "other"];
+const STATS_SORT_COLUMNS: PeopleSortColumn[] = ["vacation", "other"];
 
 function toggleSort(column: PeopleSortColumn) {
   if (sortBy.value === column) {

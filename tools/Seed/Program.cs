@@ -114,11 +114,10 @@ internal static class Program
     private static readonly string[] VacationNotes =
         ["Summer trip", "Family vacation", "Long weekend getaway", "Annual leave", null, null];
 
-    private static readonly string[] SickNotes =
-        ["Flu", "Cold", "Doctor's orders", "Not feeling well", null, null];
-
+    // Nothing here says why someone was unwell: seed data ends up in screenshots and demo
+    // deployments, and the app deliberately has nowhere to record that (see AbsenceType).
     private static readonly string[] OtherNotes =
-        ["Personal errand", "Moving day", "Family matter", "Home repair", null];
+        ["Personal errand", "Moving day", "Family matter", "Home repair", null, null];
 
     private static readonly string[] AppointmentNotes =
         ["Dentist", "Doctor's appointment", "Car service", "Parent-teacher meeting", "Bank appointment"];
@@ -130,14 +129,14 @@ internal static class Program
         "Team is short-staffed those dates",
     ];
 
-    // Four types, each with its own typical shape: vacations and sick leave are multi-day
-    // blocks, appointments are single timed slots, "other" is a mix. Totals to 52 rows per
-    // person, comfortably over the 50 minimum.
+    // Three types, each with its own typical shape: vacations are multi-day blocks,
+    // appointments are single timed slots, "other" is a mix - it covers the short unplanned
+    // absences too, since there is no Sick type (see Api's AbsenceType). Totals to 52 rows
+    // per person, comfortably over the 50 minimum.
     private static readonly (AbsenceType Type, int Count, int MinDays, int MaxDays)[] AbsencePlan =
     [
         (AbsenceType.Vacation, 8, 2, 7),
-        (AbsenceType.Sick, 10, 1, 3),
-        (AbsenceType.Other, 8, 1, 2),
+        (AbsenceType.Other, 18, 1, 3),
         (AbsenceType.Appointment, 26, 1, 1),
     ];
 
@@ -485,7 +484,7 @@ internal static class Program
             CreatedBy = person.Username,
         };
 
-        // Always timed for Appointment, sometimes timed for Other, never for Vacation/Sick.
+        // Always timed for Appointment, sometimes timed for Other, never for Vacation.
         if (type == AbsenceType.Appointment || (type == AbsenceType.Other && rng.Next(2) == 0))
         {
             var startTime = new TimeOnly(rng.Next(8, 17), 15 * rng.Next(4));
@@ -521,7 +520,6 @@ internal static class Program
         var pool = type switch
         {
             AbsenceType.Vacation => VacationNotes,
-            AbsenceType.Sick => SickNotes,
             AbsenceType.Appointment => AppointmentNotes,
             _ => OtherNotes,
         };

@@ -1,4 +1,4 @@
-﻿using Api.Configuration;
+using Api.Configuration;
 using Api.Services;
 
 using Microsoft.Extensions.Options;
@@ -20,15 +20,25 @@ public sealed record AppConfigResponse(
     // Printed verbatim next to a time-based absence's time inputs, no formatting.
     string HomeTimeZone);
 
-/// <summary>Everything the SPA needs before anyone has signed in, including how to sign in
-/// at all. Fetched once at startup so branding and IdP settings are deployment config
-/// rather than values compiled into the bundle.</summary>
+/// <summary>Who this deployment is and how to sign in to it. Inlined into the SPA shell
+/// (see SpaShell) rather than fetched, so reading it costs no round trip and no await -
+/// which is what decides what belongs here: deployment identity that is fixed until a
+/// redeploy and that the app needs *synchronously*, before it has authenticated anyone.
+///
+/// The /401 and /500 routes sit outside the authenticated layout and have to render when
+/// signing in is the thing that failed, so their two links qualify. The header's team name
+/// qualifies because reading it asynchronously would flash the wrong name first. What
+/// shapes the signed-in app - approvals, email, regions, the timezone - does not: that is
+/// AppConfigResponse above. The product's own name is in neither, being a constant.</summary>
 public sealed record BootstrapConfigResponse(
-    string AppName,
+    // The deploying team's own name for the header. Empty falls back to the product's
+    // name, so the header always has something to link home with.
+    string OrgName,
     string SupportUrl,
     string IssueUrl,
     BootstrapAuthConfig Auth);
 
+/// <summary>The IdP half of the bootstrap payload.</summary>
 public sealed record BootstrapAuthConfig(
     string Provider,
     string Authority,
@@ -41,10 +51,16 @@ public sealed record BootstrapAuthConfig(
     // interface, not for the gate.
     Dictionary<string, List<string>> Permissions,
     List<string> PermissionsClaims,
+    // True only for a real deployment running with authentication off, never for local
+    // development, which is also Provider=None but is nobody's security problem. The SPA
+    // shows a standing banner on the strength of this: a deployment that has quietly lost
+    // its identity provider should be obvious to the people using it, not just to whoever
+    // reads the startup log.
+    bool UnauthenticatedDeployment,
     BootstrapDevUser DevUser);
 
-/// <summary>Only populated when Auth:Provider=None, which is Development-only. It lets the
-/// SPA present the same identity the API's DevAuthHandler is already authenticating as.</summary>
+/// <summary>Only populated when Auth:Provider=None. It lets the SPA present the same
+/// identity the API's UnauthenticatedAuthHandler is already authenticating as.</summary>
 public sealed record BootstrapDevUser(
     string FirstName,
     string LastName,
@@ -71,37 +87,46 @@ public static class ConfigEndpoints
 
     private static IResult GetBootstrapConfig(
         HttpContext http,
-        IOptions<BrandingOptions> branding,
+        IHostEnvironment environment,
+        IOptions<TeamOptions> team,
         IOptions<AuthOptions> authOptions)
     {
-        var auth = authOptions.Value;
-
-        // This only changes on a redeploy, but a browser holding a stale copy would keep
-        // pointing at the old IdP with no way for the user to notice, so it is never
-        // stored. It is one small request, once per page load, before anything else.
+        // In a served deployment the SPA reads this straight out of its own shell and never
+        // gets here; this endpoint is what the Vite dev server's SPA falls back to, and a
+        // place to look when a deployment's auth config is in question. Either way a
+        // browser holding a stale copy would keep pointing at the old IdP with no way for
+        // the user to notice, so it is never stored.
         http.Response.Headers.CacheControl = "no-store";
 
-        return Results.Ok(new BootstrapConfigResponse(
-            branding.Value.AppName,
-            branding.Value.SupportUrl,
-            branding.Value.IssueUrl,
-            new BootstrapAuthConfig(
-                auth.Provider,
-                auth.Authority,
-                auth.ClientId,
-                auth.Audience,
-                auth.Scope,
-                auth.RedirectUri,
-                auth.Permissions,
-                auth.ClaimTypes.Permissions,
-                auth.Provider == AuthOptions.ProviderNone
-                    ? new BootstrapDevUser(
-                        auth.DevUser.FirstName,
-                        auth.DevUser.LastName,
-                        auth.DevUser.Email,
-                        // Resolved rather than copied, so the SPA holds exactly what
-                        // DevAuthHandler is authenticating the requests as.
-                        auth.EffectiveDevPermissions())
-                    : null)));
+        return Results.Ok(Build(team.Value, authOptions.Value, environment));
     }
+
+    /// <summary>The payload itself, so the SPA shell can embed exactly what this endpoint
+    /// would have returned rather than a second, drifting copy of the same mapping.</summary>
+    internal static BootstrapConfigResponse Build(
+        TeamOptions team, AuthOptions auth, IHostEnvironment environment) =>
+        new(team.OrgName,
+            team.SupportUrl,
+            team.IssueUrl,
+            BuildAuth(auth, environment));
+
+    private static BootstrapAuthConfig BuildAuth(AuthOptions auth, IHostEnvironment environment) =>
+        new(auth.Provider,
+            auth.Authority,
+            auth.ClientId,
+            auth.Audience,
+            auth.Scope,
+            auth.RedirectUri,
+            auth.Permissions,
+            auth.ClaimTypes.Permissions,
+            auth.Provider == AuthOptions.ProviderNone && !environment.IsDevelopment(),
+            auth.Provider == AuthOptions.ProviderNone
+                ? new BootstrapDevUser(
+                    auth.DevUser.FirstName,
+                    auth.DevUser.LastName,
+                    auth.DevUser.Email,
+                    // Resolved rather than copied, so the SPA holds exactly what
+                    // the unauthenticated handler is authenticating the requests as.
+                    auth.EffectiveDevPermissions())
+                : null);
 }

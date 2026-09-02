@@ -5,17 +5,18 @@ import { createPinia } from "pinia";
 import { createApp } from "vue";
 
 import { initAuth } from "@/auth";
-import { loadRuntimeConfig } from "@/lib/runtimeConfig";
+import { loadBootstrapConfig } from "@/lib/bootstrapConfig";
 import router from "@/router";
 
 import App from "./App.vue";
 import "./styles/index.css";
 
-// Nothing can render before the API says how this deployment is branded and how to sign
-// in, so the config request gates the mount rather than racing it.
+// Nothing can render before the app knows how to sign in. That normally costs nothing:
+// the API inlines the answer into the shell, so this resolves without touching the
+// network (see lib/bootstrapConfig.ts). The title is already correct in the HTML, since
+// the product's name is a constant rather than something a deployment configures.
 async function bootstrap() {
-  const config = await loadRuntimeConfig();
-  document.title = config.appName;
+  const config = await loadBootstrapConfig();
 
   initAuth(config.auth);
 

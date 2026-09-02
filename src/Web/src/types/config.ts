@@ -23,8 +23,8 @@ export interface AppConfig {
   homeTimeZone: string;
 }
 
-/** Mirrors the API's BootstrapDevUser. Only sent when the dev auth bypass is on. */
-export interface RuntimeDevUser {
+/** Mirrors the API's BootstrapDevUser. Only sent when Auth:Provider=None. */
+export interface BootstrapDevUser {
   firstName: string;
   lastName: string;
   email: string;
@@ -32,7 +32,7 @@ export interface RuntimeDevUser {
 }
 
 /** Mirrors the API's BootstrapAuthConfig. */
-export interface RuntimeAuthConfig {
+export interface BootstrapAuthConfig {
   provider: string;
   authority: string;
   clientId: string;
@@ -45,13 +45,20 @@ export interface RuntimeAuthConfig {
   permissions: Record<string, string[]>;
   /** Claims that carry permissions, searched in order. */
   permissionsClaims: string[];
-  devUser: RuntimeDevUser | null;
+  /** True only for a real deployment running with authentication off - never for local
+   * development, which is also provider "None". What the standing banner keys off. */
+  unauthenticatedDeployment: boolean;
+  devUser: BootstrapDevUser | null;
 }
 
-/** Mirrors the API's BootstrapConfigResponse. */
-export interface RuntimeConfig {
-  appName: string;
+/** Mirrors the API's BootstrapConfigResponse: what the app needs before it has
+ * authenticated anyone. Inlined into the SPA shell rather than fetched, see
+ * lib/bootstrapConfig.ts. */
+export interface BootstrapConfig {
+  /** The deploying team's own name for the header. Empty falls back to the product's
+   * name, which is a constant (see lib/productInfo.ts) and not configurable. */
+  orgName: string;
   supportUrl: string;
   issueUrl: string;
-  auth: RuntimeAuthConfig;
+  auth: BootstrapAuthConfig;
 }

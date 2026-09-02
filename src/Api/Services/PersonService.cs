@@ -154,7 +154,6 @@ public sealed class PersonService(
             return sortBy switch
             {
                 PersonSortColumn.Vacation => stats.VacationDays,
-                PersonSortColumn.Sick => stats.SickDays,
                 _ => stats.OtherDays,
             };
         }

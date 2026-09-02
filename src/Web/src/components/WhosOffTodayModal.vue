@@ -129,8 +129,7 @@ const TIME_BASED_CATEGORY = 0;
 const WHOLE_DAY_CATEGORY: Record<AbsenceType, number> = {
   Appointment: TIME_BASED_CATEGORY,
   Vacation: 2,
-  Sick: 3,
-  Other: 4,
+  Other: 3,
 };
 
 // A nationwide holiday (no subdivision suffix) covers everyone in the country; a

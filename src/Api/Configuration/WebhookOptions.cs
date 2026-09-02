@@ -17,13 +17,6 @@ public sealed class WebhookOptions
     /// </summary>
     public string Secret { get; init; } = "";
 
-    /// <summary>Whether an event carries the absence's note. Off by default: a note on a
-    /// sick leave is health information, and a webhook is the one way it leaves the app
-    /// entirely, usually into a chat channel far wider than the people it was written for.
-    /// The field stays in the payload either way, so a receiver parsing it doesn't break,
-    /// it simply arrives null.</summary>
-    public bool IncludeAbsenceNote { get; init; }
-
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Delivery attempts per event, including the first.</summary>

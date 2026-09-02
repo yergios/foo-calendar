@@ -44,14 +44,14 @@ public sealed class NotificationServiceTests : SqliteTestBase
     public async Task NotifyAsync_RecordsANotificationForTheAbsencesOwner()
     {
         var person = CreatePerson();
-        var absence = NewAbsence(person.Id, "2026-03-02", "2026-03-06", AbsenceType.Sick);
+        var absence = NewAbsence(person.Id, "2026-03-02", "2026-03-06", AbsenceType.Other);
 
         await sut.NotifyAsync(absence, NotificationType.AbsenceRejected, "Not enough coverage.");
 
         var result = await sut.GetForPersonAsync(person.Id);
         var notification = result.Notifications.ShouldHaveSingleItem();
         notification.Type.ShouldBe(NotificationType.AbsenceRejected);
-        notification.AbsenceType.ShouldBe(AbsenceType.Sick);
+        notification.AbsenceType.ShouldBe(AbsenceType.Other);
         notification.StartDate.ShouldBe(new DateOnly(2026, 3, 2));
         notification.Note.ShouldBe("Not enough coverage.");
         notification.ReadAt.ShouldBeNull();

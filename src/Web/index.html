@@ -6,23 +6,24 @@
          rewrites it when ReverseProxy:PathBase is set (see SpaShell.cs), which is what
          lets one build be served from a sub-path without being rebuilt. -->
     <base href="/" />
-    <!-- Starts the one request the app cannot mount without (see loadRuntimeConfig) while
-         the bundle is still downloading, instead of after it has parsed and executed. A
-         classic script, not a module, so it runs during HTML parse. Resolved against the
-         base tag above, so it follows a sub-path deployment's rewritten href. -->
-    <script>
-      window.__earlyBootstrapConfig = fetch(new URL("api/config/bootstrap", document.baseURI), {
-        headers: { Accept: "application/json" },
-      });
-    </script>
     <link
       rel="icon"
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='4' fill='%23FFFFFF' stroke='%230C2972' stroke-width='2'/%3E%3Crect x='3' y='5' width='26' height='7' rx='4' fill='%230C2972'/%3E%3Crect x='3' y='9' width='26' height='3' fill='%230C2972'/%3E%3Crect x='9' y='2' width='2.5' height='6' rx='1.25' fill='%231177E0'/%3E%3Crect x='20.5' y='2' width='2.5' height='6' rx='1.25' fill='%231177E0'/%3E%3Crect x='19' y='19' width='6' height='6' rx='1.5' fill='%23E8A317'/%3E%3Crect x='7' y='19' width='6' height='6' rx='1.5' fill='%23CCE4E5'/%3E%3C/svg%3E"
     />
+    <!-- Monochrome variant of the same mark, for contexts that ink it themselves: Safari's
+         pinned tabs here, and the footer attribution in BrandMark.vue, which has to sit
+         legibly on whatever palette a deployment compiled into theme.css. The mark's
+         shape is what carries the identity, so the two variants stay the same drawing. -->
+    <link
+      rel="mask-icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='4' fill='none' stroke='black' stroke-width='2'/%3E%3Crect x='3' y='5' width='26' height='7' rx='4' fill='black'/%3E%3Crect x='3' y='9' width='26' height='3' fill='black'/%3E%3Crect x='9' y='2' width='2.5' height='6' rx='1.25' fill='black'/%3E%3Crect x='20.5' y='2' width='2.5' height='6' rx='1.25' fill='black'/%3E%3Crect x='19' y='19' width='6' height='6' rx='1.5' fill='black'/%3E%3C/svg%3E"
+      color="#0C2972"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Replaced at runtime from Branding:AppName; this is only what shows while the
-         config request is in flight. -->
+    <!-- The product's name, not a deployment's: it is a constant (see ProductInfo.cs and
+         lib/productInfo.ts), so it is correct here from the first byte with nothing to
+         swap in later. A deployment names itself in the header, via Team:OrgName. -->
     <title>Foo Calendar</title>
   </head>
   <body>

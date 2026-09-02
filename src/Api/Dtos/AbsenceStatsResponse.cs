@@ -3,5 +3,4 @@
 public sealed record AbsenceStatsResponse(
     int Year,
     int VacationDays,
-    int SickDays,
     int OtherDays);

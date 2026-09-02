@@ -57,7 +57,6 @@
         >
           <option value="Vacation">Vacation</option>
           <option value="Appointment">Appointment</option>
-          <option value="Sick">Sick</option>
           <option value="Other">Other</option>
         </select>
       </div>

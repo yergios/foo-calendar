@@ -8,7 +8,7 @@
 
 <script setup lang="ts">
 import ErrorLayout from "@/components/ErrorLayout.vue";
-import { runtimeConfig } from "@/lib/runtimeConfig";
+import { bootstrapConfig } from "@/lib/bootstrapConfig";
 
-const supportUrl = runtimeConfig().supportUrl;
+const supportUrl = bootstrapConfig().supportUrl;
 </script>

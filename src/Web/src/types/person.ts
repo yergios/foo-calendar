@@ -12,9 +12,9 @@ export interface PeoplePageResponse {
 }
 
 /** Matches the API's PersonSortColumn constants (Api/Services/PersonSortColumn.cs) -
- * vacation/sick/other are gated server-side behind ReportsRead, since they carry the same
+ * vacation/other are gated server-side behind ReportsRead, since they carry the same
  * per-year numbers the stats endpoint does. */
-export type PeopleSortColumn = "name" | "username" | "homeCity" | "vacation" | "sick" | "other";
+export type PeopleSortColumn = "name" | "username" | "homeCity" | "vacation" | "other";
 
 export interface PeoplePageQuery {
   search?: string;
@@ -23,7 +23,7 @@ export interface PeoplePageQuery {
   regions?: string[];
   sortBy?: PeopleSortColumn;
   descending?: boolean;
-  /** Which year vacation/sick/other are computed for. Ignored unless sortBy is one of them. */
+  /** Which year vacation/other are computed for. Ignored unless sortBy is one of them. */
   statsYear?: number;
 }
 
@@ -59,7 +59,6 @@ export interface UpdatePersonRequest {
 export interface AbsenceStatsResponse {
   year: number;
   vacationDays: number;
-  sickDays: number;
   otherDays: number;
 }
 
@@ -67,7 +66,6 @@ export interface PersonAbsenceStatsDto {
   personId: number;
   year: number;
   vacationDays: number;
-  sickDays: number;
   otherDays: number;
 }
 

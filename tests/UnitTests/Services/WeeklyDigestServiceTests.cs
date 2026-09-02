@@ -27,7 +27,6 @@ public sealed class WeeklyDigestServiceTests : SqliteTestBase
             bankHolidays,
             teamRegions,
             emails,
-            Options.Create(new BrandingOptions()),
             Options.Create(new EmailOptions()),
             Options.Create(new TeamOptions { HomeTimeZone = "UTC" }));
     }
@@ -137,7 +136,7 @@ public sealed class WeeklyDigestServiceTests : SqliteTestBase
             PersonId = pendingOwner.Id,
             StartDate = weekStart,
             EndDate = weekStart,
-            Type = AbsenceType.Sick,
+            Type = AbsenceType.Other,
             Status = AbsenceStatus.Pending,
             CreatedBy = pendingOwner.Username,
         });

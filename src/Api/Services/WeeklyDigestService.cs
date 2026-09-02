@@ -17,7 +17,6 @@ public sealed class WeeklyDigestService(
     IBankHolidayService bankHolidays,
     ITeamRegionService teamRegions,
     IEmailSender emailSender,
-    IOptions<BrandingOptions> branding,
     IOptions<EmailOptions> emailOptions,
     IOptions<TeamOptions> team) : IWeeklyDigestService
 {
@@ -53,7 +52,7 @@ public sealed class WeeklyDigestService(
         var holidays = (await bankHolidays.GetForRegionsAsync(regions, weekStart, weekEnd, ct)).Holidays;
 
         var (subject, html, text) = EmailTemplates.BuildWeeklyDigest(
-            weekStart, weekEnd, absences, holidays, branding.Value.AppName, emailOptions.Value.AppUrl);
+            weekStart, weekEnd, absences, holidays, ProductInfo.Name, emailOptions.Value.AppUrl);
 
         foreach (var recipient in recipients)
             emailSender.Send(new EmailMessage(recipient.Email, recipient.DisplayName, subject, html, text));

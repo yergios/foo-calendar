@@ -20,6 +20,5 @@ public static class TestAbsenceService
         new RecordingNotificationService(),
         new RecordingEmailSender(),
         Options.Create(new AbsenceApprovalOptions { Enabled = false }),
-        Options.Create(new BrandingOptions { AppName = "Foo Calendar" }),
         Options.Create(new EmailOptions()));
 }

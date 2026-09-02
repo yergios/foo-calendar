@@ -12,7 +12,7 @@ Each row is a person, each column a day. The color of a cell tells you what's go
 
 - A solid **gold** column marks today.
 - A tinted column marks a public holiday for one of the regions the team is in. Hover a day to see which holiday(s) apply.
-- A colored block in someone's row is an absence, labeled **V** (Vacation), **S** (Sick), or **O** (Other). A multi-day absence only shows its letter once, at the start of the block, so it reads as one continuous stretch.
+- A colored block in someone's row is an absence, labeled **V** (Vacation), **A** (Appointment), or **O** (Other). A multi-day absence only shows its letter once, at the start of the block, so it reads as one continuous stretch.
 
 Use the **Sort by** and **Region** controls above the grid to reorder or filter the team list. The **Region** list shows the places the team is actually spread across, so it grows and shrinks as people join, move, and leave.
 
@@ -21,7 +21,7 @@ Use the **Sort by** and **Region** controls above the grid to reorder or filter 
 - Click **+ Add absence**, or click any empty day in your own row to start a new absence prefilled with that date.
 - Click one of your own absence blocks to edit its dates, type, or note — or to delete it, right from that same screen.
 - You can only add, edit, or delete absences for yourself. Everyone else's absences are visible but read-only.
-- Your **note is yours**. The team sees that you're off and whether it's vacation, sick, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, not in the audit log.
+- Your **note is yours**. The team sees that you're off and whether it's vacation, an appointment, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, not in the audit log, and never in a webhook. There is deliberately no "sick" type: why you're away is nobody's business, so if you're ill, use **Other**, and please keep health details out of the note.
 
 ### Bank holidays
 
@@ -31,7 +31,7 @@ Click **+ Add bank holiday** to add a new one, or click the bank-holiday day dir
 
 ### Your profile
 
-From the **Profile** page you can update your display name, color, and region, see your own vacation/sick/other day totals for any year, or delete your profile entirely.
+From the **Profile** page you can update your display name, color, and region, see your own vacation/other day totals for any year, or delete your profile entirely.
 
 One thing worth knowing before you delete: if you're the last person in your region, that region's public holidays are removed from the calendar along with your profile, including any that were added by hand. The team's home region is never removed this way.
 
@@ -42,7 +42,7 @@ Keeping the calendar's public holidays right is everyone's job — adding, editi
 Beyond that, an **Admin** link appears in the header if you've been granted anything extra. The page shows only the parts you hold, so what you see there depends on what you were given:
 
 - **Manage people** — create, edit, and delete anyone's profile, and import a team from a CSV.
-- **Read reports** — everyone's vacation/sick/other totals for a year, side by side.
+- **Read reports** — everyone's vacation/other totals for a year, side by side.
 - **Sync bank holidays** — re-run the automatic sync for a given year, or for a single region that failed.
 - **Read the audit log** — who changed or deleted what, kept after the thing itself is gone.
 
@@ -79,7 +79,7 @@ Only manually-added holidays can be deleted or edited. One that came from the au
 Custom ordering is stored in your own browser, not on the server. Clearing your browser's site data, or switching devices, resets it back to sorting by name.
 
 **Do weekends or holidays count toward my stats?**
-The Vacation/Sick/Other totals on your profile only count working days within the range you picked, so a week-long vacation over a weekend doesn't inflate your total.
+The Vacation and Other totals on your profile only count working days within the range you picked, so a week-long vacation over a weekend doesn't inflate your total.
 
 ---
 
