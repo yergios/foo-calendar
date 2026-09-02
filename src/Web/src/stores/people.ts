@@ -14,7 +14,7 @@ import type { PeopleResponse } from "@/types/person";
 const PEOPLE_CACHE_KEY = "people.v1";
 
 // Keeps the identity of whatever a refetch didn't change - the calendar grid's row
-// v-memo and cell cache compare these identities, so a revalidate that confirms the
+// v-memo and segment cache compare these identities, so a revalidate that confirms the
 // cache must not hand every row a fresh-but-equal object. See lib/reconcile.ts.
 function reconcilePeople(previous: PeopleResponse, fresh: PeopleResponse): PeopleResponse {
   const people = reconcileList(previous.people, fresh.people);

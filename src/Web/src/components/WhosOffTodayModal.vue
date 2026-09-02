@@ -1,7 +1,8 @@
 <template>
   <AppModal title="Who's off today" size="md" @close="$emit('close')">
     <p class="text-xs text-secondary -mt-1 mb-3">
-      {{ todayLabel }}<span v-if="configStore.config"> ({{ configStore.config.homeTimeZone }})</span>
+      {{ todayLabel
+      }}<span v-if="configStore.config"> ({{ configStore.config.homeTimeZone }})</span>
     </p>
 
     <p v-if="loading" class="text-sm text-secondary py-2">Loading…</p>
@@ -39,8 +40,8 @@ import {
   addDays,
   formatDayMonth,
   formatLongDate,
+  formatTimeRange,
   nextWorkingDay,
-  toDisplayTime,
   today,
 } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
@@ -206,7 +207,7 @@ const entries = computed<Entry[]>(() => {
       // The year is worth spelling out once the return date crosses into the next one:
       // "02/01" on its own reads as a date that has already been and gone.
       const detail = absence.startTime
-        ? `${toDisplayTime(absence.startTime)}–${toDisplayTime(absence.endTime)}`
+        ? formatTimeRange(absence.startTime, absence.endTime)
         : `Back on the ${formatDayMonth(backOn, backOn.slice(0, 4) !== todayIso.slice(0, 4))}`;
       return {
         key: `absence-${absence.id}`,

@@ -6,12 +6,17 @@ export function shallowEqual(a: Record<string, unknown>, b: Record<string, unkno
   return keys.every((key) => a[key] === b[key]);
 }
 
+/** Whether two lists hold the same elements, by identity, in the same order. */
+export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
 /**
  * Merges a freshly fetched list into the one already rendered, keeping the identity of
  * everything that didn't change: the previous element object where a fresh item is
  * field-for-field equal, and the previous array itself when every position is. A refetch
  * parses fresh JSON, so every object in it is new even when nothing changed on the
- * server; identity is what the calendar grid's per-person cell cache and the rows' v-memo
+ * server; identity is what the calendar grid's per-person segment cache and the rows' v-memo
  * compare, so unchanged data re-rendering nothing depends on this step, not on luck.
  */
 export function reconcileList<T extends { id: number }>(previous: T[], fresh: T[]): T[] {

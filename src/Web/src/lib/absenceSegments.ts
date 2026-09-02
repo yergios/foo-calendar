@@ -1,4 +1,5 @@
-import { toDisplayTime } from "@/lib/dates";
+import { formatTimeRange } from "@/lib/dates";
+import { sameList } from "@/lib/reconcile";
 import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { PersonDto } from "@/types/person";
 
@@ -9,10 +10,10 @@ export interface SegmentDay {
 }
 
 /**
- * A contiguous run of days that render identically for one person: the same whole-day
- * absence, the same stack of time-based ones, and the same painted/unpainted state. This is
- * what the calendar grid renders one element for, instead of one cell per day: a person
- * with fifty absences a year is a few dozen segments, not 365 cells.
+ * A contiguous run of days that render identically for one person: the same absences and
+ * the same painted/unpainted state. This is what the calendar grid renders one element
+ * for, instead of one cell per day: a person with fifty absences a year is a few dozen
+ * segments, not 365 cells.
  *
  * `start`/`end` are inclusive indices into the days array the segments were built from.
  */
@@ -21,10 +22,6 @@ export interface AbsenceSegment {
   end: number;
   /** Every absence touching these days - own or not, tooltips are visible to everyone. */
   absences: AbsenceDto[];
-  /** The at-most-one whole-day absence (mutual exclusivity is enforced server-side). */
-  wholeDay: AbsenceDto | undefined;
-  /** Everything else: time-based absences, any number of which can stack on one day. */
-  timeBased: AbsenceDto[];
   /** Whether the run shows the person's color. A weekend isn't a work day, so an absence
    * stretch doesn't paint over it; a bank holiday still does, so it can't hide that someone
    * is actually off that day. */
@@ -42,24 +39,20 @@ export function dayIndexOf(days: readonly SegmentDay[]): Map<string, number> {
 // The letter the legend shows, with a trailing "?" for anything still awaiting review, so a
 // pending absence reads as "color, but unconfirmed" without needing a second visual language
 // on top of the one the calendar already has.
-export function absenceLabel(absence: AbsenceDto): string {
-  const initial = ABSENCE_TYPE_INITIALS[absence.type];
-  return absence.status === "Pending" ? `${initial}?` : initial;
-}
-
-// Same "?" reasoning as absenceLabel, but for the whole day's stack of time-based absences at
-// once: pending if any one of them is. Letter comes from the first entry's own type - the
-// stack is usually one type, and on the rare day it isn't (e.g. an Appointment and a
-// time-based Other), the tooltip is what disambiguates the rest.
-export function timeBasedLabel(entries: AbsenceDto[]): string {
-  const initial = ABSENCE_TYPE_INITIALS[entries[0]!.type];
-  return entries.some((a) => a.status === "Pending") ? `${initial}?` : initial;
-}
-
-const NO_ABSENCES: AbsenceDto[] = [];
-
-function sameList(a: AbsenceDto[], b: AbsenceDto[]): boolean {
-  return a.length === b.length && a.every((item, i) => item === b[i]);
+//
+// A day holds at most one whole-day absence (mutual exclusivity is enforced server-side),
+// which then owns the letter. Otherwise it holds only time-based ones, any number of which
+// can stack: pending if any one of them is, and the letter comes from the first entry's own
+// type - the stack is usually one type, and on the rare day it isn't (e.g. an Appointment
+// and a time-based Other), the tooltip is what disambiguates the rest.
+function labelFor(dayAbsences: AbsenceDto[]): string {
+  const wholeDay = dayAbsences.find((a) => !a.startTime);
+  if (wholeDay) {
+    const initial = ABSENCE_TYPE_INITIALS[wholeDay.type];
+    return wholeDay.status === "Pending" ? `${initial}?` : initial;
+  }
+  const initial = ABSENCE_TYPE_INITIALS[dayAbsences[0]!.type];
+  return dayAbsences.some((a) => a.status === "Pending") ? `${initial}?` : initial;
 }
 
 /**
@@ -102,30 +95,19 @@ export function segmentsForPerson(
       current = null;
       continue;
     }
-    const wholeDay = dayAbsences.find((a) => !a.startTime);
-    const timeBased = dayAbsences.some((a) => a.startTime)
-      ? dayAbsences.filter((a) => a.startTime)
-      : NO_ABSENCES;
     const painted = !days[i]!.isWeekend;
-
-    if (
-      current &&
-      current.painted === painted &&
-      current.wholeDay === wholeDay &&
-      sameList(current.timeBased, timeBased)
-    ) {
+    // Every day's list is filled by the same pass in the same absence order, so two days
+    // holding the same absences hold them in the same order too.
+    if (current && current.painted === painted && sameList(current.absences, dayAbsences)) {
       current.end = i;
       continue;
     }
-
     current = {
       start: i,
       end: i,
       absences: dayAbsences,
-      wholeDay,
-      timeBased,
       painted,
-      label: !painted ? "" : wholeDay ? absenceLabel(wholeDay) : timeBasedLabel(timeBased),
+      label: painted ? labelFor(dayAbsences) : "",
     };
     segments.push(current);
   }
@@ -157,9 +139,7 @@ export function absenceTooltip(
   const name = person.displayName ?? person.username;
   const lines = absences.map((a) => {
     const status = a.status === "Pending" ? " (pending approval)" : "";
-    const timeRange = a.startTime
-      ? ` ${toDisplayTime(a.startTime)}–${toDisplayTime(a.endTime)}`
-      : "";
+    const timeRange = a.startTime ? ` ${formatTimeRange(a.startTime, a.endTime)}` : "";
     const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
     return `${name} — ${body}${status}`;
   });

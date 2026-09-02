@@ -31,6 +31,14 @@ export function toDisplayTime(time: string | null | undefined): string {
   return time?.slice(0, 5) ?? "";
 }
 
+/** A time-based absence's "HH:mm–HH:mm", from the API's "HH:mm:ss" pair. */
+export function formatTimeRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string {
+  return `${toDisplayTime(start)}–${toDisplayTime(end)}`;
+}
+
 /** A short "dd/MM", for a date sitting next to a label that already supplies the context,
  * or "dd/MM/yyyy" when the year can't be taken for granted. */
 export function formatDayMonth(isoDate: string, includeYear = false): string {

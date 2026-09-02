@@ -14,7 +14,6 @@ import path from "node:path";
 const PEOPLE = Number(process.argv[2] ?? 100);
 const PORT = 9333 + Math.floor(Math.random() * 100);
 const APP_URL = process.env.APP_URL ?? "http://localhost:5055/";
-const here = path.dirname(new URL(import.meta.url).pathname);
 const BROWSER =
   process.env.CHROME_HEADLESS_SHELL ??
   path.join(
@@ -22,7 +21,7 @@ const BROWSER =
     ".cache/chrome-headless-shell/chrome-headless-shell-linux64/chrome-headless-shell",
   );
 
-const profile = mkdtempSync(path.join(tmpdir(), "vivaldi-bench-"));
+const profile = mkdtempSync(path.join(tmpdir(), "foo-calendar-bench-"));
 const browser = spawn(
   BROWSER,
   [
@@ -92,14 +91,13 @@ class CDP {
   }
 }
 
-const { webSocketDebuggerUrl } = await waitForDevtools();
+await waitForDevtools();
 const pages = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
 const page = pages.find((t) => t.type === "page");
 const cdp = await CDP.connect(page.webSocketDebuggerUrl);
 const send = (m, p) => cdp.send(m, p);
 await send("Page.enable");
 await send("Runtime.enable");
-await send("Network.enable");
 await send("Emulation.setDeviceMetricsOverride", {
   width: 1920,
   height: 1080,
@@ -204,6 +202,10 @@ const REGIONS = [
   "AU-NSW",
   "CA-ON",
 ];
+// Answers /api/people and /api/absences for the scaling runs without reseeding the
+// database. The shape (names, regions, the per-person absence plan) mirrors
+// tools/Seed/Program.cs, which is the source of truth; keep the plan below in step with
+// its AbsencePlan.
 function synthetic(n) {
   let seed = 7;
   const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
@@ -304,7 +306,6 @@ await send("Tracing.start", {
   transferMode: "ReportEvents",
 });
 
-const results = [];
 async function measure(name, action, settleFrames = 6) {
   await mark(`start:${name}`);
   await action();
@@ -319,16 +320,8 @@ async function measure(name, action, settleFrames = 6) {
   await mark("start:cold-load");
   await send("Page.navigate", { url: APP_URL });
   for (let i = 0; i < 600; i++) {
-    // Old grid: one <tr> per person. New grid: only the rows in view exist, as .calendar-row.
-    const n = await evaluate(
-      `document.querySelectorAll('tbody tr[data-person-id], .calendar-row').length`,
-    );
-    if (
-      n === PEOPLE ||
-      (n > 0 &&
-        n >= Math.min(PEOPLE, 10) &&
-        (await evaluate(`!!document.querySelector('.calendar-row')`)))
-    )
+    // Only the rows in view exist, so "ready" is any row at all.
+    if (await evaluate(`document.querySelectorAll('.calendar-row').length > 0`))
       break;
     await settle(50);
   }
@@ -339,7 +332,7 @@ async function measure(name, action, settleFrames = 6) {
     `grid ready after ${Date.now() - navStart} ms wall (${PEOPLE} rows)`,
   );
   const domStats = await evaluate(
-    `({nodes: document.getElementsByTagName('*').length, cells: document.querySelectorAll('tbody td, [role=gridcell]').length, rows: document.querySelectorAll('tbody tr, .calendar-row').length})`,
+    `({nodes: document.getElementsByTagName('*').length, cells: document.querySelectorAll('[role=gridcell]').length, rows: document.querySelectorAll('.calendar-row').length})`,
   );
   console.log("DOM:", JSON.stringify(domStats));
 
@@ -393,7 +386,9 @@ async function measure(name, action, settleFrames = 6) {
 
   // Hover: sweep the mouse across 40 columns on the 6th row, one move per two frames.
   const rowRect = await evaluate(
-    `(()=>{const row=document.querySelectorAll('tbody tr[data-person-id], .calendar-row')[5];const r=row.getBoundingClientRect();const c=document.querySelector('.overflow-auto').getBoundingClientRect();return {x:c.left+1+160+3.5*28,y:r.top+r.height/2,w:28}})()`,
+    // Geometry read off the rendered grid (corner cell width, a day header's width, a row's
+    // height) rather than restated here, so the sweep keeps landing on cells if it changes.
+    `(()=>{const row=document.querySelectorAll('.calendar-row')[5];const r=row.getBoundingClientRect();const c=document.querySelector('.overflow-auto').getBoundingClientRect();const [corner, day]=document.querySelectorAll('[role=columnheader]');return {x:c.left+1+corner.getBoundingClientRect().width+3.5*day.getBoundingClientRect().width,y:r.top+r.height/2,w:day.getBoundingClientRect().width,h:r.height}})()`,
   );
   await send("Input.dispatchMouseEvent", {
     type: "mouseMoved",
@@ -444,7 +439,7 @@ async function measure(name, action, settleFrames = 6) {
         await send("Input.dispatchMouseEvent", {
           type: "mouseMoved",
           x: Math.round(rowRect.x + 5 * rowRect.w),
-          y: Math.round(rowRect.y + i * 36),
+          y: Math.round(rowRect.y + i * rowRect.h),
         });
         await frames(2);
       }
@@ -511,7 +506,7 @@ async function measure(name, action, settleFrames = 6) {
     );
     await frames(2);
     await evaluate(
-      `[...document.querySelectorAll('button')].find(b => /${delta < 0 ? "previous|‹|<" : "next|›|>"}/i.test(b.getAttribute('aria-label') ?? b.textContent) && b.closest('[role=dialog], .absolute, div')).click()`,
+      `[...document.querySelectorAll('button')].find(b => /${delta < 0 ? "previous|‹|<" : "next|›|>"}/i.test(b.getAttribute('aria-label') ?? b.textContent)).click()`,
     );
     await frames(2);
     await evaluate(
@@ -595,7 +590,6 @@ for (const [name, w] of windows) {
   out.push(
     `${name.padEnd(30)} ${busy.toFixed(1).padStart(8)} ${longest.toFixed(1).padStart(8)} ${String(over16).padStart(8)} ${(sum("FunctionCall") + sum("EvaluateScript")).toFixed(1).padStart(8)} ${sum("UpdateLayoutTree").toFixed(1).padStart(8)} ${sum("Layout").toFixed(1).padStart(8)} ${sum("PrePaint").toFixed(1).padStart(8)} ${sum("Paint").toFixed(1).padStart(8)} ${wall.toFixed(0).padStart(7)}`,
   );
-  results.push({ name, busy, longest, over16 });
 }
 console.log(out.join("\n"));
 // Loadable in DevTools' Performance panel for a closer look at any window.
@@ -604,6 +598,5 @@ const traceFile =
   path.join(tmpdir(), `foo-calendar-trace-${PEOPLE}.json`);
 writeFileSync(traceFile, JSON.stringify({ traceEvents: traceChunks }));
 console.log(`trace written to ${traceFile}`);
-await send("Tracing.end").catch(() => {});
 browser.kill("SIGKILL");
 process.exit(0);

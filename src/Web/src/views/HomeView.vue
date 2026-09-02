@@ -432,7 +432,7 @@ const emptyMessage = computed<string | null>(() => {
 });
 
 // Just the ids, in display order. Recomputed on every sort mode change, but that's cheap:
-// sorting person records, not rebuilding anyone's cells.
+// sorting person records, not rebuilding anyone's segments.
 //
 // A live search takes the sort mode's place while it's running: scoring the matches is
 // only worth doing if the best one is at the top, and "region, then name" isn't what
@@ -579,7 +579,7 @@ async function loadYear() {
     if (!isCurrent()) return;
     // reconcileList hands back the previous objects (and, when nothing changed at all,
     // the previous arrays) wherever the fresh copies are field-for-field equal, so a
-    // revalidate that confirms the cache re-renders nothing: the grid's cell cache and
+    // revalidate that confirms the cache re-renders nothing: the grid's segment cache and
     // v-memo compare exactly these identities. See lib/reconcile.ts.
     const nextAbsences = reconcileList(absences.value, absencesRes.absences);
     const nextHolidays = reconcileList(holidays.value, holidaysRes.holidays);

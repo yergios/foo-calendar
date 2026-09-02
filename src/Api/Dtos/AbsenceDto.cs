@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Api.Data.Models;
 
 namespace Api.Dtos;
@@ -30,4 +32,21 @@ public sealed record AbsenceDto(
         absence.CreatedAt,
         absence.StartTime,
         absence.EndTime);
+
+    /// <summary>The same mapping as <see cref="FromEntity"/>, as an expression EF can
+    /// translate, for reads that project straight out of the query instead of
+    /// materializing entities first. <paramref name="viewerPersonId"/> plays the part of
+    /// includeNote: only the viewer's own rows carry their note, decided in SQL so a note
+    /// never leaves the database.</summary>
+    public static Expression<Func<Absence, AbsenceDto>> Projection(int? viewerPersonId) => a => new AbsenceDto(
+        a.Id,
+        a.PersonId,
+        a.StartDate,
+        a.EndDate,
+        a.Type,
+        a.Status,
+        a.PersonId == viewerPersonId ? a.Note : null,
+        a.CreatedAt,
+        a.StartTime,
+        a.EndTime);
 }

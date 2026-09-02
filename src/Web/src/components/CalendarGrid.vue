@@ -14,13 +14,15 @@
     </button>
 
     <!-- Every pointer interaction with the grid is resolved here from coordinates: the
-         geometry is fixed (NAME_W, COL_W, ROW_H, HEADER_H below), so which day and which
-         row the mouse is over is arithmetic, not a hit test over thousands of elements.
-         See locate() for the math and the comment on the overlays for why. -->
+         geometry is fixed (see lib/gridGeometry.ts), so which day and which row the mouse
+         is over is arithmetic, not a hit test over thousands of elements. See locate() for
+         the math and the comment on the overlays for why. The row height also goes to the
+         CSS below as a custom property, for the stripe and row-line gradients. -->
     <div
       ref="containerRef"
       class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-card"
       :class="reorderable ? undefined : 'reorder-off'"
+      :style="{ '--row-h': `${ROW_H}px` }"
       role="grid"
       :aria-rowcount="rows.length"
       :aria-colcount="days.length + 1"
@@ -46,34 +48,33 @@
           <div
             v-for="group in monthGroups"
             :key="group.month"
-            class="absolute top-0 border-l-2 border-b border-border text-center text-xs font-semibold text-ink bg-surface leading-6 truncate"
+            class="absolute top-0 border-l-2 border-b border-border text-center text-xs font-semibold text-ink bg-surface truncate"
             :style="{
-              left: `${NAME_W + group.start * COL_W}px`,
+              left: `${colX(group.start)}px`,
               width: `${group.span * COL_W}px`,
               height: `${MONTH_H}px`,
+              lineHeight: `${MONTH_H}px`,
             }"
           >
             {{ group.label }}
           </div>
 
+          <!-- Memo'd on the day's precomputed info, like the body columns below: the
+               365 header cells are static within a year and must not be re-diffed on
+               every scroll or reorder render of the grid. -->
           <div
             v-for="(day, i) in days"
             :key="day.iso"
+            v-memo="[dayRenderInfo[i]]"
             class="absolute border-b border-border flex flex-col items-center justify-center text-xs"
-            :class="[
-              dayRenderInfo[i]!.headerClass,
-              todayColumnClass(day.isToday, 'top'),
-              editableHoliday(day.iso) || canAddHoliday(day.iso)
-                ? 'cursor-pointer hover:opacity-70'
-                : '',
-            ]"
+            :class="dayRenderInfo[i]!.headerClass"
             :style="{
-              left: `${NAME_W + i * COL_W}px`,
+              left: `${colX(i)}px`,
               top: `${MONTH_H}px`,
               width: `${COL_W}px`,
               height: `${DAY_H}px`,
             }"
-            :title="headerTitle(day)"
+            :title="dayRenderInfo[i]!.headerTitle"
             role="columnheader"
           >
             <div class="font-semibold" :class="day.isToday ? 'text-today' : 'text-ink'">
@@ -86,6 +87,20 @@
               {{ day.weekdayLabel }}
             </div>
           </div>
+
+          <!-- Today's outline, header half; the body half is the overlay further down.
+               Both are drawn from the same column geometry, on top of the column's own
+               left divider, so the two halves can't drift apart. -->
+          <div
+            v-if="todayIdx >= 0"
+            class="absolute border-l-2 border-r-2 border-t-2 border-today pointer-events-none"
+            :style="{
+              left: `${colX(todayIdx)}px`,
+              top: `${MONTH_H}px`,
+              width: `${COL_W}px`,
+              height: `${DAY_H}px`,
+            }"
+          />
         </div>
 
         <div class="calendar-body relative" :style="{ height: `${bodyHeight}px` }">
@@ -95,9 +110,10 @@
           <div
             v-for="(day, i) in days"
             :key="day.iso"
+            v-memo="[dayRenderInfo[i]]"
             class="absolute top-0 bottom-0"
             :class="dayRenderInfo[i]!.columnClass"
-            :style="{ left: `${NAME_W + i * COL_W}px`, width: `${COL_W}px` }"
+            :style="{ left: `${colX(i)}px`, width: `${COL_W}px` }"
             :title="dayRenderInfo[i]!.holidayTitle || undefined"
           />
           <div class="calendar-lines absolute inset-0 pointer-events-none" />
@@ -114,7 +130,7 @@
                 v-for="n in skeletonRowCount"
                 :key="`skeleton-${n}`"
                 class="absolute top-0 left-0 w-full flex items-center px-2"
-                :style="{ height: `${ROW_H}px`, transform: `translateY(${(n - 1) * ROW_H}px)` }"
+                :style="{ height: `${ROW_H}px`, transform: `translateY(${rowY(n - 1)}px)` }"
               >
                 <AppSkeleton class="h-4 w-20" />
               </div>
@@ -124,7 +140,6 @@
               v-else
               :key="item.person.id"
               class="calendar-name absolute top-0 left-0 w-full flex items-center gap-2 px-2 text-sm cursor-grab active:cursor-grabbing"
-              :class="item.isMine ? 'bg-row-mine' : undefined"
               :style="{ height: `${ROW_H}px`, transform: `translateY(${item.top}px)` }"
               draggable="true"
               role="rowheader"
@@ -159,11 +174,11 @@
             <div
               v-for="n in skeletonRowCount"
               :key="`skeleton-${n}`"
-              class="absolute top-0 left-0 right-0 p-1.5"
+              class="absolute top-0 right-0 p-1.5"
               :style="{
+                left: `${NAME_W}px`,
                 height: `${ROW_H}px`,
-                paddingLeft: `${NAME_W + 6}px`,
-                transform: `translateY(${(n - 1) * ROW_H}px)`,
+                transform: `translateY(${rowY(n - 1)}px)`,
               }"
             >
               <AppSkeleton class="h-full w-full" />
@@ -177,40 +192,30 @@
                whose props don't change on a reorder, so Vue skips them entirely. -->
           <div
             v-for="item in visibleRows"
+            v-else
             :key="item.person.id"
-            v-memo="[item.person, item.segments, item.top]"
+            v-memo="[item.person, item.segments, item.top, item.isMine, configStore.config]"
             class="calendar-row absolute top-0 left-0 right-0"
             :style="{ height: `${ROW_H}px`, transform: `translateY(${item.top}px)` }"
             role="row"
-            :data-person-id="item.person.id"
           >
             <CalendarGridRow
               :person="item.person"
               :segments="item.segments"
               :is-mine="item.isMine"
               :home-time-zone="configStore.config?.homeTimeZone"
-              :name-width="NAME_W"
-              :column-width="COL_W"
-              :row-height="ROW_H"
             />
           </div>
 
-          <!-- Overlays. Today's column, the viewer's own row and the hover highlight used
-               to be classes and attributes on every cell they touched, which meant every
-               body cell was a positioned element (for the outline pseudo-elements) and a
-               hover crossing rewrote hundreds of attributes and repainted the table. Each
-               is now one element moved with a transform: nothing under it changes.
+          <!-- Overlays. Today's column, the viewer's own row and the hover highlight are
+               each one element placed by a transform, so showing or moving them touches
+               nothing underneath: no cell is re-rendered, re-styled or repainted.
                Stacking is DOM order, except the name column (sticky, z-10) and the two
                row-wide overlays that have to sit above it (z-11). -->
-          <!-- Inset past the column's own (transparent) left divider, so it lines up with
-               the header cell's outline, which is a pseudo-element inside that border. -->
           <div
             v-if="todayIdx >= 0"
             class="absolute top-0 bottom-0 border-l-2 border-r-2 border-b-2 border-today pointer-events-none"
-            :style="{
-              left: `${NAME_W + todayIdx * COL_W + todayDividerWidth}px`,
-              width: `${COL_W - todayDividerWidth}px`,
-            }"
+            :style="{ left: `${colX(todayIdx)}px`, width: `${COL_W}px` }"
           />
           <div
             ref="hoverColRef"
@@ -227,7 +232,7 @@
             hidden
           />
           <div
-            v-if="mineTop !== null"
+            v-if="!loading && mineTop !== null"
             class="calendar-mine absolute left-0 right-0 top-0 z-11 border-2 border-primary-text pointer-events-none"
             :style="{ height: `${ROW_H}px`, transform: `translateY(${mineTop}px)` }"
           />
@@ -269,7 +274,9 @@ import {
   segmentAt,
   segmentsForPerson,
 } from "@/lib/absenceSegments";
-import { toIso } from "@/lib/dates";
+import { toIso, today } from "@/lib/dates";
+import { COL_W, DAY_H, HEADER_H, MONTH_H, NAME_W, ROW_H, colX, rowY } from "@/lib/gridGeometry";
+import { sameList } from "@/lib/reconcile";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
@@ -303,15 +310,6 @@ const emit = defineEmits<{
   reorder: [personId: number, targetPersonId: number];
 }>();
 
-// The grid's geometry, in CSS pixels. Everything about where things are on screen - what
-// the mouse is over, where a row or a segment goes, how far to scroll for today - is
-// derived from these, never measured off the DOM.
-const NAME_W = 160;
-const COL_W = 28;
-const ROW_H = 36;
-const MONTH_H = 24;
-const DAY_H = 36;
-const HEADER_H = MONTH_H + DAY_H;
 // Rows rendered beyond the visible ones on each side, so a scroll of a few rows lands on
 // rows that already exist and the window only has to catch up, not race the frame.
 const OVERSCAN = 5;
@@ -323,10 +321,6 @@ const containerRef = ref<HTMLDivElement | null>(null);
 const hoverColRef = ref<HTMLDivElement | null>(null);
 const hoverRowRef = ref<HTMLDivElement | null>(null);
 const hoverCellRef = ref<HTMLDivElement | null>(null);
-
-function isMyRow(person: PersonDto): boolean {
-  return person.id === personStore.person?.id;
-}
 
 // Native HTML5 drag-and-drop rather than a library: reordering a handful of rows
 // doesn't need anything fancier, and it keeps this already-heavy component lean.
@@ -360,13 +354,18 @@ interface GridPoint {
   dayIdx: number;
   /** Index into `rows`, or -1 when the pointer is over the header or below the last row. */
   rowIdx: number;
-  inHeader: boolean;
+  /** True over the day-header band only (month labels above it carry no click/hover of
+   * their own, same as before this rewrite). */
+  inDayHeader: boolean;
 }
 
 // Where a viewport point falls in the grid. The header and the name column are sticky,
 // so the visible box is split first: anything within HEADER_H of the top is the header
 // whatever the scroll position, anything within NAME_W of the left is a name.
 function locate(clientX: number, clientY: number): GridPoint | null {
+  // Rows and their segments aren't rendered while loading (see the template), and the
+  // skeleton beneath is a placeholder, not clickable content - hover and click both no-op.
+  if (props.loading) return null;
   const container = containerRef.value;
   if (!container) return null;
   const rect = container.getBoundingClientRect();
@@ -374,12 +373,12 @@ function locate(clientX: number, clientY: number): GridPoint | null {
   const y = clientY - rect.top - container.clientTop;
   if (x < 0 || y < 0 || x >= container.clientWidth || y >= container.clientHeight) return null;
 
-  const inHeader = y < HEADER_H;
+  const inDayHeader = y >= MONTH_H && y < HEADER_H;
   let dayIdx = x < NAME_W ? -1 : Math.floor((x + container.scrollLeft - NAME_W) / COL_W);
   if (dayIdx >= days.value.length) dayIdx = -1;
-  let rowIdx = inHeader ? -1 : Math.floor((y + container.scrollTop - HEADER_H) / ROW_H);
+  let rowIdx = y < HEADER_H ? -1 : Math.floor((y + container.scrollTop - HEADER_H) / ROW_H);
   if (rowIdx >= rows.value.length) rowIdx = -1;
-  return { dayIdx, rowIdx, inHeader };
+  return { dayIdx, rowIdx, inDayHeader };
 }
 
 // The hover highlight is applied by moving three overlay elements, not by touching any
@@ -396,8 +395,8 @@ let lastClientX = Number.NaN;
 let lastClientY = Number.NaN;
 
 function setHover(point: GridPoint | null) {
-  const dayIdx = point && !point.inHeader ? point.dayIdx : (point?.dayIdx ?? -1);
-  const rowIdx = point ? point.rowIdx : -1;
+  const dayIdx = point?.dayIdx ?? -1;
+  const rowIdx = point?.rowIdx ?? -1;
   const col = hoverColRef.value;
   const row = hoverRowRef.value;
   const cell = hoverCellRef.value;
@@ -405,17 +404,17 @@ function setHover(point: GridPoint | null) {
 
   if (dayIdx !== hoverDay) {
     col.hidden = dayIdx < 0;
-    if (dayIdx >= 0) col.style.transform = `translateX(${NAME_W + dayIdx * COL_W}px)`;
+    if (dayIdx >= 0) col.style.transform = `translateX(${colX(dayIdx)}px)`;
   }
   if (rowIdx !== hoverRow) {
     row.hidden = rowIdx < 0;
-    if (rowIdx >= 0) row.style.transform = `translateY(${rowIdx * ROW_H}px)`;
+    if (rowIdx >= 0) row.style.transform = `translateY(${rowY(rowIdx)}px)`;
   }
   if (dayIdx !== hoverDay || rowIdx !== hoverRow) {
     const over = dayIdx >= 0 && rowIdx >= 0;
     cell.hidden = !over;
     if (over) {
-      cell.style.transform = `translate(${NAME_W + dayIdx * COL_W}px, ${rowIdx * ROW_H}px)`;
+      cell.style.transform = `translate(${colX(dayIdx)}px, ${rowY(rowIdx)}px)`;
       const item = rows.value[rowIdx]!;
       const segment = segmentAt(segmentsFor(item.person.id), dayIdx);
       const title = segment
@@ -461,7 +460,7 @@ function handleClick(event: MouseEvent) {
   const point = locate(event.clientX, event.clientY);
   if (!point || point.dayIdx < 0) return;
   const day = days.value[point.dayIdx]!;
-  if (point.inHeader) {
+  if (point.inDayHeader) {
     handleHeaderClick(day);
     return;
   }
@@ -504,7 +503,8 @@ async function scrollToToday() {
   await nextTick();
   const container = containerRef.value;
   if (!container || todayIdx.value < 0) return;
-  container.scrollLeft = todayIdx.value * COL_W + COL_W / 2 - (container.clientWidth - NAME_W) / 2;
+  container.scrollLeft =
+    colX(todayIdx.value) - NAME_W + COL_W / 2 - (container.clientWidth - NAME_W) / 2;
 }
 
 defineExpose({ scrollToToday });
@@ -604,7 +604,7 @@ const days = computed(() => {
   // that midnight doesn't exist, so `d` gets pushed to 01:00 and setDate keeps it there for
   // the rest of the year. Against a midnight `end` that silently drops December 31.
   const end = new Date(props.year, 11, 31, 12);
-  const today = toIso(new Date());
+  const todayIso = today();
 
   const result = [];
   for (const d = new Date(props.year, 0, 1); d <= end; d.setDate(d.getDate() + 1)) {
@@ -614,7 +614,7 @@ const days = computed(() => {
       month: d.getMonth(),
       dayNum: d.getDate(),
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
-      isToday: iso === today,
+      isToday: iso === todayIso,
       weekdayLabel: weekdayLabels[d.getDay()],
     });
   }
@@ -623,9 +623,6 @@ const days = computed(() => {
 
 const dayIndex = computed(() => dayIndexOf(days.value));
 const todayIdx = computed(() => days.value.findIndex((day) => day.isToday));
-// The width of today's own left divider (see columnSideBorderClass): a month start gets
-// the thicker one.
-const todayDividerWidth = computed(() => (days.value[todayIdx.value]?.dayNum === 1 ? 2 : 1));
 const contentWidth = computed(() => NAME_W + days.value.length * COL_W);
 
 const monthGroups = computed(() => {
@@ -659,15 +656,23 @@ const holidayMap = computed(() => {
   return map;
 });
 
-// The day-level part of the rendering: the weekend/holiday background, the month-boundary
-// side border, and the holiday tooltip are the same for every row, so they're resolved
-// once per day here and drawn by the day column (and the header cell), not per cell.
+// Everything a day contributes to the rendering - the weekend/holiday background, the
+// month-boundary side border, the header's tooltip and click affordance - resolved once
+// per day here rather than per row or per render. Recomputed only when the year, the
+// holidays or the region labels change; the header cells and body columns memo on each
+// day's object, so a render of the grid for any other reason never revisits the 365 days.
 const dayRenderInfo = computed(() =>
-  days.value.map((day) => ({
-    headerClass: `${dayHeaderClass(day, "bg-background")} ${columnSideBorderClass(day)}`,
-    columnClass: `${dayHeaderClass(day)} ${columnSideBorderClass(day)}`,
-    holidayTitle: holidayName(day.iso),
-  })),
+  days.value.map((day) => {
+    const clickable = editableHoliday(day.iso) || canAddHoliday(day.iso);
+    return {
+      headerClass:
+        `${dayHeaderClass(day, "bg-background")} ${columnSideBorderClass(day)}` +
+        (clickable ? " cursor-pointer hover:opacity-70" : ""),
+      headerTitle: headerTitle(day),
+      columnClass: `${dayHeaderClass(day)} ${columnSideBorderClass(day)}`,
+      holidayTitle: holidayName(day.iso),
+    };
+  }),
 );
 
 // ---- Rows and segments -----------------------------------------------------------------
@@ -689,9 +694,7 @@ const absencesByPerson = computed(() => {
   }
   for (const [personId, list] of grouped) {
     const prev = prevAbsencesByPerson.get(personId);
-    if (prev && prev.length === list.length && prev.every((a, i) => a === list[i])) {
-      grouped.set(personId, prev);
-    }
+    if (prev && sameList(prev, list)) grouped.set(personId, prev);
   }
   prevAbsencesByPerson = grouped;
   return grouped;
@@ -701,28 +704,26 @@ const NO_SEGMENTS: AbsenceSegment[] = [];
 
 // Segments are cached per person and computed on demand, so only the people in the
 // window ever pay for theirs, and a person keeps the same segments array - which the row
-// v-memo compares - while both inputs it was built from match by identity: their own
-// absences (see absencesByPerson) and the year's days. Nothing else feeds it: holidays
-// don't affect painting, and a changed name or region can't stale an entry. Entries for
-// people currently filtered out or scrolled away are kept; the ceiling is the whole
-// roster, which is what's in memory anyway.
+// v-memo compares - while the absences it was built from match by identity (see
+// absencesByPerson). Nothing else feeds it: holidays don't affect painting, and a changed
+// name or region can't stale an entry. Entries for people currently filtered out or
+// scrolled away are kept; the ceiling is the whole roster, which is what's in memory
+// anyway. A year change swaps the days every entry was built against, so it drops the
+// whole cache - which also stops it pinning the previous year's absences.
 interface SegmentCacheEntry {
   segments: AbsenceSegment[];
   /** undefined when the person had no absences at all - still a valid, comparable input. */
   sourceAbsences: AbsenceDto[] | undefined;
-  sourceDays: (typeof days)["value"];
 }
 const segmentCache = new Map<number, SegmentCacheEntry>();
+watch(days, () => segmentCache.clear(), { flush: "sync" });
 
 function segmentsFor(personId: number): AbsenceSegment[] {
   const source = absencesByPerson.value.get(personId);
-  const dayList = days.value;
   const entry = segmentCache.get(personId);
-  if (entry && entry.sourceAbsences === source && entry.sourceDays === dayList) {
-    return entry.segments;
-  }
-  const segments = source ? segmentsForPerson(source, dayList, dayIndex.value) : NO_SEGMENTS;
-  segmentCache.set(personId, { segments, sourceAbsences: source, sourceDays: dayList });
+  if (entry && entry.sourceAbsences === source) return entry.segments;
+  const segments = source ? segmentsForPerson(source, days.value, dayIndex.value) : NO_SEGMENTS;
+  segmentCache.set(personId, { segments, sourceAbsences: source });
   return segments;
 }
 
@@ -731,12 +732,13 @@ const personById = computed(() => new Map(props.people.map((person) => [person.i
 // Every row in display order, without their segments: index math and two map lookups per
 // person, so a sort-mode change stays cheap no matter how big the team is. Which of these
 // are actually rendered is decided by the window below.
-const rows = computed(() =>
-  props.order.map((personId) => {
+const rows = computed(() => {
+  const myId = personStore.person?.id;
+  return props.order.map((personId) => {
     const person = personById.value.get(personId)!;
     return {
       person,
-      isMine: isMyRow(person),
+      isMine: person.id === myId,
       // Code shown on the row itself (compact enough for the widened name column); the
       // full label is only surfaced on hover, via the title.
       regionCode: person.homeCity,
@@ -744,8 +746,8 @@ const rows = computed(() =>
         ? (regionLabels.value.get(person.homeCity) ?? person.homeCity)
         : null,
     };
-  }),
-);
+  });
+});
 
 // The rows that exist in the DOM: those within the scrolled-to part of the body, plus
 // OVERSCAN either side. Everything that scales with the team - style, layout, paint, hit
@@ -777,14 +779,28 @@ const visibleRows = computed(() => {
   const result = [];
   for (let i = start; i <= end; i++) {
     const row = all[i]!;
-    result.push({ ...row, segments: segmentsFor(row.person.id), top: i * ROW_H });
+    result.push({ ...row, segments: segmentsFor(row.person.id), top: rowY(i) });
   }
   return result.sort((a, b) => a.person.id - b.person.id);
 });
 
 const mineTop = computed(() => {
   const index = rows.value.findIndex((row) => row.isMine);
-  return index === -1 ? null : index * ROW_H;
+  return index === -1 ? null : rowY(index);
+});
+
+// The hover overlays and tooltip are set imperatively from mouse/scroll events (see
+// setHover), so they don't react on their own when the data under a stationary pointer
+// changes: a search narrowing `rows`, or a save/delete changing which absences a hovered
+// cell holds. This replays the last pointer position whenever either can have changed,
+// forcing setHover past its "nothing moved" short-circuit so the title and highlight
+// catch up. Doesn't fire on every keystroke's grid update alone - only when the set of
+// rows or their absences actually changes.
+watch([rows, () => props.absences], () => {
+  if (Number.isNaN(lastClientX)) return;
+  hoverDay = Number.NaN;
+  hoverRow = Number.NaN;
+  setHover(locate(lastClientX, lastClientY));
 });
 
 // How many rows fit in the visible container. Backs the loading skeleton's row count
@@ -844,33 +860,14 @@ function dayHeaderClass(day: { iso: string; isWeekend: boolean }, plainBackgroun
   return plainBackground;
 }
 
-// Today's column is outlined by an overlay in the body (see the template) and, for the
-// header cell, by a pseudo-element rather than a real border: a real border would take
-// up space in the cell's box and push the day number off-centre. No `relative` here: the
-// header cell is already positioned (absolute), and adding a second position utility
-// would let whichever comes later in the stylesheet win.
-const TODAY_OUTLINE =
-  "after:content-[''] after:absolute after:inset-0 after:pointer-events-none " +
-  "after:border-l-2 after:border-r-2 after:border-today";
-
-function todayColumnClass(isToday: boolean, edge: "top"): string {
-  if (!isToday) return "";
-  return edge === "top" ? `${TODAY_OUTLINE} after:border-t-2` : TODAY_OUTLINE;
-}
-
 // Every day gets a real left border: the column-axis equivalent of the row lines, and
 // using left rather than right avoids doubling up with the month-boundary border (each
 // divider has exactly one owner, the column to its right). Month starts get a thicker,
 // stronger-colored version so the grouping still stands out from the day-to-day lines.
-//
-// On the day that is today, the border is left transparent and today's own outline reads
-// as the divider instead. The transparent border still reserves the same width, so column
-// widths stay uniform whether or not today happens to fall on a month boundary.
-function columnSideBorderClass(day: { isToday: boolean; dayNum: number }): string {
-  if (day.dayNum !== 1) {
-    return day.isToday ? "border-l border-l-transparent" : "border-l border-border";
-  }
-  return day.isToday ? "border-l-2 border-l-transparent" : "border-l-2 border-l-border";
+// Today's outline (see the template) is drawn over its column's divider, so today needs
+// no special case here.
+function columnSideBorderClass(day: { dayNum: number }): string {
+  return day.dayNum === 1 ? "border-l-2 border-l-border" : "border-l border-border";
 }
 
 function holidayName(iso: string): string {
@@ -886,7 +883,7 @@ function holidayName(iso: string): string {
 function editableHoliday(iso: string): BankHolidayDto | undefined {
   const entries = holidayMap.value.get(iso);
   if (!entries || entries.length !== 1) return undefined;
-  return entries[0].source === "Manual" ? entries[0] : undefined;
+  return entries[0]!.source === "Manual" ? entries[0] : undefined;
 }
 
 // A day with no holiday at all can be clicked to add one. A day already carrying a
@@ -921,15 +918,16 @@ function emptyCellTitle(isMine: boolean, holidayTitle: string): string {
 
 <style scoped>
 /* Zebra striping is a repeating gradient rather than a background per row: rows are
-   positioned by transform at multiples of the row height, so the stripe under row n is
-   the band at n * 36px whatever order the rows are in. The name column repeats it so it
-   stays opaque over the day columns scrolling underneath. */
+   positioned by transform at multiples of the row height (--row-h, set on the scroller
+   from lib/gridGeometry.ts), so the stripe under row n is the band at n * --row-h
+   whatever order the rows are in. The name column repeats it so it stays opaque over the
+   day columns scrolling underneath. */
 .calendar-body,
 .calendar-names {
   background: repeating-linear-gradient(
     to bottom,
-    var(--color-background) 0 36px,
-    var(--color-row-alt) 36px 72px
+    var(--color-background) 0 var(--row-h),
+    var(--color-row-alt) var(--row-h) calc(var(--row-h) * 2)
   );
 }
 
@@ -938,8 +936,8 @@ function emptyCellTitle(isMine: boolean, holidayTitle: string): string {
 .calendar-lines {
   background: repeating-linear-gradient(
     to bottom,
-    transparent 0 35px,
-    var(--color-border) 35px 36px
+    transparent 0 calc(var(--row-h) - 1px),
+    var(--color-border) calc(var(--row-h) - 1px) var(--row-h)
   );
 }
 

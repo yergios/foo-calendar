@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { toIso } from "@/lib/dates";
 import type { AbsenceDto } from "@/types/absence";
 
 import { dayIndexOf, segmentAt, segmentsForPerson } from "./absenceSegments";
@@ -7,10 +8,7 @@ import { dayIndexOf, segmentAt, segmentsForPerson } from "./absenceSegments";
 // January 2026: the 1st is a Thursday, so the 3rd/4th, 10th/11th, ... are weekends.
 const days = Array.from({ length: 31 }, (_, i) => {
   const d = new Date(2026, 0, 1 + i);
-  return {
-    iso: `2026-01-${String(i + 1).padStart(2, "0")}`,
-    isWeekend: d.getDay() === 0 || d.getDay() === 6,
-  };
+  return { iso: toIso(d), isWeekend: d.getDay() === 0 || d.getDay() === 6 };
 });
 const dayIndex = dayIndexOf(days);
 
@@ -44,17 +42,7 @@ describe("segmentsForPerson", () => {
 
   it("merges a workweek vacation into one painted run labelled once", () => {
     const v = absence("2026-01-05", "2026-01-09");
-    expect(segments(v)).toEqual([
-      {
-        start: 4,
-        end: 8,
-        absences: [v],
-        wholeDay: v,
-        timeBased: [],
-        painted: true,
-        label: "V",
-      },
-    ]);
+    expect(segments(v)).toEqual([{ start: 4, end: 8, absences: [v], painted: true, label: "V" }]);
   });
 
   it("splits a run at the weekend, which stays unpainted but keeps the absence", () => {
@@ -88,7 +76,7 @@ describe("segmentsForPerson", () => {
       startTime: "11:00:00",
       endTime: "12:00:00",
     });
-    expect(segments(a, b).map((s) => [s.start, s.end, s.label, s.timeBased])).toEqual([
+    expect(segments(a, b).map((s) => [s.start, s.end, s.label, s.absences])).toEqual([
       [4, 4, "A", [a]],
       [5, 5, "A", [b]],
     ]);
@@ -106,9 +94,9 @@ describe("segmentsForPerson", () => {
       endTime: "15:00:00",
       status: "Pending",
     });
-    const [only] = segments(a, b);
-    expect(only).toMatchObject({ start: 4, end: 4, label: "A?", timeBased: [a, b] });
-    expect(only!.wholeDay).toBeUndefined();
+    expect(segments(a, b)).toEqual([
+      { start: 4, end: 4, absences: [a, b], painted: true, label: "A?" },
+    ]);
   });
 
   it("marks a pending whole-day absence with a question mark", () => {

@@ -2,7 +2,7 @@
   <AppModal :title="modalTitle" @close="$emit('close')">
     <div v-if="view === 'list'" class="flex flex-col gap-2">
       <p class="text-sm text-secondary mb-1">
-        {{ formatLongDate(props.dayAbsences[0].startDate) }}
+        {{ formatLongDate(props.dayAbsences[0]!.startDate) }}
         <span v-if="configStore.config" class="text-secondary/70"
           >({{ configStore.config.homeTimeZone }})</span
         >
@@ -18,7 +18,8 @@
         @keydown.enter="openForEdit(a)"
       >
         <span class="truncate text-sm">
-          {{ formatTimeRange(a) }}<span v-if="a.note" class="text-secondary"> · {{ a.note }}</span>
+          {{ formatTimeRange(a.startTime, a.endTime)
+          }}<span v-if="a.note" class="text-secondary"> · {{ a.note }}</span>
         </span>
         <button
           type="button"
@@ -197,7 +198,7 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
 import AppModal from "@/components/AppModal.vue";
-import { formatLongDate, toApiTime, toDisplayTime, today } from "@/lib/dates";
+import { formatLongDate, formatTimeRange, toApiTime, toDisplayTime, today } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";
 import type { AbsenceDto, AbsenceType } from "@/types/absence";
 
@@ -244,7 +245,7 @@ const view = ref<ModalView>(props.dayAbsences.length >= 2 ? "list" : "form");
 // the modal's lifetime (a list row click, or "add another"), unlike the old singular
 // `absence` prop this replaces.
 const editingAbsence = ref<AbsenceDto | null>(
-  props.dayAbsences.length === 1 ? props.dayAbsences[0] : null,
+  props.dayAbsences.length === 1 ? props.dayAbsences[0]! : null,
 );
 const isEditing = computed(() => editingAbsence.value !== null);
 
@@ -311,10 +312,6 @@ function openForAdd() {
   editingAbsence.value = null;
   seedFormFrom(null);
   view.value = "form";
-}
-
-function formatTimeRange(absence: AbsenceDto): string {
-  return `${toDisplayTime(absence.startTime)}–${toDisplayTime(absence.endTime)}`;
 }
 
 // Pushing start past the current end date drags end along with it. Otherwise you'd

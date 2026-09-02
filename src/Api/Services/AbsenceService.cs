@@ -87,24 +87,13 @@ public sealed class AbsenceService(
         // Projected straight into the DTO rather than materialized as tracked entities and
         // mapped afterwards: this is the largest read in the app (a year for the whole
         // team), and nothing here is edited, so tracking and the second pass over every
-        // row were pure cost. Notes come back only on the viewer's own rows, decided in
-        // the query itself so a note never leaves the database, whoever is asking and
-        // however they ask.
+        // row were pure cost. The projection also applies the notes rule (see
+        // AbsenceDto.Projection), so a note never leaves the database.
         var absences = await VisibleOverlapping(db.Absences, from, to)
             .AsNoTracking()
             .OrderBy(a => a.StartDate)
             .ThenBy(a => a.Id)
-            .Select(a => new AbsenceDto(
-                a.Id,
-                a.PersonId,
-                a.StartDate,
-                a.EndDate,
-                a.Type,
-                a.Status,
-                a.PersonId == viewerPersonId ? a.Note : null,
-                a.CreatedAt,
-                a.StartTime,
-                a.EndTime))
+            .Select(AbsenceDto.Projection(viewerPersonId))
             .ToListAsync(ct);
 
         return new(absences);
