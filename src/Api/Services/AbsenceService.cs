@@ -83,14 +83,31 @@ public sealed class AbsenceService(
         // ThenBy Id: a plain OrderBy(StartDate) leaves same-day rows in no guaranteed
         // order, which the calendar grid depends on being stable (it picks the first
         // same-day time-based absence's type to letter a stacked cell).
+        //
+        // Projected straight into the DTO rather than materialized as tracked entities and
+        // mapped afterwards: this is the largest read in the app (a year for the whole
+        // team), and nothing here is edited, so tracking and the second pass over every
+        // row were pure cost. Notes come back only on the viewer's own rows, decided in
+        // the query itself so a note never leaves the database, whoever is asking and
+        // however they ask.
         var absences = await VisibleOverlapping(db.Absences, from, to)
+            .AsNoTracking()
             .OrderBy(a => a.StartDate)
             .ThenBy(a => a.Id)
+            .Select(a => new AbsenceDto(
+                a.Id,
+                a.PersonId,
+                a.StartDate,
+                a.EndDate,
+                a.Type,
+                a.Status,
+                a.PersonId == viewerPersonId ? a.Note : null,
+                a.CreatedAt,
+                a.StartTime,
+                a.EndTime))
             .ToListAsync(ct);
 
-        // Notes come back only on the viewer's own rows. Filtered here rather than in the
-        // client so a note never leaves the process, whoever is asking and however they ask.
-        return new([.. absences.Select(a => AbsenceDto.FromEntity(a, a.PersonId == viewerPersonId))]);
+        return new(absences);
     }
 
     public async Task<AbsenceStatsResponse> GetStatsAsync(int personId, int year, CancellationToken ct = default)

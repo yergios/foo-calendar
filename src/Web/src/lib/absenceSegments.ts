@@ -1,0 +1,171 @@
+import { toDisplayTime } from "@/lib/dates";
+import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
+import type { PersonDto } from "@/types/person";
+
+/** The one thing a day contributes to segmenting: whether an absence paints over it. */
+export interface SegmentDay {
+  iso: string;
+  isWeekend: boolean;
+}
+
+/**
+ * A contiguous run of days that render identically for one person: the same whole-day
+ * absence, the same stack of time-based ones, and the same painted/unpainted state. This is
+ * what the calendar grid renders one element for, instead of one cell per day: a person
+ * with fifty absences a year is a few dozen segments, not 365 cells.
+ *
+ * `start`/`end` are inclusive indices into the days array the segments were built from.
+ */
+export interface AbsenceSegment {
+  start: number;
+  end: number;
+  /** Every absence touching these days - own or not, tooltips are visible to everyone. */
+  absences: AbsenceDto[];
+  /** The at-most-one whole-day absence (mutual exclusivity is enforced server-side). */
+  wholeDay: AbsenceDto | undefined;
+  /** Everything else: time-based absences, any number of which can stack on one day. */
+  timeBased: AbsenceDto[];
+  /** Whether the run shows the person's color. A weekend isn't a work day, so an absence
+   * stretch doesn't paint over it; a bank holiday still does, so it can't hide that someone
+   * is actually off that day. */
+  painted: boolean;
+  /** The legend letter for a painted run, shown once per run rather than once per day; "" on
+   * an unpainted one. */
+  label: string;
+}
+
+/** Maps each day's ISO date to its index in the array, built once per year. */
+export function dayIndexOf(days: readonly SegmentDay[]): Map<string, number> {
+  return new Map(days.map((day, index) => [day.iso, index]));
+}
+
+// The letter the legend shows, with a trailing "?" for anything still awaiting review, so a
+// pending absence reads as "color, but unconfirmed" without needing a second visual language
+// on top of the one the calendar already has.
+export function absenceLabel(absence: AbsenceDto): string {
+  const initial = ABSENCE_TYPE_INITIALS[absence.type];
+  return absence.status === "Pending" ? `${initial}?` : initial;
+}
+
+// Same "?" reasoning as absenceLabel, but for the whole day's stack of time-based absences at
+// once: pending if any one of them is. Letter comes from the first entry's own type - the
+// stack is usually one type, and on the rare day it isn't (e.g. an Appointment and a
+// time-based Other), the tooltip is what disambiguates the rest.
+export function timeBasedLabel(entries: AbsenceDto[]): string {
+  const initial = ABSENCE_TYPE_INITIALS[entries[0]!.type];
+  return entries.some((a) => a.status === "Pending") ? `${initial}?` : initial;
+}
+
+const NO_ABSENCES: AbsenceDto[] = [];
+
+function sameList(a: AbsenceDto[], b: AbsenceDto[]): boolean {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
+/**
+ * One person's absences, expanded onto the year's days and merged into runs. Two adjacent
+ * days join a run when they hold exactly the same absences and paint the same way, so a
+ * five-day vacation is one painted run labelled "V" once, the weekend inside a longer one is
+ * its own unpainted run (still carrying the absence for its tooltip), and a time-based
+ * absence, being single-day, always ends up in a run of its own.
+ *
+ * Absences are clamped to the year: the API returns anything overlapping the range, so a
+ * stretch can start before January 1 or end after December 31.
+ */
+export function segmentsForPerson(
+  absences: readonly AbsenceDto[],
+  days: readonly SegmentDay[],
+  dayIndex: Map<string, number>,
+): AbsenceSegment[] {
+  if (days.length === 0 || absences.length === 0) return [];
+  const firstIso = days[0]!.iso;
+  const lastIso = days[days.length - 1]!.iso;
+
+  // Sparse: only days touched by an absence get an array, everything else stays undefined.
+  const byDay = new Array<AbsenceDto[] | undefined>(days.length);
+  for (const absence of absences) {
+    const start = absence.startDate < firstIso ? 0 : dayIndex.get(absence.startDate);
+    const end = absence.endDate > lastIso ? days.length - 1 : dayIndex.get(absence.endDate);
+    if (start === undefined || end === undefined) continue;
+    for (let i = start; i <= end; i++) {
+      const list = byDay[i];
+      if (list) list.push(absence);
+      else byDay[i] = [absence];
+    }
+  }
+
+  const segments: AbsenceSegment[] = [];
+  let current: AbsenceSegment | null = null;
+  for (let i = 0; i < days.length; i++) {
+    const dayAbsences = byDay[i];
+    if (dayAbsences === undefined) {
+      current = null;
+      continue;
+    }
+    const wholeDay = dayAbsences.find((a) => !a.startTime);
+    const timeBased = dayAbsences.some((a) => a.startTime)
+      ? dayAbsences.filter((a) => a.startTime)
+      : NO_ABSENCES;
+    const painted = !days[i]!.isWeekend;
+
+    if (
+      current &&
+      current.painted === painted &&
+      current.wholeDay === wholeDay &&
+      sameList(current.timeBased, timeBased)
+    ) {
+      current.end = i;
+      continue;
+    }
+
+    current = {
+      start: i,
+      end: i,
+      absences: dayAbsences,
+      wholeDay,
+      timeBased,
+      painted,
+      label: !painted ? "" : wholeDay ? absenceLabel(wholeDay) : timeBasedLabel(timeBased),
+    };
+    segments.push(current);
+  }
+  return segments;
+}
+
+/** The segment covering a day index, if any. Segments are few and ordered, so a linear scan
+ * is cheaper than anything smarter. */
+export function segmentAt(segments: readonly AbsenceSegment[], dayIdx: number) {
+  for (const segment of segments) {
+    if (segment.start > dayIdx) return undefined;
+    if (segment.end >= dayIdx) return segment;
+  }
+  return undefined;
+}
+
+/**
+ * The tooltip for a cell's absences: every absence on it, own or not - tooltips are
+ * visible to everyone, only editing is restricted. One line per absence, so several
+ * same-day time-based absences each get their own. Used both as the hovered cell's title
+ * and as each segment's accessible label.
+ */
+export function absenceTooltip(
+  person: PersonDto,
+  absences: readonly AbsenceDto[],
+  isMine: boolean,
+  homeTimeZone: string | undefined,
+): string {
+  const name = person.displayName ?? person.username;
+  const lines = absences.map((a) => {
+    const status = a.status === "Pending" ? " (pending approval)" : "";
+    const timeRange = a.startTime
+      ? ` ${toDisplayTime(a.startTime)}–${toDisplayTime(a.endTime)}`
+      : "";
+    const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
+    return `${name} — ${body}${status}`;
+  });
+  // Once at the end rather than repeated per line: every time here is in the same zone,
+  // same as the add/edit form's own (Europe/Zurich) labels.
+  if (homeTimeZone && absences.some((a) => a.startTime)) lines.push(`(times in ${homeTimeZone})`);
+  if (isMine) lines.push("(click to edit)");
+  return lines.join("\n");
+}

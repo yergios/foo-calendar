@@ -231,7 +231,6 @@ import { useStaleGuard } from "@/composables/useStaleGuard";
 import { clearCacheGroup, readCache, writeCache } from "@/lib/browserCache";
 import { toIso, today } from "@/lib/dates";
 import { fuzzyScore, normalizeForSearch } from "@/lib/fuzzy";
-import { afterPaint } from "@/lib/paint";
 import { reconcileList } from "@/lib/reconcile";
 import { groupRegions } from "@/lib/regionGroups";
 import { useConfigStore } from "@/stores/config";
@@ -286,39 +285,12 @@ const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "name");
 // (from before multi-select) was a plain string, not an array.
 const cachedRegionFilter = readCache<string[]>("teamRegionFilter");
 const regionFilter = ref<string[]>(Array.isArray(cachedRegionFilter) ? cachedRegionFilter : []);
-// What filteredPeople actually reads, kept separate from regionFilter itself so the select
-// box updates instantly while the (expensive - it changes who's visible, so CalendarGrid
-// has to rebuild a year of cells) grid update can lag one skeleton frame behind. See
-// applyRegionFilter below.
-const appliedRegionFilter = ref<string[]>(regionFilter.value);
 const customOrder = ref<number[]>(readCache<number[]>("teamCustomOrder") ?? []);
 // Not cached across reloads, unlike the sort mode and region filter: a half-typed name is
-// about what you're doing right now, not how you like the grid set up.
+// about what you're doing right now, not how you like the grid set up. Read directly by
+// the grid's filtering: CalendarGrid only renders the rows in view, so a keystroke's
+// update is a handful of rows and lands within the same frame as the typed character.
 const searchQuery = ref("");
-// What the search actually filters by, lagging searchQuery by one painted frame. The
-// keystroke echo and the grid's reaction used to share a frame: v-model wrote
-// searchQuery, Vue's microtask flush then patched the grid before the browser could
-// paint - and a keystroke changes *membership*, so departing rows swap against filler
-// rows, hundreds of <td>s created and destroyed while the typed character waits. Applying
-// the query after the paint keeps typing at native speed; the grid follows a frame later,
-// where the same work is invisible. No skeleton, unlike applyRegionFilter: surviving rows
-// keep their cached cells (see CalendarGrid), so the update lands fast enough that a
-// skeleton would read as flicker, not feedback.
-const appliedSearchQuery = ref("");
-
-const isLatestSearchApply = useStaleGuard();
-
-async function applySearchQuery() {
-  const isCurrent = isLatestSearchApply();
-  await afterPaint();
-  // Not a debounce: the window is the frame this waits on, so anything typed at human
-  // speed applies on its own keystroke. It only collapses keys arriving faster than a
-  // frame - held backspace, or a paste-like burst - where the strands dropped here are
-  // scans of a query that was already superseded before the grid could show it.
-  if (isCurrent()) appliedSearchQuery.value = searchQuery.value;
-}
-
-watch(searchQuery, applySearchQuery);
 
 watch(sortMode, (mode) => writeCache("teamSortMode", mode));
 watch(regionFilter, (regions) => writeCache("teamRegionFilter", regions));
@@ -363,34 +335,10 @@ function personLabel(person: PersonDto): string {
 // you pick a country like "CH", you also get people set to "CH-ZH", "CH-BE", etc. No
 // codes selected means no filtering at all, and any one selected code matching is enough.
 function matchesRegionFilter(homeCity: string | null): boolean {
-  if (appliedRegionFilter.value.length === 0) return true;
+  if (regionFilter.value.length === 0) return true;
   if (!homeCity) return false;
-  return appliedRegionFilter.value.some(
-    (code) => homeCity === code || homeCity.startsWith(`${code}-`),
-  );
+  return regionFilter.value.some((code) => homeCity === code || homeCity.startsWith(`${code}-`));
 }
-
-const isLatestFilterApply = useStaleGuard();
-
-// Only regionFilter triggers this, not sortMode: a sort-mode change never touches who's
-// visible, so CalendarGrid rebuilds nothing beyond the cheap `order` array (see
-// filteredPeople's own comment below) and stays fast without a skeleton. A region-filter
-// change does change membership, which is the expensive part, so it gets the same
-// show-skeleton-then-do-the-work shape as loadYear.
-async function applyRegionFilter() {
-  const isCurrent = isLatestFilterApply();
-  loading.value = true;
-  // afterPaint, not nextTick: the skeleton from the loading=true write above has to be
-  // actually on screen before the expensive membership change lands (see paint.ts for
-  // why nextTick or a single rAF wouldn't get it there).
-  await afterPaint();
-  if (!isCurrent()) return;
-  appliedRegionFilter.value = regionFilter.value;
-  await nextTick();
-  if (isCurrent()) loading.value = false;
-}
-
-watch(regionFilter, applyRegionFilter);
 
 // Falls back to the bare code so someone whose region isn't in the team's current
 // catalog (yet, or anymore) still sorts somewhere sensible instead of crashing the
@@ -449,10 +397,9 @@ const searchKeys = computed(
 );
 
 // null means "no query": filtering and ranking both skip out entirely rather than scoring
-// everyone against an empty string. Reads the applied query, not searchQuery itself, so
-// the grid's update runs after the keystroke's own paint - see appliedSearchQuery above.
+// everyone against an empty string.
 const searchScores = computed<Map<number, number> | null>(() => {
-  const needle = normalizeForSearch(appliedSearchQuery.value.trim());
+  const needle = normalizeForSearch(searchQuery.value.trim());
   if (!needle) return null;
 
   const scores = new Map<number, number>();
@@ -463,10 +410,9 @@ const searchScores = computed<Map<number, number> | null>(() => {
   return scores;
 });
 
-// Filtering only, no sorting: CalendarGrid keys its (expensive, a year of cells per
-// person) content off this list, so switching sort mode - which only ever changes display
-// order, never membership - doesn't force it to rebuild that content from scratch. See
-// visibleOrder below for the cheap part that does change with sort mode.
+// Filtering only, no sorting: CalendarGrid keys its per-person content off this list, so
+// switching sort mode - which only ever changes display order, never membership - doesn't
+// invalidate it. See visibleOrder below for the cheap part that does change with sort mode.
 const filteredPeople = computed(() => {
   const scores = searchScores.value;
   return people.value.filter(
@@ -481,9 +427,7 @@ const filteredPeople = computed(() => {
 const emptyMessage = computed<string | null>(() => {
   if (people.value.length === 0 || filteredPeople.value.length > 0) return null;
   const scores = searchScores.value;
-  // The applied query, same as searchScores reads: quoting the live searchQuery here
-  // could blame a query the grid hasn't actually filtered by yet.
-  if (scores?.size === 0) return `Nobody matches “${appliedSearchQuery.value.trim()}”.`;
+  if (scores?.size === 0) return `Nobody matches “${searchQuery.value.trim()}”.`;
   return "Nobody matches the current filters.";
 });
 
