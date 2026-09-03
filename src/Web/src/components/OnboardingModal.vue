@@ -13,22 +13,12 @@
 
 <script setup lang="ts">
 import AppModal from "@/components/AppModal.vue";
+import type { OnboardingRequest } from "@/types/person";
 
 import ProfileForm from "./ProfileForm.vue";
 
 defineEmits<{
-  submit: [
-    payload: {
-      username: string | null;
-      displayName: string | null;
-      homeCity: string | null;
-      email: string | null;
-      emailOnAbsenceReviewed: boolean;
-      emailOnNewAbsenceRequest: boolean;
-      emailOnWeeklyDigest: boolean;
-    },
-    done: (error?: string | null) => void,
-  ];
+  submit: [payload: OnboardingRequest, done: (error?: string | null) => void];
   close: [];
 }>();
 </script>

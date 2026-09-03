@@ -95,6 +95,7 @@ import { useAuthStore, usesSelfAssertedIdentity } from "@/auth";
 import RegionPicker from "@/components/RegionPicker.vue";
 import { useConfigStore } from "@/stores/config";
 import { Permission } from "@/types/permission";
+import type { OnboardingRequest } from "@/types/person";
 
 const props = withDefaults(
   defineProps<{
@@ -122,18 +123,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  submit: [
-    payload: {
-      username: string | null;
-      displayName: string | null;
-      homeCity: string | null;
-      email: string | null;
-      emailOnAbsenceReviewed: boolean;
-      emailOnNewAbsenceRequest: boolean;
-      emailOnWeeklyDigest: boolean;
-    },
-    done: (error?: string | null) => void,
-  ];
+  submit: [payload: OnboardingRequest, done: (error?: string | null) => void];
 }>();
 
 const authStore = useAuthStore();

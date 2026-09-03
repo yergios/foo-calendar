@@ -24,14 +24,6 @@ namespace Api.Infrastructure;
 /// </summary>
 public static partial class SpaShell
 {
-    /// <summary>Web defaults, i.e. camelCase, matching what the SPA reads off
-    /// /api/config/bootstrap. The encoder is deliberately left at the default: it escapes
-    /// '&lt;', '&gt;' and '&amp;' to their \u003c-style forms, which is the only reason it
-    /// is safe to drop this JSON inside a &lt;script&gt; element at all. Do not "tidy" this
-    /// into UnsafeRelaxedJsonEscaping - a config value containing a closing script tag
-    /// would then end the element early and turn the rest of the payload into markup.</summary>
-    private static readonly JsonSerializerOptions ShellJson = new(JsonSerializerDefaults.Web);
-
     public static void MapSpaFallback(this WebApplication app, string pathBase)
     {
         var indexPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
@@ -61,7 +53,16 @@ public static partial class SpaShell
         // redeploy, which is the same lifetime as the shell string itself.
         var team = app.Services.GetRequiredService<IOptions<TeamOptions>>().Value;
         var auth = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
-        html = InlineBootstrapConfig(html, team, auth, app.Environment, indexPath);
+        // The very options the API serializes its own responses with, rather than a second
+        // set that happens to match today: ConfigEndpoints.Build exists so the shell can't
+        // hold a drifting copy of the payload, and the serializer settings are part of it.
+        // The first enum added to the payload would otherwise reach the browser as a number
+        // here and a string from the endpoint - on the served deployment only, never under
+        // the Vite dev server that the fetch path serves.
+        var json = app.Services
+            .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
+            .Value.SerializerOptions;
+        html = InlineBootstrapConfig(html, team, auth, json, indexPath);
 
         app.MapFallback((HttpContext http) =>
         {
@@ -78,10 +79,14 @@ public static partial class SpaShell
     }
 
     private static string InlineBootstrapConfig(
-        string html, TeamOptions team, AuthOptions auth, IHostEnvironment environment, string indexPath)
+        string html, TeamOptions team, AuthOptions auth, JsonSerializerOptions options, string indexPath)
     {
-        var json = JsonSerializer.Serialize(
-            ConfigEndpoints.Build(team, auth, environment), ShellJson);
+        // Whatever else these options carry, their encoder is the default one, which escapes
+        // '<', '>' and '&' to their \u003c-style forms. That is the only reason it is safe to
+        // drop this JSON inside a <script> element at all, and it is why nothing here may be
+        // "tidied" into UnsafeRelaxedJsonEscaping: a config value containing a closing script
+        // tag would then end the element early and turn the rest of the payload into markup.
+        var json = JsonSerializer.Serialize(ConfigEndpoints.Build(team, auth), options);
         var tag = $"<script>window.__bootstrap={json}</script>";
 
         var head = html.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);

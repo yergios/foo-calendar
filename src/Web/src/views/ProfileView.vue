@@ -150,6 +150,8 @@ async function handleSave(payload: OnboardingRequest, done: (error?: string | nu
   try {
     // The form emits a username alongside the profile because onboarding needs one to
     // claim; editing never does - it is fixed once claimed - so only the profile is sent.
+    // Spelled out rather than rest-destructured off: this project's eslint has
+    // ignoreRestSiblings off, so the discarded binding is an error.
     const updated = await updateMe({
       displayName: payload.displayName,
       homeCity: payload.homeCity,

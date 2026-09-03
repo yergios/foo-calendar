@@ -18,7 +18,7 @@ namespace Api.Infrastructure;
 /// Two deployments use it. Local development, where the cookie is usually absent and
 /// Auth:DevUser stands in so nobody has to pick a name to run the app. And a deliberately
 /// unauthenticated deployment on a trusted network, where Auth:AllowUnauthenticatedDeployment
-/// has been set: there, an unnamed visitor becomes <see cref="AnonymousUsername"/>, an
+/// has been set: there, an unnamed visitor becomes <see cref="AuthOptions.AnonymousUsername"/>, an
 /// identity that owns no profile and holds no permissions. That is what puts them in front
 /// of the same "set up your profile" form a new hire on an OIDC deployment sees, rather
 /// than a screen of failed requests or a second sign-in flow of its own.</summary>
@@ -26,8 +26,7 @@ public sealed class UnauthenticatedAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IOptions<AuthOptions> authOptions,
-    IHostEnvironment environment)
+    IOptions<AuthOptions> authOptions)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "Unauthenticated";
@@ -37,24 +36,20 @@ public sealed class UnauthenticatedAuthHandler(
     /// what "unauthenticated" means here.</summary>
     public const string IdentityCookie = "fc_identity";
 
-    /// <summary>Who a visitor is before they have said. Deliberately unusable as a real
-    /// username - no person can be created with it and the identity endpoint refuses to
-    /// set it - so it can never collide with someone's actual name.</summary>
-    public const string AnonymousUsername = "(anonymous)";
-
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var auth = authOptions.Value;
         var claimTypes = auth.ClaimTypes;
 
         var username = Request.Cookies[IdentityCookie];
-        var named = !string.IsNullOrWhiteSpace(username);
 
         // Development stands in the dev user so nobody has to name themselves to run the
         // app locally. A real deployment must not: every unnamed visitor would land on one
         // shared calendar row. They get the anonymous identity instead, which owns nothing.
-        if (!named)
-            username = environment.IsDevelopment() ? auth.DevUser.Username : AnonymousUsername;
+        if (string.IsNullOrWhiteSpace(username))
+            username = auth.UnauthenticatedDeployment
+                ? AuthOptions.AnonymousUsername
+                : auth.DevUser.Username;
 
         var claims = new List<Claim> { new(claimTypes.UserName, username) };
 

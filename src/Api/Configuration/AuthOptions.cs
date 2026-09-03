@@ -10,6 +10,12 @@ public sealed class AuthOptions
     /// <summary>Value of <see cref="Provider"/> that turns authentication off.</summary>
     public const string ProviderNone = "None";
 
+    /// <summary>Who a visitor is before they have said, when there is no identity provider
+    /// (see UnauthenticatedAuthHandler). Deliberately unusable as a real username - every
+    /// path that creates a person refuses it - so it can never collide with someone's
+    /// actual name and put every unnamed visitor on their calendar row.</summary>
+    public const string AnonymousUsername = "(anonymous)";
+
     /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" skips
     /// authentication entirely (see UnauthenticatedAuthHandler): visitors say who they are
     /// and the app believes them. Outside Development that also needs
@@ -28,6 +34,15 @@ public sealed class AuthOptions
     /// the permissions. On a network where that is not true of everything else already, it
     /// is the wrong setting.</summary>
     public bool AllowUnauthenticatedDeployment { get; init; }
+
+    /// <summary>True when this is a real deployment running with authentication off, and
+    /// false for local development, which is the same <see cref="Provider"/> setting but
+    /// nobody's security problem. Resolved once during configuration rather than recomputed
+    /// from IHostEnvironment at each use, for the same reason as
+    /// <see cref="EffectiveDevPermissions"/>: the auth handler, the SPA's bootstrap payload
+    /// and the startup log all branch on it, and two spellings of the predicate would let
+    /// them disagree about which deployment this is.</summary>
+    public bool UnauthenticatedDeployment { get; set; }
 
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";

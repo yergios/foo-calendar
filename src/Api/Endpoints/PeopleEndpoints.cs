@@ -2,7 +2,6 @@
 
 using Api.Configuration;
 using Api.Dtos;
-using Api.Infrastructure;
 using Api.Interfaces;
 using Api.Services;
 
@@ -35,11 +34,19 @@ public static class PeopleEndpoints
         var claimTypes = authOptions.Value.ClaimTypes;
         var username = user.FindFirstValue(claimTypes.UserName);
 
-        // Belt and braces on a deployment with no identity provider: the identity endpoint
-        // already refuses to claim this name, so reaching here with it means the profile
-        // form was submitted before one was claimed at all.
-        if (username == UnauthenticatedAuthHandler.AnonymousUsername)
-            return Results.BadRequest("Choose a username before setting up a profile.");
+        // This record is built in code below rather than bound from the body, so the rule
+        // CreatePersonRequest carries for every other creation path never runs on it.
+        // Reaching here with the reserved name means the profile form was submitted before
+        // a username was claimed at all. Thrown, not returned: DomainExceptionHandler turns
+        // it into the ProblemDetails shape the SPA reads a message out of.
+        if (username == AuthOptions.AnonymousUsername)
+            throw new ArgumentException("Choose a username before setting up a profile.");
+
+        // Null is "not supplied", so the identity provider's claim stands in; anything else
+        // is what they typed, with an emptied box meaning they deliberately have no address.
+        var email = request.EditsEmail
+            ? request.ResolvedEmail
+            : user.FindFirstValue(claimTypes.Email);
 
         var create = new CreatePersonRequest(
             username,
@@ -47,12 +54,7 @@ public static class PeopleEndpoints
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
             request.HomeCity,
-            // What they typed wins over the claim: the form is prefilled from the claim, so
-            // an unchanged value is the claim, and a changed one is a correction. An empty
-            // string is someone deliberately having no address, not a fall back to the claim.
-            string.IsNullOrWhiteSpace(request.Email)
-                ? request.Email is null ? user.FindFirstValue(claimTypes.Email) : null
-                : request.Email,
+            email,
             request.EmailOnAbsenceReviewed,
             request.EmailOnNewAbsenceRequest,
             request.EmailOnWeeklyDigest);

@@ -257,7 +257,11 @@ var isDevelopment = builder.Environment.IsDevelopment();
 
 services.AddOptions<AuthOptions>()
     .Bind(config.GetSection(AuthOptions.SectionName))
-    .PostConfigure(o => o.RemoveBlankEntries())
+    .PostConfigure(o =>
+    {
+        o.RemoveBlankEntries();
+        o.UnauthenticatedDeployment = o.Provider == AuthOptions.ProviderNone && !isDevelopment;
+    })
     .Validate(o => o.Provider is AuthOptions.ProviderOidc or AuthOptions.ProviderNone,
         $"Auth:Provider must be one of {AuthOptions.ProviderOidc}, {AuthOptions.ProviderNone}.")
     .Validate(o => o.Provider != AuthOptions.ProviderNone
@@ -451,19 +455,21 @@ var app = builder.Build();
 // "my laptop" and "the office network" is a line in a config file. Saying which one this
 // is, every time it starts, is the cheapest way for a deployment to notice it is the
 // second one by accident.
-if (authConfig.Provider == AuthOptions.ProviderNone)
+var resolvedAuth = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
+
+if (resolvedAuth.Provider == AuthOptions.ProviderNone)
 {
-    if (app.Environment.IsDevelopment())
+    if (!resolvedAuth.UnauthenticatedDeployment)
         app.Logger.LogWarning(
             "Auth:Provider=None: authentication is off. Unnamed requests are '{Username}' "
             + "holding [{Permissions}]. Development only unless "
             + "Auth:AllowUnauthenticatedDeployment is set.",
-            authConfig.DevUser.Username,
-            string.Join(", ", authConfig.EffectiveDevPermissions()));
+            resolvedAuth.DevUser.Username,
+            string.Join(", ", resolvedAuth.EffectiveDevPermissions()));
     // Without the flag this configuration doesn't start at all: options validation rejects
     // it a moment from now, and saying anything here would be describing a deployment that
     // is about to not exist - in the wrong tense, since the flag it names isn't set.
-    else if (authConfig.AllowUnauthenticatedDeployment)
+    else if (resolvedAuth.AllowUnauthenticatedDeployment)
         app.Logger.LogCritical(
             "Auth:Provider=None with Auth:AllowUnauthenticatedDeployment=true in the "
             + "{Environment} environment: THIS DEPLOYMENT HAS NO AUTHENTICATION. Anyone who "
@@ -471,7 +477,7 @@ if (authConfig.Provider == AuthOptions.ProviderNone)
             + "[{Permissions}]. Only run this where network access is already the access "
             + "control.",
             app.Environment.EnvironmentName,
-            string.Join(", ", authConfig.EffectiveDevPermissions()));
+            string.Join(", ", resolvedAuth.EffectiveDevPermissions()));
 }
 
 await using (var scope = app.Services.CreateAsyncScope())

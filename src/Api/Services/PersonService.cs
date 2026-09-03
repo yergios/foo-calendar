@@ -24,7 +24,7 @@ public sealed class PersonService(
     // anyone holding AuditRead and outlives the profile it describes, so it records that a
     // contact detail moved, not a history of everyone's contact details.
     private static string DescribeEmailChange(string before, string after) =>
-        (string.IsNullOrWhiteSpace(before), string.IsNullOrWhiteSpace(after)) switch
+        (before is null, after is null) switch
         {
             (true, false) => "email set",
             (false, true) => "email cleared",
@@ -223,26 +223,21 @@ public sealed class PersonService(
         var changes = new List<string>();
         if (person.DisplayName != request.DisplayName)
             changes.Add($"name {person.DisplayName} → {request.DisplayName}");
-        // Null is "not supplied": the admin people page sends a name and a region, and an
-        // omitted address there must not delete one. An empty string is "clear it".
-        var editsEmail = request.Email is not null;
-        // Compared as "no address" vs "this address", not as raw strings: the profile form
-        // sends an empty box as "", and someone who has never had an address has null, so a
-        // literal comparison would log a change on every save they ever make.
-        var emailMoved = editsEmail
-            && !(string.IsNullOrWhiteSpace(person.Email) && string.IsNullOrWhiteSpace(request.Email))
-            && !string.Equals(person.Email, request.Email, StringComparison.OrdinalIgnoreCase);
+        // Both sides normalized before comparing, so an emptied box and a stored null read
+        // as the same absence of an address rather than as a change made on every save.
         // Logged as "set"/"changed"/"cleared" rather than with the addresses in it: the
         // audit log is readable by anyone holding AuditRead and outlives the profile, and
         // a trail of everyone's email addresses is not what it is for.
-        if (emailMoved)
-            changes.Add(DescribeEmailChange(person.Email, request.Email));
+        var storedEmail = string.IsNullOrWhiteSpace(person.Email) ? null : person.Email;
+        if (request.EditsEmail
+            && !string.Equals(storedEmail, request.ResolvedEmail, StringComparison.OrdinalIgnoreCase))
+            changes.Add(DescribeEmailChange(storedEmail, request.ResolvedEmail));
         if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
             changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");
 
         person.DisplayName = request.DisplayName;
         person.HomeCity = request.HomeCity;
-        if (editsEmail) person.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email;
+        if (request.EditsEmail) person.Email = request.ResolvedEmail;
         person.EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed;
         person.EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest;
         person.EmailOnWeeklyDigest = request.EmailOnWeeklyDigest;

@@ -4,8 +4,6 @@ import { computed, ref } from "vue";
 
 import { appUrl } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
-import { clearCache } from "@/lib/browserCache";
-import { PERSON_CACHE_KEY } from "@/stores/personCacheKey";
 import type { BootstrapAuthConfig } from "@/types/config";
 import type { Permission } from "@/types/permission";
 
@@ -24,40 +22,6 @@ let devToken = "";
  * instead of signing in. What the profile form keys off to ask for a username. */
 export function usesSelfAssertedIdentity(): boolean {
   return isDevMode;
-}
-
-/**
- * Claims a name for this browser. Only meaningful when there is no identity provider; the
- * cookie it sets is what the API resolves every later request as, so it has to land before
- * the profile behind it is read or created.
- */
-export async function chooseIdentity(username: string): Promise<void> {
-  const res = await fetch(appUrl("/api/identity"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-
-  // The previous visitor's profile, cached under a key that doesn't mention who it was.
-  clearCache(PERSON_CACHE_KEY);
-}
-
-/**
- * Gives up the claimed name and reloads, so the app comes back as nobody and asks again.
- * A reload rather than unpicking the state by hand: identity decides which person the API
- * resolves, which permissions the interface offers, and what is cached in localStorage,
- * and re-deriving all of that is a longer list than it looks with a wrong answer that
- * shows up as someone else's calendar row.
- */
-export async function forgetIdentity(): Promise<void> {
-  // Checked, unlike a fire-and-forget delete would be: reloading regardless would bring the
-  // page back as the same person with nothing said, which reads as the button being broken.
-  const res = await fetch(appUrl("/api/identity"), { method: "DELETE" });
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-
-  clearCache(PERSON_CACHE_KEY);
-  window.location.reload();
 }
 
 const oidcUser = ref<OidcUser | null>(null);

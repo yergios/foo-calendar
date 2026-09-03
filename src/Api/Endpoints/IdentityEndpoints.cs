@@ -1,8 +1,7 @@
+using Api.Dtos;
 using Api.Infrastructure;
 
 namespace Api.Endpoints;
-
-public sealed record ChooseIdentityRequest(string Username);
 
 /// <summary>Identity for deployments with no identity provider (Auth:Provider=None): the
 /// visitor says who they are and the app takes their word for it.
@@ -19,8 +18,6 @@ public sealed record ChooseIdentityRequest(string Username);
 /// self-asserted name are accepted.</summary>
 public static class IdentityEndpoints
 {
-    private const int MaxUsernameLength = 100;
-
     public static void MapIdentityEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/identity").AllowAnonymous().WithTags("Identity");
@@ -31,28 +28,16 @@ public static class IdentityEndpoints
 
     private static IResult ChooseIdentity(HttpContext http, ChooseIdentityRequest request)
     {
-        var username = request?.Username?.Trim();
-
-        if (string.IsNullOrEmpty(username))
-            return Results.BadRequest("A username is required.");
-
-        // The same cap Person.Username carries. Worth restating here because this value
-        // reaches the database without passing the request validation CreatePersonRequest
-        // gets: CreateMe builds that record in code, from this cookie.
-        if (username.Length > MaxUsernameLength)
-            return Results.BadRequest($"A username can be at most {MaxUsernameLength} characters.");
-
-        // The name the handler gives a visitor who hasn't chosen one. Claiming it would put
-        // them on the same row as everyone who hasn't chosen either.
-        if (username == UnauthenticatedAuthHandler.AnonymousUsername)
-            return Results.BadRequest("That username is reserved.");
-
-        // Not checked against the people table on purpose: a name nobody has yet is how the
-        // first person on a fresh deployment gets one, and a name that already exists is how
-        // someone who cleared their cookie gets back to their own profile. Both are the same
-        // request, and which one happened is something the caller finds out next.
+        // Nothing validated by hand here: the request record carries its own rules and the
+        // minimal API's validation runs them, the same as every other bound request body.
+        //
+        // The claimed name is not checked against the people table on purpose. A name nobody
+        // has yet is how the first person on a fresh deployment gets one, and a name that
+        // already exists is how someone who cleared their cookie gets back to their own
+        // profile. Both are the same request, and which one happened is something the caller
+        // finds out next.
         http.Response.Cookies.Append(
-            UnauthenticatedAuthHandler.IdentityCookie, username, CookieOptions(http));
+            UnauthenticatedAuthHandler.IdentityCookie, request.Claimed, CookieOptions(http));
 
         return Results.NoContent();
     }

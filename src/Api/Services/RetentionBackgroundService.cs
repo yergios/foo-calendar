@@ -15,6 +15,14 @@ public sealed class RetentionBackgroundService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // BackgroundService.StartAsync awaits this method until its first real suspension
+        // point, and on SQLite there isn't one: Microsoft.Data.Sqlite has no true async I/O,
+        // so every ExecuteDeleteAsync below completes inline. Without this yield the first
+        // sweep - the big one, against a database that predates the setting - would run
+        // inside startup, holding the write lock and delaying every hosted service
+        // registered after this one while Kestrel is already accepting requests.
+        await Task.Yield();
+
         using var timer = new PeriodicTimer(options.Value.SweepInterval);
 
         do

@@ -1,11 +1,16 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
+import { chooseIdentity, forgetIdentity } from "@/api/identity";
 import { createMe, tryGetMe } from "@/api/people";
-import { chooseIdentity } from "@/auth";
 import { clearCache, clearCacheGroup, readCache, writeCache } from "@/lib/browserCache";
-import { PERSON_CACHE_KEY } from "@/stores/personCacheKey";
 import type { OnboardingRequest, PersonDto } from "@/types/person";
+
+// Bump the version suffix whenever PersonDto's shape changes: the key carries it, so an old
+// browser's copy simply misses and refetches instead of being trusted with fields it
+// predates. v2 added `email`, and a v1 copy without it would have rendered the profile form
+// with an empty address box and saved that emptiness back over the stored one.
+const PERSON_CACHE_KEY = "person.v2";
 
 export const usePersonStore = defineStore("person", () => {
   // Evicts copies written under older schema versions, including the unversioned "person"
@@ -95,8 +100,10 @@ export const usePersonStore = defineStore("person", () => {
   async function completeOnboarding({ username, ...profile }: OnboardingRequest) {
     if (username) {
       await chooseIdentity(username);
+      // Whoever this browser was before, they are not this person. Cleared before the read
+      // below so a failure there leaves no stale profile behind either.
+      clearPerson();
       hydrated.value = false;
-      person.value = null;
 
       const existing = await tryGetMe();
       if (existing) {
@@ -126,6 +133,21 @@ export const usePersonStore = defineStore("person", () => {
     setPerson(null);
   }
 
+  /**
+   * Gives up the claimed name and reloads, so the app comes back as nobody and asks who
+   * they are again. Only reachable where there is no identity provider.
+   *
+   * A reload rather than unpicking the state by hand: identity decides which person the API
+   * resolves, which permissions the interface offers, and what is cached in localStorage,
+   * and re-deriving all of that is a longer list than it looks, with a wrong answer that
+   * shows up as someone else's calendar row.
+   */
+  async function switchIdentity() {
+    await forgetIdentity();
+    clearPerson();
+    window.location.reload();
+  }
+
   return {
     person,
     hydrated,
@@ -137,5 +159,6 @@ export const usePersonStore = defineStore("person", () => {
     cancelOnboarding,
     setPerson,
     clearPerson,
+    switchIdentity,
   };
 });

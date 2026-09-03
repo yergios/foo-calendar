@@ -20,7 +20,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { forgetIdentity } from "@/auth";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import { usePersonStore } from "@/stores/person";
 
@@ -32,7 +31,7 @@ const currentName = computed(
 );
 
 function switchIdentity() {
-  forgetIdentity().catch((error: unknown) => {
+  personStore.switchIdentity().catch((error: unknown) => {
     console.error("ERROR => Failed to clear the claimed identity:", error);
   });
 }

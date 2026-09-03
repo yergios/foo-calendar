@@ -87,7 +87,6 @@ public static class ConfigEndpoints
 
     private static IResult GetBootstrapConfig(
         HttpContext http,
-        IHostEnvironment environment,
         IOptions<TeamOptions> team,
         IOptions<AuthOptions> authOptions)
     {
@@ -98,19 +97,18 @@ public static class ConfigEndpoints
         // the user to notice, so it is never stored.
         http.Response.Headers.CacheControl = "no-store";
 
-        return Results.Ok(Build(team.Value, authOptions.Value, environment));
+        return Results.Ok(Build(team.Value, authOptions.Value));
     }
 
     /// <summary>The payload itself, so the SPA shell can embed exactly what this endpoint
     /// would have returned rather than a second, drifting copy of the same mapping.</summary>
-    internal static BootstrapConfigResponse Build(
-        TeamOptions team, AuthOptions auth, IHostEnvironment environment) =>
+    internal static BootstrapConfigResponse Build(TeamOptions team, AuthOptions auth) =>
         new(team.OrgName,
             team.SupportUrl,
             team.IssueUrl,
-            BuildAuth(auth, environment));
+            BuildAuth(auth));
 
-    private static BootstrapAuthConfig BuildAuth(AuthOptions auth, IHostEnvironment environment) =>
+    private static BootstrapAuthConfig BuildAuth(AuthOptions auth) =>
         new(auth.Provider,
             auth.Authority,
             auth.ClientId,
@@ -119,7 +117,7 @@ public static class ConfigEndpoints
             auth.RedirectUri,
             auth.Permissions,
             auth.ClaimTypes.Permissions,
-            auth.Provider == AuthOptions.ProviderNone && !environment.IsDevelopment(),
+            auth.UnauthenticatedDeployment,
             auth.Provider == AuthOptions.ProviderNone
                 ? new BootstrapDevUser(
                     auth.DevUser.FirstName,
