@@ -48,14 +48,6 @@ export interface CreatePersonRequest {
   homeCity?: string | null;
 }
 
-/** What onboarding collects: a profile, plus the username to claim first on a deployment
- * with no identity provider (null anywhere else, where the token already says who you
- * are). The username is not part of the profile request itself - the API reads it from the
- * identity the request arrives under. */
-export interface OnboardingRequest extends UpdatePersonRequest {
-  username: string | null;
-}
-
 export interface UpdatePersonRequest {
   displayName?: string | null;
   homeCity?: string | null;

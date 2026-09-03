@@ -90,7 +90,7 @@ import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
 import { useConfigStore } from "@/stores/config";
 import { usePersonStore } from "@/stores/person";
-import type { AbsenceStatsResponse, OnboardingRequest } from "@/types/person";
+import type { AbsenceStatsResponse, UpdatePersonRequest } from "@/types/person";
 
 const personStore = usePersonStore();
 const { person } = storeToRefs(personStore);
@@ -146,20 +146,9 @@ onMounted(async () => {
   }
 });
 
-async function handleSave(payload: OnboardingRequest, done: (error?: string | null) => void) {
+async function handleSave(payload: UpdatePersonRequest, done: (error?: string | null) => void) {
   try {
-    // The form emits a username alongside the profile because onboarding needs one to
-    // claim; editing never does - it is fixed once claimed - so only the profile is sent.
-    // Spelled out rather than rest-destructured off: this project's eslint has
-    // ignoreRestSiblings off, so the discarded binding is an error.
-    const updated = await updateMe({
-      displayName: payload.displayName,
-      homeCity: payload.homeCity,
-      email: payload.email,
-      emailOnAbsenceReviewed: payload.emailOnAbsenceReviewed,
-      emailOnNewAbsenceRequest: payload.emailOnNewAbsenceRequest,
-      emailOnWeeklyDigest: payload.emailOnWeeklyDigest,
-    });
+    const updated = await updateMe(payload);
     personStore.setPerson(updated);
 
     clearTimeout(savedTimeout);

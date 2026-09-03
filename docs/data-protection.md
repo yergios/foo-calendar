@@ -24,7 +24,7 @@ SMTP provider, your webhook receiver, your hosting.
 
 | Field | Why it exists |
 |---|---|
-| `Username` | Identity. Comes from your identity provider's configured username claim, or is self-asserted when the deployment runs without one. |
+| `Username` | Identity. Comes from your identity provider's configured username claim. |
 | `FirstName`, `LastName`, `DisplayName` | Shown on the calendar row and anywhere a person is named. |
 | `Email` | Notification delivery, and nothing else. Optional — a person with no address simply gets no email. Prefilled from the identity provider's email claim where there is one, and editable on the profile page, so a wrong or missing address can be corrected. |
 | `HomeCity` | An ISO 3166-2 region code, e.g. `CH-ZH`. Decides which public holidays apply to them. Not an address. |
@@ -132,15 +132,10 @@ guarantee.
 - Authentication is OIDC against your provider, with per-permission authorization enforced
   server-side on every request. The frontend's own permission checks only decide what the
   interface *offers*; they are not the gate.
-- `Auth:Provider=None` turns authentication off entirely and needs
-  `Auth:AllowUnauthenticatedDeployment=true` to run outside development. In that mode
-  **anyone who can reach the app is anyone they choose to be**: they type a username and
-  the app believes them. Nothing anonymous reads any names back, so the app never hands a
-  roster to someone who hasn't claimed one — but that is a courtesy, not a boundary, since
-  claiming a name takes one form. It exists for networks where reaching the app is already
-  the access control — a private LAN, a VPN, a tailnet. If that is not true of your
-  network, it is the wrong setting, and running it there is a breach waiting to be written
-  up.
+- `Auth:Provider=None` bypasses authentication entirely and authenticates every request as
+  the fixed `Auth:DevUser` identity. It exists so the app can be run locally with no OIDC
+  tenant, and the API **refuses to start with it outside Development** — there is no
+  supported way to deploy this app without an identity provider.
 - Data at rest is a single SQLite file. Encrypting it is your host's job — disk encryption,
   a volume, whatever you already do.
 - The app has no password of its own to leak: it stores no credentials.

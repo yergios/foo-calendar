@@ -4,7 +4,6 @@
       Set up your profile to start using the calendar.
     </p>
     <ProfileForm
-      is-onboarding
       submit-label="Get started"
       @submit="(payload, done) => $emit('submit', payload, done)"
     />
@@ -13,12 +12,12 @@
 
 <script setup lang="ts">
 import AppModal from "@/components/AppModal.vue";
-import type { OnboardingRequest } from "@/types/person";
+import type { UpdatePersonRequest } from "@/types/person";
 
 import ProfileForm from "./ProfileForm.vue";
 
 defineEmits<{
-  submit: [payload: OnboardingRequest, done: (error?: string | null) => void];
+  submit: [payload: UpdatePersonRequest, done: (error?: string | null) => void];
   close: [];
 }>();
 </script>

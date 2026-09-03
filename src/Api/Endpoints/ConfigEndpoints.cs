@@ -51,16 +51,10 @@ public sealed record BootstrapAuthConfig(
     // interface, not for the gate.
     Dictionary<string, List<string>> Permissions,
     List<string> PermissionsClaims,
-    // True only for a real deployment running with authentication off, never for local
-    // development, which is also Provider=None but is nobody's security problem. The SPA
-    // shows a standing banner on the strength of this: a deployment that has quietly lost
-    // its identity provider should be obvious to the people using it, not just to whoever
-    // reads the startup log.
-    bool UnauthenticatedDeployment,
     BootstrapDevUser DevUser);
 
-/// <summary>Only populated when Auth:Provider=None. It lets the SPA present the same
-/// identity the API's UnauthenticatedAuthHandler is already authenticating as.</summary>
+/// <summary>Only populated when Auth:Provider=None, which is Development-only. It lets the
+/// SPA present the same identity the API's DevAuthHandler is already authenticating as.</summary>
 public sealed record BootstrapDevUser(
     string FirstName,
     string LastName,
@@ -117,14 +111,13 @@ public static class ConfigEndpoints
             auth.RedirectUri,
             auth.Permissions,
             auth.ClaimTypes.Permissions,
-            auth.UnauthenticatedDeployment,
             auth.Provider == AuthOptions.ProviderNone
                 ? new BootstrapDevUser(
                     auth.DevUser.FirstName,
                     auth.DevUser.LastName,
                     auth.DevUser.Email,
                     // Resolved rather than copied, so the SPA holds exactly what
-                    // the unauthenticated handler is authenticating the requests as.
+                    // DevAuthHandler is authenticating the requests as.
                     auth.EffectiveDevPermissions())
                 : null);
 }

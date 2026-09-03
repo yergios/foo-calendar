@@ -1,10 +1,9 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-import { chooseIdentity, forgetIdentity } from "@/api/identity";
 import { createMe, tryGetMe } from "@/api/people";
 import { clearCache, clearCacheGroup, readCache, writeCache } from "@/lib/browserCache";
-import type { OnboardingRequest, PersonDto } from "@/types/person";
+import type { PersonDto, UpdatePersonRequest } from "@/types/person";
 
 // Bump the version suffix whenever PersonDto's shape changes: the key carries it, so an old
 // browser's copy simply misses and refetches instead of being trusted with fields it
@@ -88,34 +87,8 @@ export const usePersonStore = defineStore("person", () => {
     });
   }
 
-  /**
-   * Finishes onboarding, which on a deployment with no identity provider is also where
-   * identity is decided: the username the form collected is claimed first, because every
-   * request after it - including the two below - is resolved as whoever that cookie names.
-   *
-   * Claiming a name that already has a profile is how someone who cleared their cookie
-   * gets back to their own, so an existing profile is adopted rather than treated as a
-   * collision. That is the whole of "signing in" here.
-   */
-  async function completeOnboarding({ username, ...profile }: OnboardingRequest) {
-    if (username) {
-      await chooseIdentity(username);
-      // Whoever this browser was before, they are not this person. Cleared before the read
-      // below so a failure there leaves no stale profile behind either.
-      clearPerson();
-      hydrated.value = false;
-
-      const existing = await tryGetMe();
-      if (existing) {
-        setPerson(existing);
-        showOnboarding.value = false;
-        resolveOnboarding?.(existing);
-        resolveOnboarding = null;
-        return;
-      }
-    }
-
-    const created = await createMe(profile);
+  async function completeOnboarding(payload: UpdatePersonRequest) {
+    const created = await createMe(payload);
     setPerson(created);
     showOnboarding.value = false;
     resolveOnboarding?.(created);
@@ -133,21 +106,6 @@ export const usePersonStore = defineStore("person", () => {
     setPerson(null);
   }
 
-  /**
-   * Gives up the claimed name and reloads, so the app comes back as nobody and asks who
-   * they are again. Only reachable where there is no identity provider.
-   *
-   * A reload rather than unpicking the state by hand: identity decides which person the API
-   * resolves, which permissions the interface offers, and what is cached in localStorage,
-   * and re-deriving all of that is a longer list than it looks, with a wrong answer that
-   * shows up as someone else's calendar row.
-   */
-  async function switchIdentity() {
-    await forgetIdentity();
-    clearPerson();
-    window.location.reload();
-  }
-
   return {
     person,
     hydrated,
@@ -159,6 +117,5 @@ export const usePersonStore = defineStore("person", () => {
     cancelOnboarding,
     setPerson,
     clearPerson,
-    switchIdentity,
   };
 });

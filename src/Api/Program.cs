@@ -257,21 +257,11 @@ var isDevelopment = builder.Environment.IsDevelopment();
 
 services.AddOptions<AuthOptions>()
     .Bind(config.GetSection(AuthOptions.SectionName))
-    .PostConfigure(o =>
-    {
-        o.RemoveBlankEntries();
-        o.UnauthenticatedDeployment = o.Provider == AuthOptions.ProviderNone && !isDevelopment;
-    })
+    .PostConfigure(o => o.RemoveBlankEntries())
     .Validate(o => o.Provider is AuthOptions.ProviderOidc or AuthOptions.ProviderNone,
         $"Auth:Provider must be one of {AuthOptions.ProviderOidc}, {AuthOptions.ProviderNone}.")
-    .Validate(o => o.Provider != AuthOptions.ProviderNone
-            || isDevelopment
-            || o.AllowUnauthenticatedDeployment,
-        "Auth:Provider=None turns authentication off entirely: anyone who can reach the app "
-        + "is whoever they say they are. That is supported outside Development only on a "
-        + "network where reaching the app is already the access control, and it has to be "
-        + "said on purpose - set Auth:AllowUnauthenticatedDeployment=true to confirm it, or "
-        + "set Auth:Provider=Oidc and configure an identity provider.")
+    .Validate(o => o.Provider != AuthOptions.ProviderNone || isDevelopment,
+        "Auth:Provider=None is only allowed in Development.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Authority),
         "Auth:Authority must be configured.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Audience),
@@ -331,9 +321,8 @@ services.AddAuthorization(options =>
 
 if (authConfig.Provider == AuthOptions.ProviderNone)
 {
-    services.AddAuthentication(UnauthenticatedAuthHandler.SchemeName)
-        .AddScheme<AuthenticationSchemeOptions, UnauthenticatedAuthHandler>(
-            UnauthenticatedAuthHandler.SchemeName, _ => { });
+    services.AddAuthentication(DevAuthHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, _ => { });
 }
 else
 {
@@ -450,35 +439,16 @@ var app = builder.Build();
 
 // ---- Startup tasks --------------------------------------------------------
 
-// Loud on purpose, and loudest where it matters least to the person reading it locally:
-// this is the one configuration with no authentication at all, and the difference between
-// "my laptop" and "the office network" is a line in a config file. Saying which one this
-// is, every time it starts, is the cheapest way for a deployment to notice it is the
-// second one by accident.
-var resolvedAuth = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
-
-if (resolvedAuth.Provider == AuthOptions.ProviderNone)
-{
-    if (!resolvedAuth.UnauthenticatedDeployment)
-        app.Logger.LogWarning(
-            "Auth:Provider=None: authentication is off. Unnamed requests are '{Username}' "
-            + "holding [{Permissions}]. Development only unless "
-            + "Auth:AllowUnauthenticatedDeployment is set.",
-            resolvedAuth.DevUser.Username,
-            string.Join(", ", resolvedAuth.EffectiveDevPermissions()));
-    // Without the flag this configuration doesn't start at all: options validation rejects
-    // it a moment from now, and saying anything here would be describing a deployment that
-    // is about to not exist - in the wrong tense, since the flag it names isn't set.
-    else if (resolvedAuth.AllowUnauthenticatedDeployment)
-        app.Logger.LogCritical(
-            "Auth:Provider=None with Auth:AllowUnauthenticatedDeployment=true in the "
-            + "{Environment} environment: THIS DEPLOYMENT HAS NO AUTHENTICATION. Anyone who "
-            + "can reach it claims any identity they type, including ones holding "
-            + "[{Permissions}]. Only run this where network access is already the access "
-            + "control.",
-            app.Environment.EnvironmentName,
-            string.Join(", ", resolvedAuth.EffectiveDevPermissions()));
-}
+// Loud on purpose. This is the one configuration where every request is authenticated as
+// a fixed identity with no token involved; the startup check above keeps it out of other
+// environments, but ASPNETCORE_ENVIRONMENT is the only thing that does, so an accidental
+// Development deployment should be obvious in the logs rather than silent.
+if (authConfig.Provider == AuthOptions.ProviderNone)
+    app.Logger.LogWarning(
+        "Auth:Provider=None: authentication is bypassed and every request is '{Username}' "
+        + "holding [{Permissions}]. Development only, never deploy this.",
+        authConfig.DevUser.Username,
+        string.Join(", ", authConfig.EffectiveDevPermissions()));
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
@@ -582,11 +552,6 @@ app.MapAbsencesEndpoints();
 app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
-
-// Only in the no-IdP mode: on an OIDC deployment these routes don't exist at all, rather
-// than existing and refusing. See IdentityEndpoints.
-if (authConfig.Provider == AuthOptions.ProviderNone)
-    app.MapIdentityEndpoints();
 app.MapRegionEndpoints();
 app.MapNotificationsEndpoints();
 

@@ -48,7 +48,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 - .NET 10 Minimal API with EF Core + SQLite
 - Public holidays from a configurable source — the [Nager.Date](https://date.nager.at/) API by default, or a JSON file, or nothing at all — synced on a background job and on demand from the admin page, see [Where holidays come from](#where-holidays-come-from)
-- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or no authentication at all, for a trusted internal network, see [Running without an identity provider](#running-without-an-identity-provider)
+- Generic OIDC (works with Auth0, Okta, Keycloak, Azure AD, etc.) for authentication, with per-permission authorization on top — or a zero-setup dev-only bypass, see below
 - Vue 3 + TypeScript + Pinia + Tailwind CSS for the frontend
 - OpenAPI with a [Scalar](https://scalar.com/) reference UI, on in development and opt-in elsewhere, see [Browsing the API](#browsing-the-api)
 - OpenTelemetry (traces, metrics, and logs over OTLP) for observability — vendor-neutral, see [Observability](#observability)
@@ -153,7 +153,7 @@ docker build -t foo-calendar:1.0.0 .
 docker run --rm -p 8080:8080 -e ASPNETCORE_ENVIRONMENT=Development foo-calendar:1.0.0
 ```
 
-Nothing persists there — no volume is mounted, and the database goes away with the container. Uncommenting `ASPNETCORE_ENVIRONMENT=Development` in `.env` does the same through compose, keeping the volume. Outside Development the API refuses to start with `Auth:Provider=None` unless you also set `Auth:AllowUnauthenticatedDeployment=true`, so it can't be deployed unauthenticated by accident — see [Running without an identity provider](#running-without-an-identity-provider) if that is what you actually want.
+Nothing persists there — no volume is mounted, and the database goes away with the container. Uncommenting `ASPNETCORE_ENVIRONMENT=Development` in `.env` does the same through compose, keeping the volume. Either way the API refuses to start with `Auth:Provider=None` outside Development, so this can't be deployed by accident.
 
 If the container restarts in a loop, read the logs first: configuration is validated at startup, so a missing `Auth__Authority` or `Auth__ClientId` shows up there as a plain `must be configured` message rather than as a broken page later.
 
@@ -392,57 +392,9 @@ Grant the values to a user in your OIDC provider's dashboard. Locally, the dev b
 
 The API's policies and the SPA's gating read the same map — served to the browser at startup — so they cannot disagree.
 
-**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, `/healthchecks`, and — only on a deployment with no identity provider — `POST`/`DELETE /api/identity`, which set and clear the claimed name and read nothing back.
+**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
 
 **Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable. Put it in `Permissions.Optional` instead if it gates a feature that is itself off by default (`AbsencesApprove` is the example): it still gets a policy and still has to be one of the recognized names, it just isn't required to be configured.
-
-### Running without an identity provider
-
-Setting up OIDC is the largest piece of work in deploying this, and for a team on a private
-network it can be the only thing standing between them and a shared calendar. So it is
-optional — deliberately, and with the trade stated plainly rather than buried.
-
-```bash
-Auth__Provider=None \
-Auth__AllowUnauthenticatedDeployment=true \
-dotnet run --project src/Api
-```
-
-Both settings are required outside Development. `Provider=None` on its own is also what a
-half-finished deployment looks like, so the second flag is how you say you meant it.
-
-**What you get.** Nobody signs in, and there is no sign-in screen. A visitor who hasn't
-said who they are is resolved as an identity that owns no profile, which puts them in front
-of the same "set up your profile" form a new hire on an OIDC deployment sees — with one
-extra field, a username. Claiming that username *is* the sign-in: type one nobody has and
-you get a new profile, type one that exists and you get that profile back, which is how
-someone who cleared their cookie returns to their own. A standing banner says the
-deployment has no sign-in, and doubles as the way to switch identity.
-
-Because claiming a name is the whole interaction, the app never publishes a list of who you
-could be — nothing anonymous reads any names back.
-
-**What you give up.** Everything. Anyone who can reach the app can claim any identity,
-including one holding every permission. There is no password, no token and nothing to
-verify. Permission settings still apply — `Auth:DevUser:GrantAllPermissions=false` runs the
-whole deployment as plain members — but they are not a security control here, since anyone
-can simply claim a different name.
-
-**When that is fine.** When reaching the app is already the access control: a private LAN,
-a VPN, a Tailscale tailnet, a machine that is not routable from the internet. In that
-setting this is roughly the security model of a whiteboard in the office, which is what a
-team calendar largely is.
-
-**When it is not.** Anything reachable from the internet, anything with contractors or
-guests on the same network, anything where "who marked me absent" needs an answer you can
-stand behind. Use OIDC. The app logs a `Critical` line naming the environment every time it
-starts in this mode, so a deployment that drifted into it is visible in the logs as well as
-on screen.
-
-> A middle path worth knowing about: put the app behind a reverse proxy that authenticates
-> for you — Authelia, oauth2-proxy, Cloudflare Access, Tailscale — and keep OIDC off. That
-> gives real authentication without running an IdP yourself. The app doesn't read a proxy's
-> identity header today; if that is the shape you want, say so.
 
 ### Who changed what
 

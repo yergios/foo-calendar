@@ -7,22 +7,14 @@ import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import type { BootstrapAuthConfig } from "@/types/config";
 import type { Permission } from "@/types/permission";
 
-// The API reports Auth:Provider=None when there is no identity provider at all: local
-// development, or a deployment that opted into running unauthenticated on a trusted
-// network (see UnauthenticatedAuthHandler on the API side). In that mode nobody signs in;
-// they say who they are and the app believes them, which is what the identity state below
-// tracks instead of a token.
-const NO_IDP_PROVIDER = "None";
+// The API reports Auth:Provider=None when SSO is bypassed entirely, which Program.cs
+// refuses outside Development. It lets the app run with zero external IdP dependency
+// when no real OIDC tenant is available (see DevAuthHandler on the API side).
+const DEV_PROVIDER = "None";
 
 let userManager: UserManager | null = null;
 let isDevMode = false;
 let devToken = "";
-
-/** True when this deployment has no identity provider, so a visitor says who they are
- * instead of signing in. What the profile form keys off to ask for a username. */
-export function usesSelfAssertedIdentity(): boolean {
-  return isDevMode;
-}
 
 const oidcUser = ref<OidcUser | null>(null);
 const devProfile = ref<Record<string, unknown> | null>(null);
@@ -38,40 +30,28 @@ const currentProfile = computed(() =>
  * the app mounts, so nothing in this module works until it has run.
  */
 export function initAuth(auth: BootstrapAuthConfig): void {
-  isDevMode = auth.provider === NO_IDP_PROVIDER;
+  isDevMode = auth.provider === DEV_PROVIDER;
 
   if (isDevMode) {
     const devUser = auth.devUser;
+    devProfile.value = {
+      given_name: devUser?.firstName,
+      family_name: devUser?.lastName,
+      email: devUser?.email,
+    };
 
-    // Only in local development, where Auth:DevUser is genuinely who the API resolves
-    // unnamed requests as, so prefilling the profile form from it saves typing. On a real
-    // unauthenticated deployment it is nobody: every visitor would otherwise open
-    // onboarding prefilled as "Dev User" with dev@example.local in the address box, and
-    // whoever left it alone would have that saved as where their notifications go.
-    devProfile.value = auth.unauthenticatedDeployment
-      ? null
-      : {
-          given_name: devUser?.firstName,
-          family_name: devUser?.lastName,
-          email: devUser?.email,
-        };
-
-    // The API never inspects this token when there is no IdP - it only needs a decodable
-    // payload so the existing token/permission plumbing below keeps working. The
-    // permissions come from the same Auth:DevUser the API is authenticating as, so the UI
-    // can't disagree with what the API will actually allow.
+    // The API's DevAuthHandler never inspects the token in dev mode - this only needs a
+    // decodable payload so the existing token/permission plumbing below keeps working.
+    // The permissions come from the same Auth:DevUser the API is authenticating as, so
+    // the UI can't disagree with what the API will actually allow.
     devToken = `dev.${btoa(
       JSON.stringify({
-        // Under the first claim name, matching what the API's handler emits.
+        // Under the first claim name, matching what DevAuthHandler emits.
         [auth.permissionsClaims[0] ?? "permissions"]: devUser?.permissions ?? [],
         exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
       }),
     )}.dev`;
 
-    // Always "authenticated", because there is nothing to authenticate against: a visitor
-    // who hasn't named themselves is resolved by the API as an identity that owns no
-    // profile, which lands them on the same "set up your profile" form a new hire sees.
-    // Claiming a name is part of filling that form in, not a gate in front of it.
     isAuthenticated.value = true;
     isAuthLoading.value = false;
     return;

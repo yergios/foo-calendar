@@ -6,11 +6,10 @@
 
 ### Added
 
-- The app can run with no identity provider at all, for a team on a network where reaching the app is already the access control. Set `Auth:Provider=None` **and** `Auth:AllowUnauthenticatedDeployment=true`. There is no sign-in screen: the profile setup form gains a username field, and claiming a username is the sign-in — a new one gets you a new profile, an existing one gets that profile back. A banner nobody can dismiss says the deployment has no sign-in. Anyone who can reach it can be anyone, so it belongs on a private LAN, a VPN or a tailnet and nowhere else. Without the second flag it refuses to start outside development.
 - `Retention:AuditEntryDays` (365), `Retention:NotificationDays` (90) and `Retention:AbsenceDays` (off) delete data that has outlived its purpose, swept daily. Absences are left alone by default — looking back over previous years is what the calendar is for. `0` keeps a table forever.
 - [`docs/data-protection.md`](https://github.com/your-org/foo-calendar/blob/main/docs/data-protection.md): every personal-data field the app stores, everywhere data leaves, and what is the deploying team's own responsibility.
 - `Team:OrgName` puts your team's name in the header.
-- Your email address is now part of the profile form, prefilled from your identity provider's email claim and editable. It used to be read from that claim once when the profile was created and could never be corrected afterwards — and on a deployment with no identity provider there was no claim, so notifications could never be delivered at all.
+- Your email address is now part of the profile form, prefilled from your identity provider's email claim and editable. It used to be read from that claim once when the profile was created and could never be corrected afterwards, so a wrong or missing address stayed wrong.
 
 ### Changed
 

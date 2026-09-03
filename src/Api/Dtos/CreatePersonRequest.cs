@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 
-using Api.Configuration;
-
 namespace Api.Dtos;
 
 // Attributes are aimed at the generated properties rather than the constructor
@@ -18,19 +16,4 @@ public sealed record CreatePersonRequest(
     bool EmailOnAbsenceReviewed = false,
     bool EmailOnNewAbsenceRequest = false,
     bool EmailOnWeeklyDigest = false
-) : IValidatableObject
-{
-    public IEnumerable<ValidationResult> Validate(ValidationContext context)
-    {
-        // Here rather than at each endpoint because both remaining ways to create a person
-        // run this record's rules: the admin create binds it from the body, and the CSV
-        // import calls Validator.TryValidateObject on it. Claiming this name would put every
-        // visitor who hasn't named themselves onto that person's row on an unauthenticated
-        // deployment. (PeopleEndpoints.CreateMe checks it separately: it builds this record
-        // in code from the identity cookie, so nothing validates it on the way through.)
-        if (Username == AuthOptions.AnonymousUsername)
-            yield return new ValidationResult(
-                $"\"{AuthOptions.AnonymousUsername}\" is reserved and cannot be a username.",
-                [nameof(Username)]);
-    }
-}
+);

@@ -7,42 +7,12 @@ public sealed class AuthOptions
     /// <summary>Value of <see cref="Provider"/> that validates real bearer tokens.</summary>
     public const string ProviderOidc = "Oidc";
 
-    /// <summary>Value of <see cref="Provider"/> that turns authentication off.</summary>
+    /// <summary>Value of <see cref="Provider"/> that turns on the dev-only bypass.</summary>
     public const string ProviderNone = "None";
 
-    /// <summary>Who a visitor is before they have said, when there is no identity provider
-    /// (see UnauthenticatedAuthHandler). Deliberately unusable as a real username - every
-    /// path that creates a person refuses it - so it can never collide with someone's
-    /// actual name and put every unnamed visitor on their calendar row.</summary>
-    public const string AnonymousUsername = "(anonymous)";
-
-    /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" skips
-    /// authentication entirely (see UnauthenticatedAuthHandler): visitors say who they are
-    /// and the app believes them. Outside Development that also needs
-    /// <see cref="AllowUnauthenticatedDeployment"/>.</summary>
+    /// <summary>"Oidc" validates bearer tokens against Authority/Audience. "None" is a
+    /// dev-only bypass (see DevAuthHandler) that skips SSO entirely.</summary>
     public string Provider { get; init; } = ProviderOidc;
-
-    /// <summary>Permits Provider=None outside Development, for a team on a network where
-    /// reaching the app is already the access control - a private LAN, a VPN, a Tailscale
-    /// tailnet - and standing up an identity provider would be the only thing standing
-    /// between them and a shared calendar.
-    ///
-    /// A second switch rather than Provider=None alone, because the two say different
-    /// things: one is "no IdP configured", which is also what a half-finished deployment
-    /// looks like, and this one is "I know what that means here". What it means is that
-    /// anyone who can reach the app is anyone they choose to be, including whoever holds
-    /// the permissions. On a network where that is not true of everything else already, it
-    /// is the wrong setting.</summary>
-    public bool AllowUnauthenticatedDeployment { get; init; }
-
-    /// <summary>True when this is a real deployment running with authentication off, and
-    /// false for local development, which is the same <see cref="Provider"/> setting but
-    /// nobody's security problem. Resolved once during configuration rather than recomputed
-    /// from IHostEnvironment at each use, for the same reason as
-    /// <see cref="EffectiveDevPermissions"/>: the auth handler, the SPA's bootstrap payload
-    /// and the startup log all branch on it, and two spellings of the predicate would let
-    /// them disagree about which deployment this is.</summary>
-    public bool UnauthenticatedDeployment { get; set; }
 
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
@@ -84,9 +54,9 @@ public sealed class AuthOptions
     public List<string> AllPermissionValues() =>
         [.. Permissions.Values.SelectMany(values => values).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>What an unauthenticated visitor actually holds. Resolved here rather than
-    /// at each use so the API's UnauthenticatedAuthHandler and the SPA's bootstrap config
-    /// can't disagree about it.</summary>
+    /// <summary>What the dev identity actually holds. Resolved here rather than at each
+    /// use so the API's DevAuthHandler and the SPA's bootstrap config can't disagree about
+    /// what the bypass is signed in as.</summary>
     public List<string> EffectiveDevPermissions() =>
         DevUser.GrantAllPermissions ? AllPermissionValues() : DevUser.Permissions;
 

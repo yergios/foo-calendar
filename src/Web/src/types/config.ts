@@ -23,7 +23,7 @@ export interface AppConfig {
   homeTimeZone: string;
 }
 
-/** Mirrors the API's BootstrapDevUser. Only sent when Auth:Provider=None. */
+/** Mirrors the API's BootstrapDevUser. Only sent when the dev auth bypass is on. */
 export interface BootstrapDevUser {
   firstName: string;
   lastName: string;
@@ -45,9 +45,6 @@ export interface BootstrapAuthConfig {
   permissions: Record<string, string[]>;
   /** Claims that carry permissions, searched in order. */
   permissionsClaims: string[];
-  /** True only for a real deployment running with authentication off - never for local
-   * development, which is also provider "None". What the standing banner keys off. */
-  unauthenticatedDeployment: boolean;
   devUser: BootstrapDevUser | null;
 }
 

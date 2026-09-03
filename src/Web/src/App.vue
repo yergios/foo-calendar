@@ -13,7 +13,7 @@ import { watchEffect } from "vue";
 import { resolveAccessToken, useAuth, useAuthStore } from "@/auth";
 import OnboardingModal from "@/components/OnboardingModal.vue";
 import { usePersonStore } from "@/stores/person";
-import type { OnboardingRequest } from "@/types/person";
+import type { UpdatePersonRequest } from "@/types/person";
 
 const authStore = useAuthStore();
 const personStore = usePersonStore();
@@ -21,7 +21,7 @@ const { isAuthenticated, isLoading, user } = useAuth();
 
 // The modal stays open on failure with the reason in it, fixable right here.
 async function completeOnboarding(
-  payload: OnboardingRequest,
+  payload: UpdatePersonRequest,
   done: (error?: string | null) => void,
 ) {
   try {

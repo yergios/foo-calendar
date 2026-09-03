@@ -32,15 +32,6 @@ public static class PeopleEndpoints
         CancellationToken ct)
     {
         var claimTypes = authOptions.Value.ClaimTypes;
-        var username = user.FindFirstValue(claimTypes.UserName);
-
-        // This record is built in code below rather than bound from the body, so the rule
-        // CreatePersonRequest carries for every other creation path never runs on it.
-        // Reaching here with the reserved name means the profile form was submitted before
-        // a username was claimed at all. Thrown, not returned: DomainExceptionHandler turns
-        // it into the ProblemDetails shape the SPA reads a message out of.
-        if (username == AuthOptions.AnonymousUsername)
-            throw new ArgumentException("Choose a username before setting up a profile.");
 
         // Null is "not supplied", so the identity provider's claim stands in; anything else
         // is what they typed, with an emptied box meaning they deliberately have no address.
@@ -49,7 +40,7 @@ public static class PeopleEndpoints
             : user.FindFirstValue(claimTypes.Email);
 
         var create = new CreatePersonRequest(
-            username,
+            user.FindFirstValue(claimTypes.UserName),
             user.FindFirstValue(claimTypes.FirstName),
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
