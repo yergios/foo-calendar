@@ -416,7 +416,7 @@ function setHover(point: GridPoint | null) {
     if (over) {
       cell.style.transform = `translate(${colX(dayIdx)}px, ${rowY(rowIdx)}px)`;
       const item = rows.value[rowIdx]!;
-      const segment = segmentAt(segmentsFor(item.person.id), dayIdx);
+      const segment = segmentAt(segmentsFor(item.person.id, item.person.homeCity), dayIdx);
       const title = segment
         ? absenceTooltip(
             item.person,
@@ -467,7 +467,7 @@ function handleClick(event: MouseEvent) {
   if (point.rowIdx < 0) return;
   const item = rows.value[point.rowIdx]!;
   if (!item.isMine) return;
-  const segment = segmentAt(segmentsFor(item.person.id), point.dayIdx);
+  const segment = segmentAt(segmentsFor(item.person.id, item.person.homeCity), point.dayIdx);
   if (segment) emit("edit-absence", segment.absences, day.iso);
   else emit("add-absence", day.iso);
 }
@@ -705,25 +705,34 @@ const NO_SEGMENTS: AbsenceSegment[] = [];
 // Segments are cached per person and computed on demand, so only the people in the
 // window ever pay for theirs, and a person keeps the same segments array - which the row
 // v-memo compares - while the absences it was built from match by identity (see
-// absencesByPerson). Nothing else feeds it: holidays don't affect painting, and a changed
-// name or region can't stale an entry. Entries for people currently filtered out or
-// scrolled away are kept; the ceiling is the whole roster, which is what's in memory
-// anyway. A year change swaps the days every entry was built against, so it drops the
-// whole cache - which also stops it pinning the previous year's absences.
+// absencesByPerson) and their home region hasn't moved. A changed name can't stale an
+// entry, but a changed region can: it decides which bank holidays paint as the person's
+// own (see absenceSegments.ts's `painted`), so it's part of what makes an entry valid.
+// Entries for people currently filtered out or scrolled away are kept; the ceiling is the
+// whole roster, which is what's in memory anyway. A year change swaps the days every entry
+// was built against, so it drops the whole cache - which also stops it pinning the
+// previous year's absences. Holidays loading or changing does the same: which days count
+// as someone's own holiday is baked into every cached entry, and there are few enough
+// people that clearing everyone's beats tracking per-entry whether their own region was
+// touched.
 interface SegmentCacheEntry {
   segments: AbsenceSegment[];
   /** undefined when the person had no absences at all - still a valid, comparable input. */
   sourceAbsences: AbsenceDto[] | undefined;
+  homeCity: string | null;
 }
 const segmentCache = new Map<number, SegmentCacheEntry>();
 watch(days, () => segmentCache.clear(), { flush: "sync" });
+watch(holidayMap, () => segmentCache.clear(), { flush: "sync" });
 
-function segmentsFor(personId: number): AbsenceSegment[] {
+function segmentsFor(personId: number, homeCity: string | null): AbsenceSegment[] {
   const source = absencesByPerson.value.get(personId);
   const entry = segmentCache.get(personId);
-  if (entry && entry.sourceAbsences === source) return entry.segments;
-  const segments = source ? segmentsForPerson(source, days.value, dayIndex.value) : NO_SEGMENTS;
-  segmentCache.set(personId, { segments, sourceAbsences: source });
+  if (entry && entry.sourceAbsences === source && entry.homeCity === homeCity) return entry.segments;
+  const segments = source
+    ? segmentsForPerson(source, days.value, dayIndex.value, homeCity, holidayMap.value)
+    : NO_SEGMENTS;
+  segmentCache.set(personId, { segments, sourceAbsences: source, homeCity });
   return segments;
 }
 
@@ -779,7 +788,7 @@ const visibleRows = computed(() => {
   const result = [];
   for (let i = start; i <= end; i++) {
     const row = all[i]!;
-    result.push({ ...row, segments: segmentsFor(row.person.id), top: rowY(i) });
+    result.push({ ...row, segments: segmentsFor(row.person.id, row.person.homeCity), top: rowY(i) });
   }
   return result.sort((a, b) => a.person.id - b.person.id);
 });

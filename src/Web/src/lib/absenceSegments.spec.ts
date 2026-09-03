@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { toIso } from "@/lib/dates";
 import type { AbsenceDto } from "@/types/absence";
+import type { BankHolidayDto } from "@/types/bankHoliday";
 
-import { dayIndexOf, segmentAt, segmentsForPerson } from "./absenceSegments";
+import { dayIndexOf, holidayAppliesToPerson, segmentAt, segmentsForPerson } from "./absenceSegments";
 
 // January 2026: the 1st is a Thursday, so the 3rd/4th, 10th/11th, ... are weekends.
 const days = Array.from({ length: 31 }, (_, i) => {
@@ -34,6 +35,28 @@ function absence(
 }
 
 const segments = (...absences: AbsenceDto[]) => segmentsForPerson(absences, days, dayIndex);
+
+let nextHolidayId = 1;
+function holiday(date: string, region: string): BankHolidayDto {
+  return {
+    id: nextHolidayId++,
+    region,
+    date,
+    name: "Test holiday",
+    source: "Manual",
+    isRecurringAnnually: false,
+  };
+}
+
+function holidaysByIso(...holidays: BankHolidayDto[]): Map<string, BankHolidayDto[]> {
+  const map = new Map<string, BankHolidayDto[]>();
+  for (const h of holidays) {
+    const entries = map.get(h.date) ?? [];
+    entries.push(h);
+    map.set(h.date, entries);
+  }
+  return map;
+}
 
 describe("segmentsForPerson", () => {
   it("returns nothing for a person without absences", () => {
@@ -118,6 +141,72 @@ describe("segmentsForPerson", () => {
 
   it("ignores absences entirely outside the year", () => {
     expect(segments(absence("2025-12-01", "2025-12-05"))).toEqual([]);
+  });
+
+  it("splits a run at a bank holiday matching the person's exact region, leaving it unpainted", () => {
+    const v = absence("2026-01-05", "2026-01-09");
+    // Jan 6 is a regional holiday for CH-ZH.
+    const holidays = holidaysByIso(holiday("2026-01-06", "CH-ZH"));
+    const result = segmentsForPerson([v], days, dayIndex, "CH-ZH", holidays);
+    expect(result.map((s) => [s.start, s.end, s.painted])).toEqual([
+      [4, 4, true], // Jan 5
+      [5, 5, false], // Jan 6, the holiday
+      [6, 8, true], // Jan 7-9
+    ]);
+  });
+
+  it("splits a run at a nationwide bank holiday covering the person's country", () => {
+    const v = absence("2026-01-05", "2026-01-09");
+    const holidays = holidaysByIso(holiday("2026-01-06", "CH"));
+    const result = segmentsForPerson([v], days, dayIndex, "CH-ZH", holidays);
+    expect(result.map((s) => [s.start, s.end, s.painted])).toEqual([
+      [4, 4, true],
+      [5, 5, false],
+      [6, 8, true],
+    ]);
+  });
+
+  it("keeps a run painted through a bank holiday for a different region entirely", () => {
+    const v = absence("2026-01-05", "2026-01-09");
+    const holidays = holidaysByIso(holiday("2026-01-06", "ES-MD"));
+    const result = segmentsForPerson([v], days, dayIndex, "CH-ZH", holidays);
+    expect(result).toEqual([{ start: 4, end: 8, absences: [v], painted: true, label: "V" }]);
+  });
+
+  it("keeps a run painted through a bank holiday for a sibling region in the same country", () => {
+    const v = absence("2026-01-05", "2026-01-09");
+    const holidays = holidaysByIso(holiday("2026-01-06", "CH-BE"));
+    const result = segmentsForPerson([v], days, dayIndex, "CH-ZH", holidays);
+    expect(result).toEqual([{ start: 4, end: 8, absences: [v], painted: true, label: "V" }]);
+  });
+
+  it("keeps a run painted through a bank holiday when the person has no region set", () => {
+    const v = absence("2026-01-05", "2026-01-09");
+    const holidays = holidaysByIso(holiday("2026-01-06", "CH-ZH"));
+    const result = segmentsForPerson([v], days, dayIndex, null, holidays);
+    expect(result).toEqual([{ start: 4, end: 8, absences: [v], painted: true, label: "V" }]);
+  });
+});
+
+describe("holidayAppliesToPerson", () => {
+  it("matches a holiday for the person's exact region", () => {
+    expect(holidayAppliesToPerson("CH-ZH", "CH-ZH")).toBe(true);
+  });
+
+  it("matches a nationwide holiday against anyone in that country", () => {
+    expect(holidayAppliesToPerson("CH", "CH-ZH")).toBe(true);
+  });
+
+  it("does not match a different country's holiday", () => {
+    expect(holidayAppliesToPerson("ES", "CH-ZH")).toBe(false);
+  });
+
+  it("does not match a sibling region's own holiday", () => {
+    expect(holidayAppliesToPerson("CH-BE", "CH-ZH")).toBe(false);
+  });
+
+  it("does not let a region-specific holiday apply to the bare country", () => {
+    expect(holidayAppliesToPerson("CH-ZH", "CH")).toBe(false);
   });
 });
 

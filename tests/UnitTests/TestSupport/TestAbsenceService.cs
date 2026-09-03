@@ -14,6 +14,7 @@ public static class TestAbsenceService
 {
     public static AbsenceService Create(AppDbContext db) => new(
         db,
+        new RecordingBankHolidayService(),
         new RecordingAuditLog(),
         new RecordingNotificationService(),
         Options.Create(new AbsenceApprovalOptions { Enabled = false }));

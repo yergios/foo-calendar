@@ -13,6 +13,7 @@ namespace Api.Services;
 
 public sealed class AbsenceService(
     AppDbContext db,
+    IBankHolidayService bankHolidays,
     IAuditLog audit,
     INotificationService notifications,
     IOptions<AbsenceApprovalOptions> approvalOptions) : IAbsenceService
@@ -48,35 +49,65 @@ public sealed class AbsenceService(
         return new(absences);
     }
 
-    public async Task<AbsenceStatsResponse> GetStatsAsync(int personId, int year, CancellationToken ct = default)
+    public async Task<AbsenceStatsResponse> GetStatsAsync(Person person, int year, CancellationToken ct = default)
     {
         var (yearStart, yearEnd) = YearRange(year);
 
-        var absences = await ApprovedOverlapping(db.Absences.Where(a => a.PersonId == personId), yearStart, yearEnd)
+        var absences = await ApprovedOverlapping(db.Absences.Where(a => a.PersonId == person.Id), yearStart, yearEnd)
             .ToListAsync(ct);
 
-        return ComputeStats(absences, year, yearStart, yearEnd);
+        var holidayDates = await HolidayDatesForAsync(person.HomeCity, yearStart, yearEnd, ct);
+
+        return ComputeStats(absences, year, yearStart, yearEnd, holidayDates);
     }
 
     public async Task<AllAbsenceStatsResponse> GetAllStatsAsync(int year, CancellationToken ct = default)
     {
         var (yearStart, yearEnd) = YearRange(year);
 
-        var personIds = await db.People.Select(p => p.Id).ToListAsync(ct);
+        var people = await db.People.Select(p => new { p.Id, p.HomeCity }).ToListAsync(ct);
         var absences = await ApprovedOverlapping(db.Absences, yearStart, yearEnd).ToListAsync(ct);
         var byPerson = absences.ToLookup(a => a.PersonId);
 
-        var stats = personIds
-            .Select(id =>
+        // One fetch covering every region anyone's home city touches, rather than one round
+        // trip per person: a team's home regions are few, however many people share them.
+        var regions = people.Select(p => p.HomeCity).Where(c => c is not null).Distinct().ToList();
+        var holidays = regions.Count > 0
+            ? (await bankHolidays.GetForRegionsAsync(regions!, yearStart, yearEnd, ct)).Holidays
+            : [];
+
+        var stats = people
+            .Select(p =>
             {
-                var personStats = ComputeStats(byPerson[id], year, yearStart, yearEnd);
+                var holidayDates = DatesApplyingTo(p.HomeCity, holidays);
+                var personStats = ComputeStats(byPerson[p.Id], year, yearStart, yearEnd, holidayDates);
                 return new PersonAbsenceStatsResponse(
-                    id, year, personStats.VacationDays, personStats.OtherDays);
+                    p.Id, year, personStats.VacationDays, personStats.OtherDays);
             })
             .ToList();
 
         return new AllAbsenceStatsResponse(stats);
     }
+
+    // GetStatsAsync's own fetch, scoped to one person: GetForRegionsAsync already expands
+    // a region to itself plus its country, so this comes back holding exactly the holidays
+    // that count as this person's own.
+    private async Task<HashSet<DateOnly>> HolidayDatesForAsync(
+        string homeCity, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        if (homeCity is null) return [];
+        var response = await bankHolidays.GetForRegionsAsync([homeCity], from, to, ct);
+        return response.Holidays.Select(h => h.Date).ToHashSet();
+    }
+
+    // GetAllStatsAsync's batch fetch covers every region in play at once, so a holiday
+    // belonging to one person's country sits alongside another's; this is what picks back
+    // out just the ones that are actually this person's own, the same rule
+    // RegionCode.BelongsTo enforces everywhere else a region has to match a person's.
+    private static HashSet<DateOnly> DatesApplyingTo(string homeCity, IEnumerable<BankHolidayDto> holidays) =>
+        homeCity is null
+            ? []
+            : holidays.Where(h => RegionCode.BelongsTo(homeCity, h.Region)).Select(h => h.Date).ToHashSet();
 
     public async Task<AbsenceDto> CreateAsync(Person person, CreateAbsenceRequest request, CancellationToken ct = default)
     {
@@ -338,7 +369,11 @@ public sealed class AbsenceService(
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
 
     private static AbsenceStatsResponse ComputeStats(
-        IEnumerable<Absence> absences, int year, DateOnly yearStart, DateOnly yearEnd)
+        IEnumerable<Absence> absences,
+        int year,
+        DateOnly yearStart,
+        DateOnly yearEnd,
+        IReadOnlySet<DateOnly> holidayDates)
     {
         var vacationDays = 0;
         var otherDays = 0;
@@ -349,7 +384,8 @@ public sealed class AbsenceService(
             // count here, whatever its type.
             if (absence.StartTime is not null) continue;
 
-            var days = CountWorkingDays(Max(absence.StartDate, yearStart), Min(absence.EndDate, yearEnd));
+            var days = CountWorkingDays(
+                Max(absence.StartDate, yearStart), Min(absence.EndDate, yearEnd), holidayDates);
             switch (absence.Type)
             {
                 case AbsenceType.Vacation: vacationDays += days; break;
@@ -360,11 +396,15 @@ public sealed class AbsenceService(
         return new AbsenceStatsResponse(year, vacationDays, otherDays);
     }
 
-    private static int CountWorkingDays(DateOnly start, DateOnly end)
+    // A day that's both a weekday and this person's own bank holiday (see DatesApplyingTo /
+    // HolidayDatesForAsync) isn't a working day either: the calendar paints it as the
+    // holiday, not the absence (see the frontend's absenceSegments.ts), and the two have to
+    // agree on which days that is.
+    private static int CountWorkingDays(DateOnly start, DateOnly end, IReadOnlySet<DateOnly> holidayDates)
     {
         var count = 0;
         for (var d = start; d <= end; d = d.AddDays(1))
-            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && !holidayDates.Contains(d))
                 count++;
         return count;
     }

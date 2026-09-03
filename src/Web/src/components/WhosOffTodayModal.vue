@@ -36,6 +36,7 @@ import { computed, onMounted, ref } from "vue";
 import { getAbsences } from "@/api/absences";
 import { getCatalogHolidays } from "@/api/bankHolidays";
 import AppModal from "@/components/AppModal.vue";
+import { holidayAppliesToPerson } from "@/lib/absenceSegments";
 import {
   addDays,
   formatDayMonth,
@@ -132,15 +133,6 @@ const WHOLE_DAY_CATEGORY: Record<AbsenceType, number> = {
   Other: 3,
 };
 
-// A nationwide holiday (no subdivision suffix) covers everyone in the country; a
-// subdivision's own holiday covers only people set to that exact subdivision, not
-// siblings under the same country. Mirrors the API's RegionCode.BelongsTo.
-function holidayAppliesToPerson(holidayRegion: string, personHomeCity: string): boolean {
-  if (holidayRegion === personHomeCity) return true;
-  const holidayIsNationwide = !holidayRegion.includes("-");
-  const personCountry = personHomeCity.split("-")[0] ?? personHomeCity;
-  return holidayIsNationwide && personCountry === holidayRegion;
-}
 
 // Every date each person is already booked off again, from the approved whole-day absences
 // in the fetched window. A second absence starting the day after the first ends is

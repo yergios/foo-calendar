@@ -123,7 +123,7 @@ public static class PeopleEndpoints
         var person = await currentPerson.GetAsync(ct);
         var targetYear = year ?? DateTime.UtcNow.Year; // This will be wrong only ~1hr/year at midnight
 
-        var result = await absences.GetStatsAsync(person.Id, targetYear, ct);
+        var result = await absences.GetStatsAsync(person, targetYear, ct);
         return Results.Ok(result);
     }
 

@@ -16,6 +16,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 {
     private readonly RecordingAuditLog audit = new();
     private readonly RecordingNotificationService notifications = new();
+    private readonly RecordingBankHolidayService bankHolidays = new();
 
     // Approvals off by default, matching every deployment until it opts in: the bulk of
     // this file exercises today's behavior. Tests for the approval workflow itself build
@@ -29,16 +30,18 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
     private AbsenceService ApprovalsEnabledSut(bool enabled) => new(
         Db,
+        bankHolidays,
         audit,
         notifications,
         Options.Create(new AbsenceApprovalOptions { Enabled = enabled }));
 
-    private Person CreatePerson(string username = "jdoe")
+    private Person CreatePerson(string username = "jdoe", string homeCity = null)
     {
         var person = new Person
         {
             Username = username,
             DisplayName = username,
+            HomeCity = homeCity,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = username,
         };
@@ -194,7 +197,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         // Mon 2026-03-02 through Sun 2026-03-08: one full calendar week, 5 working days.
         await sut.CreateAsync(person, Request("2026-03-02", "2026-03-08"));
 
-        var stats = await sut.GetStatsAsync(person.Id, 2026);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
         stats.VacationDays.ShouldBe(5);
     }
@@ -206,7 +209,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         // Wed 2025-12-31 through Fri 2026-01-02: only Jan 1 (Thu) and Jan 2 (Fri) fall in 2026.
         await sut.CreateAsync(person, Request("2025-12-31", "2026-01-02"));
 
-        var stats = await sut.GetStatsAsync(person.Id, 2026);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
         stats.VacationDays.ShouldBe(2);
     }
@@ -218,7 +221,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.CreateAsync(person, Request("2026-02-02", "2026-02-02", AbsenceType.Vacation));
         await sut.CreateAsync(person, Request("2026-02-04", "2026-02-04", AbsenceType.Other));
 
-        var stats = await sut.GetStatsAsync(person.Id, 2026);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
         stats.VacationDays.ShouldBe(1);
         stats.OtherDays.ShouldBe(1);
@@ -239,9 +242,91 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         });
         Db.SaveChanges();
 
-        var stats = await sut.GetStatsAsync(person.Id, 2026);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
         stats.VacationDays.ShouldBe(0);
+    }
+
+    private int nextHolidayId = 1;
+
+    private void SeedHoliday(string region, string date) =>
+        bankHolidays.Holidays.Add(new BankHolidayDto(
+            nextHolidayId++, region, DateOnly.Parse(date), "Test holiday", HolidaySource.Manual, false));
+
+    [Fact]
+    public async Task GetStatsAsync_ExcludesABankHolidayMatchingThePersonsExactRegion()
+    {
+        var person = CreatePerson(homeCity: "CH-ZH");
+        // Mon 2026-03-02 through Fri 2026-03-06: 5 working days, one of them a holiday.
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("CH-ZH", "2026-03-04");
+
+        var stats = await sut.GetStatsAsync(person, 2026);
+
+        stats.VacationDays.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_ExcludesANationwideBankHolidayForThePersonsCountry()
+    {
+        var person = CreatePerson(homeCity: "CH-ZH");
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("CH", "2026-03-04");
+
+        var stats = await sut.GetStatsAsync(person, 2026);
+
+        stats.VacationDays.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_StillCountsABankHolidayForADifferentRegion()
+    {
+        var person = CreatePerson(homeCity: "CH-ZH");
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("ES-MD", "2026-03-04");
+
+        var stats = await sut.GetStatsAsync(person, 2026);
+
+        stats.VacationDays.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_StillCountsABankHolidayForASiblingRegionInTheSameCountry()
+    {
+        var person = CreatePerson(homeCity: "CH-ZH");
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("CH-BE", "2026-03-04");
+
+        var stats = await sut.GetStatsAsync(person, 2026);
+
+        stats.VacationDays.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task GetStatsAsync_StillCountsABankHolidayWhenThePersonHasNoRegion()
+    {
+        var person = CreatePerson();
+        await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("CH-ZH", "2026-03-04");
+
+        var stats = await sut.GetStatsAsync(person, 2026);
+
+        stats.VacationDays.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task GetAllStatsAsync_ExcludesOnlyEachPersonsOwnBankHoliday()
+    {
+        var zurich = CreatePerson("alice", "CH-ZH");
+        var madrid = CreatePerson("bob", "ES-MD");
+        await sut.CreateAsync(zurich, Request("2026-03-02", "2026-03-06"));
+        await sut.CreateAsync(madrid, Request("2026-03-02", "2026-03-06"));
+        SeedHoliday("CH-ZH", "2026-03-04");
+
+        var stats = await sut.GetAllStatsAsync(2026);
+
+        stats.Stats.Single(s => s.PersonId == zurich.Id).VacationDays.ShouldBe(4);
+        stats.Stats.Single(s => s.PersonId == madrid.Id).VacationDays.ShouldBe(5);
     }
 
     [Fact]
@@ -743,7 +828,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.CreateAsync(
             person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00"));
 
-        var stats = await sut.GetStatsAsync(person.Id, 2026);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
         stats.OtherDays.ShouldBe(0);
     }
