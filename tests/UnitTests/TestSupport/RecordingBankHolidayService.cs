@@ -18,7 +18,7 @@ public sealed class RecordingBankHolidayService : IBankHolidayService
         IReadOnlyCollection<string> regions, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var expanded = regions
-            .SelectMany(r => new[] { r, RegionCode.CountryOf(r) })
+            .SelectMany(RegionCode.SelfAndCountry)
             .ToHashSet(StringComparer.Ordinal);
 
         var matches = Holidays

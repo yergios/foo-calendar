@@ -13,4 +13,10 @@ public static class RegionCode
     /// <summary>True for the country's own code and for any of its subdivisions.</summary>
     public static bool BelongsTo(string region, string countryCode) =>
         region == countryCode || region.StartsWith(countryCode + Separator, StringComparison.Ordinal);
+
+    /// <summary>The region keys that hold anything relevant to <paramref name="region"/>:
+    /// itself, plus its country's nationwide rows. Every place that has to expand a region
+    /// this way (matching it against stored bank holidays, mainly) calls this rather than
+    /// re-deriving the pair by hand, so the relationship stays defined in one place.</summary>
+    public static IReadOnlyList<string> SelfAndCountry(string region) => [region, CountryOf(region)];
 }

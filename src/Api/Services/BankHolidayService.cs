@@ -42,7 +42,7 @@ public sealed class BankHolidayService(
     {
         // Expand each region to itself + its country code, so "ES-MD" also pulls in nationwide "ES" rows.
         var expanded = regions
-            .SelectMany(r => new[] { r, RegionCode.CountryOf(r) })
+            .SelectMany(RegionCode.SelfAndCountry)
             .Distinct()
             .ToList();
 
