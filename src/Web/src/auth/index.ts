@@ -5,6 +5,7 @@ import { computed, ref } from "vue";
 import { appUrl } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import { clearCache } from "@/lib/browserCache";
+import { PERSON_CACHE_KEY } from "@/stores/personCacheKey";
 import type { BootstrapAuthConfig } from "@/types/config";
 import type { Permission } from "@/types/permission";
 
@@ -39,7 +40,7 @@ export async function chooseIdentity(username: string): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 
   // The previous visitor's profile, cached under a key that doesn't mention who it was.
-  clearCache("person");
+  clearCache(PERSON_CACHE_KEY);
 }
 
 /**
@@ -50,8 +51,12 @@ export async function chooseIdentity(username: string): Promise<void> {
  * shows up as someone else's calendar row.
  */
 export async function forgetIdentity(): Promise<void> {
-  await fetch(appUrl("/api/identity"), { method: "DELETE" });
-  clearCache("person");
+  // Checked, unlike a fire-and-forget delete would be: reloading regardless would bring the
+  // page back as the same person with nothing said, which reads as the button being broken.
+  const res = await fetch(appUrl("/api/identity"), { method: "DELETE" });
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+
+  clearCache(PERSON_CACHE_KEY);
   window.location.reload();
 }
 
@@ -73,11 +78,19 @@ export function initAuth(auth: BootstrapAuthConfig): void {
 
   if (isDevMode) {
     const devUser = auth.devUser;
-    devProfile.value = {
-      given_name: devUser?.firstName,
-      family_name: devUser?.lastName,
-      email: devUser?.email,
-    };
+
+    // Only in local development, where Auth:DevUser is genuinely who the API resolves
+    // unnamed requests as, so prefilling the profile form from it saves typing. On a real
+    // unauthenticated deployment it is nobody: every visitor would otherwise open
+    // onboarding prefilled as "Dev User" with dev@example.local in the address box, and
+    // whoever left it alone would have that saved as where their notifications go.
+    devProfile.value = auth.unauthenticatedDeployment
+      ? null
+      : {
+          given_name: devUser?.firstName,
+          family_name: devUser?.lastName,
+          email: devUser?.email,
+        };
 
     // The API never inspects this token when there is no IdP - it only needs a decodable
     // payload so the existing token/permission plumbing below keeps working. The

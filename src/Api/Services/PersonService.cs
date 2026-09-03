@@ -226,10 +226,16 @@ public sealed class PersonService(
         // Null is "not supplied": the admin people page sends a name and a region, and an
         // omitted address there must not delete one. An empty string is "clear it".
         var editsEmail = request.Email is not null;
+        // Compared as "no address" vs "this address", not as raw strings: the profile form
+        // sends an empty box as "", and someone who has never had an address has null, so a
+        // literal comparison would log a change on every save they ever make.
+        var emailMoved = editsEmail
+            && !(string.IsNullOrWhiteSpace(person.Email) && string.IsNullOrWhiteSpace(request.Email))
+            && !string.Equals(person.Email, request.Email, StringComparison.OrdinalIgnoreCase);
         // Logged as "set"/"changed"/"cleared" rather than with the addresses in it: the
         // audit log is readable by anyone holding AuditRead and outlives the profile, and
         // a trail of everyone's email addresses is not what it is for.
-        if (editsEmail && !string.Equals(person.Email, request.Email, StringComparison.OrdinalIgnoreCase))
+        if (emailMoved)
             changes.Add(DescribeEmailChange(person.Email, request.Email));
         if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
             changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");

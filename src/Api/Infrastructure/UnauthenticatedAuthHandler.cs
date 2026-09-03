@@ -70,22 +70,19 @@ public sealed class UnauthenticatedAuthHandler(
         }
 
         // Under the first configured claim name; the policies accept any of them, so one is
-        // enough to stand in for whatever a real provider would have emitted. Everyone who
-        // has named themselves gets the same set: with no identity provider there is nothing
-        // to check a person's permissions against, and anyone who wanted more could simply
-        // claim another name. Auth:DevUser:GrantAllPermissions still narrows it, which is a
-        // way to run the whole deployment as plain members, not a way to keep one visitor
-        // out of the admin pages.
+        // enough to stand in for whatever a real provider would have emitted. Everyone gets
+        // the same set, named or not: with no identity provider there is nothing to check a
+        // person's permissions against, and anyone who wanted more could simply claim
+        // another name. Auth:DevUser:GrantAllPermissions still narrows it, which is a way to
+        // run the whole deployment as plain members, not a way to keep one visitor out of
+        // the admin pages.
         //
-        // A visitor who hasn't named themselves holds nothing, so the interface offers them
-        // the profile form and not the admin area. That is tidiness, not a boundary: naming
-        // yourself is one form away.
-        if (named || environment.IsDevelopment())
-        {
-            var permissionClaim = claimTypes.Permissions.FirstOrDefault() ?? "permissions";
-            claims.AddRange(
-                auth.EffectiveDevPermissions().Select(p => new Claim(permissionClaim, p)));
-        }
+        // Withholding them until someone names themselves reads like tidiness and isn't:
+        // the SPA builds its own idea of what it holds from the same Auth:DevUser this
+        // resolves (see auth/index.ts), and it cannot see whether the cookie is set, so the
+        // two would disagree and offer an admin page every request behind it then refuses.
+        var permissionClaim = claimTypes.Permissions.FirstOrDefault() ?? "permissions";
+        claims.AddRange(auth.EffectiveDevPermissions().Select(p => new Claim(permissionClaim, p)));
 
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);

@@ -199,6 +199,20 @@ public sealed class PersonServiceTests : SqliteTestBase
         Db.People.Single().Email.ShouldBeNull();
     }
 
+    // The profile form sends an empty box as "", and someone who never had an address has
+    // null. Comparing those literally logged "email changed" on every save they ever made.
+    [Fact]
+    public async Task UpdateAsync_WhenThereWasNoEmailAndStillIsNone_LogsNothing()
+    {
+        var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
+        audit.Entries.Clear();
+
+        await sut.UpdateAsync(person.Id, new UpdatePersonRequest("Jane D.", "ES-MD", ""), "jdoe");
+
+        audit.Entries.ShouldBeEmpty();
+        Db.People.Single().Email.ShouldBeNull();
+    }
+
     // The log says an address moved, never what it moved to: it is readable by anyone
     // holding AuditRead and outlives the profile it describes.
     [Fact]

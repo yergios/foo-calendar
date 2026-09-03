@@ -3,13 +3,16 @@ import { ref } from "vue";
 
 import { createMe, tryGetMe } from "@/api/people";
 import { chooseIdentity } from "@/auth";
-import { clearCache, readCache, writeCache } from "@/lib/browserCache";
+import { clearCache, clearCacheGroup, readCache, writeCache } from "@/lib/browserCache";
+import { PERSON_CACHE_KEY } from "@/stores/personCacheKey";
 import type { OnboardingRequest, PersonDto } from "@/types/person";
 
-const CACHE_KEY = "person";
-
 export const usePersonStore = defineStore("person", () => {
-  const person = ref<PersonDto | null>(readCache<PersonDto>(CACHE_KEY));
+  // Evicts copies written under older schema versions, including the unversioned "person"
+  // this key replaced; the current one survives the sweep for the read below. Same shape as
+  // usePeopleStore's, and the reason both exist is in stores/config.ts.
+  clearCacheGroup("person", PERSON_CACHE_KEY);
+  const person = ref<PersonDto | null>(readCache<PersonDto>(PERSON_CACHE_KEY));
   // True once we have a cached profile carried over from a previous session. We trust a
   // cached profile outright, with no network call, because the only things that ever
   // change it are mutations made in this same browser (save, delete, onboarding), and
@@ -28,8 +31,8 @@ export const usePersonStore = defineStore("person", () => {
   function hydrate(p: PersonDto | null) {
     person.value = p;
     hydrated.value = true;
-    if (p) writeCache(CACHE_KEY, p);
-    else clearCache(CACHE_KEY);
+    if (p) writeCache(PERSON_CACHE_KEY, p);
+    else clearCache(PERSON_CACHE_KEY);
   }
 
   function setPerson(p: PersonDto | null) {

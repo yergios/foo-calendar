@@ -19,6 +19,8 @@ public sealed record ChooseIdentityRequest(string Username);
 /// self-asserted name are accepted.</summary>
 public static class IdentityEndpoints
 {
+    private const int MaxUsernameLength = 100;
+
     public static void MapIdentityEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/identity").AllowAnonymous().WithTags("Identity");
@@ -33,6 +35,12 @@ public static class IdentityEndpoints
 
         if (string.IsNullOrEmpty(username))
             return Results.BadRequest("A username is required.");
+
+        // The same cap Person.Username carries. Worth restating here because this value
+        // reaches the database without passing the request validation CreatePersonRequest
+        // gets: CreateMe builds that record in code, from this cookie.
+        if (username.Length > MaxUsernameLength)
+            return Results.BadRequest($"A username can be at most {MaxUsernameLength} characters.");
 
         // The name the handler gives a visitor who hasn't chosen one. Claiming it would put
         // them on the same row as everyone who hasn't chosen either.
