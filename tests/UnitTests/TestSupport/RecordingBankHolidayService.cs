@@ -1,5 +1,6 @@
 using Api.Dtos;
 using Api.Interfaces;
+using Api.Services;
 
 namespace UnitTests.TestSupport;
 
@@ -17,7 +18,7 @@ public sealed class RecordingBankHolidayService : IBankHolidayService
         IReadOnlyCollection<string> regions, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var expanded = regions
-            .SelectMany(r => new[] { r, CountryOf(r) })
+            .SelectMany(r => new[] { r, RegionCode.CountryOf(r) })
             .ToHashSet(StringComparer.Ordinal);
 
         var matches = Holidays
@@ -26,9 +27,6 @@ public sealed class RecordingBankHolidayService : IBankHolidayService
 
         return Task.FromResult(new BankHolidaysResponse(matches));
     }
-
-    private static string CountryOf(string region) =>
-        region.Contains('-') ? region.Split('-')[0] : region;
 
     public Task<IReadOnlyList<string>> SyncRegionsAsync(
         IReadOnlyCollection<string> regions, int year, CancellationToken ct = default) =>

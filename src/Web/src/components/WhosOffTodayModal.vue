@@ -133,7 +133,6 @@ const WHOLE_DAY_CATEGORY: Record<AbsenceType, number> = {
   Other: 3,
 };
 
-
 // Every date each person is already booked off again, from the approved whole-day absences
 // in the fetched window. A second absence starting the day after the first ends is
 // perfectly legal - the server rejects overlapping absences, not adjacent ones - so without
