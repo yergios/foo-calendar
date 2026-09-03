@@ -3,6 +3,7 @@
     type="button"
     class="inline-flex items-center gap-1 hover:text-ink transition-colors"
     :class="active ? 'text-ink' : 'text-secondary'"
+    :title="title"
     @click="$emit('toggle')"
   >
     <slot />
@@ -18,6 +19,13 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ active: boolean; descending: boolean }>();
+import { computed } from "vue";
+
+const props = defineProps<{ active: boolean; descending: boolean; label: string }>();
 defineEmits<{ toggle: [] }>();
+
+const title = computed(() => {
+  if (!props.active) return `Sort by ${props.label}`;
+  return props.descending ? `Sorted by ${props.label}, descending` : `Sorted by ${props.label}, ascending`;
+});
 </script>

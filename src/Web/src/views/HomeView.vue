@@ -36,7 +36,7 @@
           </svg>
         </div>
 
-        <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'name'" :min-width="230">
+        <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'mine'" :min-width="230">
           <template #icon>
             <svg
               class="w-5 h-5"
@@ -280,7 +280,7 @@ const prefillHolidayDate = ref<string | null>(null);
 const dayAbsences = ref<AbsenceDto[]>([]);
 const editingHoliday = ref<BankHolidayDto | null>(null);
 
-const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "name");
+const sortMode = ref<SortMode>(readCache<SortMode>("teamSortMode") ?? "mine");
 // Array now, not a single code: coerced defensively since an older cached value here
 // (from before multi-select) was a plain string, not an array.
 const cachedRegionFilter = readCache<string[]>("teamRegionFilter");

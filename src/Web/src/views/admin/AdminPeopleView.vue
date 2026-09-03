@@ -37,6 +37,7 @@
                 <SortButton
                   :active="sortBy === 'name'"
                   :descending="descending"
+                  label="Person"
                   @toggle="toggleSort('name')"
                   >Person</SortButton
                 >
@@ -45,6 +46,7 @@
                 <SortButton
                   :active="sortBy === 'username'"
                   :descending="descending"
+                  label="Username"
                   @toggle="toggleSort('username')"
                   >Username</SortButton
                 >
@@ -53,6 +55,7 @@
                 <SortButton
                   :active="sortBy === 'homeCity'"
                   :descending="descending"
+                  label="Home city"
                   @toggle="toggleSort('homeCity')"
                   >Home city</SortButton
                 >
@@ -61,6 +64,7 @@
                 <SortButton
                   :active="sortBy === 'vacation'"
                   :descending="descending"
+                  label="Vacation"
                   @toggle="toggleSort('vacation')"
                   >Vacation</SortButton
                 >
@@ -69,6 +73,7 @@
                 <SortButton
                   :active="sortBy === 'other'"
                   :descending="descending"
+                  label="Other"
                   @toggle="toggleSort('other')"
                   >Other</SortButton
                 >

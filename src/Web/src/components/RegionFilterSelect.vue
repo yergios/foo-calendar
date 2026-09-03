@@ -4,6 +4,7 @@
       :id="id"
       type="button"
       class="h-9 w-48 flex items-center justify-between gap-2 border border-border-strong rounded-8 pl-3 pr-2 text-sm bg-background hover:bg-surface/60 transition-colors"
+      title="Filter by region"
       :aria-expanded="open"
       @click="togglePanel"
     >

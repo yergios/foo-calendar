@@ -49,6 +49,7 @@
               <SortButton
                 :active="sortBy === 'occurredAt'"
                 :descending="descending"
+                label="When"
                 @toggle="toggleSort('occurredAt')"
                 >When ({{ timeZone }})</SortButton
               >
@@ -57,6 +58,7 @@
               <SortButton
                 :active="sortBy === 'actor'"
                 :descending="descending"
+                label="Who"
                 @toggle="toggleSort('actor')"
                 >Who</SortButton
               >
@@ -65,6 +67,7 @@
               <SortButton
                 :active="sortBy === 'action'"
                 :descending="descending"
+                label="Action"
                 @toggle="toggleSort('action')"
                 >Action</SortButton
               >
