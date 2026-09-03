@@ -21,7 +21,7 @@ Use the **Sort by** and **Region** controls above the grid to reorder or filter 
 - Click **+ Add absence**, or click any empty day in your own row to start a new absence prefilled with that date.
 - Click one of your own absence blocks to edit its dates, type, or note — or to delete it, right from that same screen.
 - You can only add, edit, or delete absences for yourself. Everyone else's absences are visible but read-only.
-- Your **note is yours**. The team sees that you're off and whether it's vacation, an appointment, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, not in the audit log, and never in a webhook. There is deliberately no "sick" type: why you're away is nobody's business, so if you're ill, use **Other**, and please keep health details out of the note.
+- Your **note is yours**. The team sees that you're off and whether it's vacation, an appointment, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, and not in the audit log. There is deliberately no "sick" type: why you're away is nobody's business, so if you're ill, use **Other**, and please keep health details out of the note.
 
 ### Bank holidays
 
@@ -44,6 +44,7 @@ Beyond that, an **Admin** link appears in the header if you've been granted anyt
 - **Manage people** — create, edit, and delete anyone's profile, and import a team from a CSV.
 - **Read reports** — everyone's vacation/other totals for a year, side by side.
 - **Sync bank holidays** — re-run the automatic sync for a given year, or for a single region that failed.
+- **Approve absences** — when your team has this turned on, approve or reject requests waiting for review. Each one waiting on you also shows up under "Waiting on you" in the notification bell, and badges the "Absence approvals" link, until it's resolved.
 - **Read the audit log** — who changed or deleted what, kept after the thing itself is gone.
 
 Ask whoever administers your identity provider if you need one of these.
@@ -76,7 +77,7 @@ Add it manually with **+ Add bank holiday**. If your region isn't in that list a
 Only manually-added holidays can be deleted or edited. One that came from the automatic Nager sync is locked, since editing it would just be undone the next time the sync runs.
 
 **I set a custom sort order and now it's gone.**
-Custom ordering is stored in your own browser, not on the server. Clearing your browser's site data, or switching devices, resets it back to sorting by name.
+Custom ordering is stored in your own browser, not on the server. Clearing your browser's site data, or switching devices, resets it back to the default: you first, then everyone else by name.
 
 **Do weekends or holidays count toward my stats?**
 The Vacation and Other totals on your profile only count working days within the range you picked, so a week-long vacation over a weekend doesn't inflate your total.

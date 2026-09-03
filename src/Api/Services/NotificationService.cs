@@ -28,7 +28,14 @@ public sealed class NotificationService(AppDbContext db) : INotificationService
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<NotificationsResponse> GetForPersonAsync(int personId, CancellationToken ct = default)
+    // Same cap as the notification feed itself: this is meant to be worked down to zero,
+    // not browsed, so a healthy deployment never gets near it. AbsenceService.GetPendingAsync
+    // affords a much larger one for the approvals page proper, which is where a real
+    // backlog actually gets worked, not just glanced at from the bell.
+    private const int PendingApprovalsFeedSize = 50;
+
+    public async Task<NotificationsResponse> GetForPersonAsync(
+        int personId, bool includePendingApprovals, CancellationToken ct = default)
     {
         // Ordered by Id, same reasoning as AuditLog: two rows written in the same
         // millisecond still have to come back in the order they happened.
@@ -41,7 +48,17 @@ public sealed class NotificationService(AppDbContext db) : INotificationService
         var unreadCount = await db.Notifications
             .CountAsync(n => n.PersonId == personId && n.ReadAt == null, ct);
 
-        return new([.. notifications.Select(NotificationDto.FromEntity)], unreadCount);
+        var pendingApprovals = includePendingApprovals
+            ? await db.Absences
+                .Where(a => a.Status == AbsenceStatus.Pending && a.PersonId != personId)
+                .OrderBy(a => a.CreatedAt)
+                .Take(PendingApprovalsFeedSize)
+                .Select(a => new PendingApprovalDto(
+                    a.Id, a.Person.DisplayName, a.Type, a.StartDate, a.EndDate))
+                .ToListAsync(ct)
+            : [];
+
+        return new([.. notifications.Select(NotificationDto.FromEntity)], unreadCount, pendingApprovals);
     }
 
     public async Task MarkAllReadAsync(int personId, CancellationToken ct = default)

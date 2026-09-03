@@ -26,10 +26,6 @@
         <ProfileForm
           :initial-display-name="person.displayName"
           :initial-home-city="person.homeCity"
-          :initial-email="person.email"
-          :initial-email-on-absence-reviewed="person.emailOnAbsenceReviewed"
-          :initial-email-on-new-absence-request="person.emailOnNewAbsenceRequest"
-          :initial-email-on-weekly-digest="person.emailOnWeeklyDigest"
           submit-label="Save changes"
           @submit="handleSave"
         />
@@ -88,7 +84,6 @@ import ProfileForm from "@/components/ProfileForm.vue";
 import SuccessMessage from "@/components/SuccessMessage.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
-import { useConfigStore } from "@/stores/config";
 import { usePersonStore } from "@/stores/person";
 import type { AbsenceStatsResponse, UpdatePersonRequest } from "@/types/person";
 
@@ -130,13 +125,6 @@ watch(
 );
 
 onMounted(async () => {
-  // Pre-warm: ProfileForm needs this too, but can't mount (and so can't fetch it
-  // itself) until `person` resolves below. Kicking it off here lets that network
-  // round trip overlap with the checkOnce() wait instead of starting after it.
-  useConfigStore()
-    .loadOnce()
-    .catch((error: unknown) => console.error("ERROR => Failed to preload app config:", error));
-
   try {
     await personStore.checkOnce();
   } catch (error: unknown) {

@@ -3,7 +3,7 @@
     <button
       type="button"
       class="relative w-9 h-9 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 transition-colors"
-      :title="unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'"
+      :title="badgeCount > 0 ? `Notifications (${badgeCount} unread)` : 'Notifications'"
       @click="toggle"
     >
       <svg
@@ -22,10 +22,10 @@
         <path d="M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
       <span
-        v-if="unreadCount > 0"
+        v-if="badgeCount > 0"
         class="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-pill bg-error text-white text-[10px] font-bold flex items-center justify-center"
       >
-        {{ unreadCount > 9 ? "9+" : unreadCount }}
+        {{ badgeCount > 9 ? "9+" : badgeCount }}
       </span>
     </button>
 
@@ -38,32 +38,61 @@
       </div>
 
       <p v-if="loading" class="text-sm text-secondary px-4 py-3">Loading…</p>
-      <p v-else-if="notifications.length === 0" class="text-sm text-secondary px-4 py-3">
-        Nothing yet.
-      </p>
+      <template v-else>
+        <p
+          v-if="notifications.length === 0 && pendingApprovals.length === 0"
+          class="text-sm text-secondary px-4 py-3"
+        >
+          Nothing yet.
+        </p>
 
-      <ul v-else class="divide-y divide-border">
-        <li v-for="notification in notifications" :key="notification.id" class="px-4 py-3">
-          <p class="text-sm">
-            <span class="font-semibold" :class="statusClass(notification.type)">{{
-              statusLabel(notification.type)
-            }}</span>
-            — {{ notification.absenceType }}, {{ notification.startDate }} →
-            {{ notification.endDate }}
+        <!-- Live state, not a one-off event like the notifications below: it isn't marked
+             read on open, and an item leaves this list the moment its request is resolved,
+             from wherever that happens - here or the approvals page itself. -->
+        <div v-if="pendingApprovals.length > 0" class="border-b border-border">
+          <p class="px-4 pt-3 pb-1 text-xs font-semibold text-secondary uppercase tracking-wide">
+            Waiting on you
           </p>
-          <p v-if="notification.note" class="text-xs text-secondary mt-1">
-            "{{ notification.note }}"
-          </p>
-          <p class="text-xs text-secondary mt-1">{{ relativeTime(notification.createdAt) }}</p>
-        </li>
-      </ul>
+          <ul class="divide-y divide-border">
+            <li v-for="item in pendingApprovals" :key="item.absenceId">
+              <button
+                type="button"
+                class="w-full text-left px-4 py-3 hover:bg-surface transition-colors"
+                @click="goToApprovals"
+              >
+                <p class="text-sm">
+                  <span class="font-semibold">{{ item.personName }}</span>
+                  — {{ item.type }}, {{ item.startDate }} → {{ item.endDate }}
+                </p>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <ul v-if="notifications.length > 0" class="divide-y divide-border">
+          <li v-for="notification in notifications" :key="notification.id" class="px-4 py-3">
+            <p class="text-sm">
+              <span class="font-semibold" :class="statusClass(notification.type)">{{
+                statusLabel(notification.type)
+              }}</span>
+              — {{ notification.absenceType }}, {{ notification.startDate }} →
+              {{ notification.endDate }}
+            </p>
+            <p v-if="notification.note" class="text-xs text-secondary mt-1">
+              "{{ notification.note }}"
+            </p>
+            <p class="text-xs text-secondary mt-1">{{ relativeTime(notification.createdAt) }}</p>
+          </li>
+        </ul>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import { useNotificationsStore } from "@/stores/notifications";
 import type { NotificationType } from "@/types/notification";
@@ -71,7 +100,13 @@ import type { NotificationType } from "@/types/notification";
 // The feed lives in the store (loaded from AppHeader, before this component exists);
 // this component is just the panel.
 const store = useNotificationsStore();
-const { notifications, unreadCount, loading } = storeToRefs(store);
+const { notifications, unreadCount, pendingApprovals, loading } = storeToRefs(store);
+const router = useRouter();
+
+// Pending approvals count toward the badge alongside unread reviews: both are things
+// this person hasn't acted on yet. They don't count toward markAllRead below though -
+// they're not "read", they're resolved, and only the approvals flow does that.
+const badgeCount = computed(() => unreadCount.value + pendingApprovals.value.length);
 
 const rootRef = ref<HTMLDivElement | null>(null);
 const open = ref(false);
@@ -84,8 +119,13 @@ async function toggle() {
   if (unreadCount.value === 0) return;
 
   // Read on open, not per-item: the feed is short enough that "seen the panel" is a fine
-  // stand-in for "seen each one".
+  // stand-in for "seen each one". Pending approvals are untouched by this - see badgeCount.
   await store.markAllRead();
+}
+
+function goToApprovals() {
+  open.value = false;
+  router.push("/admin/approvals");
 }
 
 function handleOutsideClick(event: MouseEvent) {

@@ -319,9 +319,9 @@ curl -X POST https://leave.acme.example/api/admin/people/import \
 ```
 
 ```csv
-username,firstName,lastName,email,homeCity
-jdoe,Jane,Doe,jane@acme.example,ES-MD
-asmith,Alan,Smith,alan@acme.example,CH-ZH
+username,firstName,lastName,homeCity
+jdoe,Jane,Doe,ES-MD
+asmith,Alan,Smith,CH-ZH
 ```
 
 **Only `username` is required**, and it has to match whatever `Auth:ClaimTypes:UserName` will carry for that person, since that is what links a sign-in to their record. Everything else is optional:
@@ -331,7 +331,6 @@ asmith,Alan,Smith,alan@acme.example,CH-ZH
 | `username` | Required. Must match the sign-in identity. |
 | `firstName`, `lastName` | Up to 100 characters each. |
 | `displayName` | Defaults to "First Last", or the username when neither is given. |
-| `email` | Up to 255 characters. |
 | `homeCity` | ISO 3166-2, e.g. `ES-MD` or just `ES`. Blank is fine. Importing someone into a region new to the team pulls its holidays in. |
 
 Header names are matched loosely — case, spaces and underscores are ignored, so `Home City`, `home_city` and `homeCity` are the same column — and column order doesn't matter. Quoted fields, embedded commas and a UTF-8 BOM are all handled, so a spreadsheet export works as-is.
@@ -441,11 +440,16 @@ Auth__Permissions__AbsencesApprove__0=leave-admin
 - A pending absence still shows on the calendar, color-rendered like any other, with a `?` marking it unreviewed. A rejected one disappears from the calendar entirely; the only way back onto it is a new request.
 - Whoever holds `AbsencesApprove` sees a "Absence approvals" section on `/admin`, listing every pending request — including its note, the one place someone other than its author is shown it, since deciding whether to approve needs the reason. Approving needs nothing further; rejecting takes an optional note explaining why.
 - Editing a still-pending request just edits it. Editing one that was already approved sends it through review again, since what was approved was those specific dates, type, and note. A rejected request can't be edited at all — file a new one.
-- The requester is told the outcome twice, independently: an [in-app notification](#getting-notified) always, and `absence.approved` / `absence.rejected` on the [webhook](#reacting-to-absences) if one is configured.
+- The requester is told the outcome from the [in-app notification bell](#getting-notified), always, the instant they next open the app.
 
 ### Getting notified
 
-Whoever a pending request belongs to finds out what happened to it from the bell icon in the header — no email or push setup required. It lists their own recent approvals and rejections (with the reviewer's note, when there is one), badges the unread count, and marks everything read once opened. `GET /api/notifications` and `POST /api/notifications/read` are what it calls; there's nothing to configure.
+Everyone finds out what they need to from the bell icon in the header — no email or push setup required, and nothing to configure.
+
+- Whoever a pending request belongs to sees what happened to it: their own recent approvals and rejections, with the reviewer's note when there is one.
+- Whoever holds `AbsencesApprove` also sees every request currently waiting on them, under "Waiting on you," for as long as it stays unresolved — not a one-time alert, so it can't go stale or get missed by opening the bell at the wrong moment. Clicking one goes straight to `/admin/approvals`. The same count badges the "Absence approvals" link in the admin sidebar.
+
+Either kind counts toward the bell's badge. Opening it marks approvals/rejections read; a pending item only leaves the list once it's actually resolved, from here or the approvals page itself. `GET /api/notifications` and `POST /api/notifications/read` are what it calls.
 
 ### Browsing the API
 
@@ -463,67 +467,6 @@ The document names a `Bearer` security scheme, so Scalar's auth panel takes an a
 Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config, Notifications — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
 
 > Under a sub-path (`ReverseProxy:PathBase`), Scalar resolves the document URL against the page's own path, so `/calendar/scalar` reads `/calendar/openapi/v1.json` without either being configured.
-
-### Reacting to absences
-
-The app can POST an event to a URL of your choosing whenever an absence changes, so it can feed whatever you already run — a Slack or Teams message, an email, a ticket, an HR export. There are deliberately no per-vendor connectors: there is one hook, and the glue on your side is usually a few lines.
-
-```bash
-Webhook__Url=https://hooks.example.internal/foo-calendar
-Webhook__Secret=a-long-random-string
-```
-
-Five events are sent: `absence.created`, `absence.updated`, `absence.deleted`, `absence.approved` and `absence.rejected`. The last two only happen once [absence approvals](#absence-approvals) are turned on. Each one carries the absence in full, so a receiver rarely needs to call back:
-
-```json
-{
-  "id": "f3428de8-3643-4eee-81d7-632ed1f1c695",
-  "event": "absence.created",
-  "occurredAt": "2026-05-01T09:00:00.000Z",
-  "actor": "jdoe",
-  "absence": {
-    "id": 7,
-    "personId": 3,
-    "personName": "Jane Doe",
-    "startDate": "2026-05-04",
-    "endDate": "2026-05-08",
-    "type": "Vacation",
-    "status": "Pending",
-    "note": null,
-    "reviewNote": null
-  }
-}
-```
-
-For a deletion, `absence` describes the absence as it was. `status` is `Pending` on `absence.created` only when approvals are turned on (`Approved` otherwise, same as before); it's what lets a receiver tell a request that needs a look from one that's already settled.
-
-`note` is free text somebody typed about their own absence, and free text is the one field whose contents nobody can predict. It is **never sent**, and there is no setting that sends it — the field is always in the payload, it simply always arrives `null`. `reviewNote`, a reviewer's reason for a rejection, is treated the same way for the same reason. Everything else here does go out, so point the hook somewhere you have thought about: a chat channel is usually a far wider audience than the people an absence was shared with.
-
-**Headers**
-
-| Header | Purpose |
-| ------------------------- | ------------------------------------------------------------------ |
-| `X-FooCalendar-Event` | The event name, for routing without parsing the body. |
-| `X-FooCalendar-Delivery` | Unique per delivery, and repeated in `id`, for deduplication. |
-| `X-FooCalendar-Signature` | `sha256=<hex>`, HMAC-SHA256 of the raw body keyed with `Webhook:Secret`. Absent when no secret is set. |
-
-Verify the signature over the **raw bytes you received**, before parsing:
-
-```python
-expected = "sha256=" + hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
-if not hmac.compare_digest(expected, request.headers["X-FooCalendar-Signature"]):
-    abort(401)
-```
-
-Without a secret, anyone who learns the URL can post convincing events at it. Set one.
-
-**Delivery is best effort, on purpose.** Events are queued in memory and delivered by a background loop, so a receiver that is slow, down or misconfigured can never slow down or fail the request that produced the event. The consequences are worth being explicit about:
-
-- A failed delivery is retried `Webhook:MaxAttempts` times (3 by default, backing off 2s then 4s) and then dropped with an error in the log.
-- A restart drops anything still queued, and a receiver that stays down long enough will have events dropped from a full queue.
-- Events are delivered in order, one at a time.
-
-So treat these as notifications, not as a ledger. Anything that must not miss a change should reconcile against `GET /api/absences` rather than counting on the hook. That endpoint returns everyone's absences, but a `note` only on the caller's own: it is the one field the calendar keeps between a person and the app.
 
 ### Observability
 

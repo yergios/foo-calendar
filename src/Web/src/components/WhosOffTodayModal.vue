@@ -185,8 +185,8 @@ function unavailableCheckFor(person: PersonDto): (iso: string) => boolean {
       holidays.value.some((h) => h.date === iso && holidayAppliesToPerson(h.region, homeCity)));
 }
 
-// Approved only, same distinction the weekly digest email draws: a still-pending request
-// hasn't actually been granted, so it isn't yet "off" in the sense this list means.
+// Approved only: a still-pending request hasn't actually been granted, so it isn't yet
+// "off" in the sense this list means.
 const entries = computed<Entry[]>(() => {
   const peopleById = new Map(people.value.map((person) => [person.id, person]));
 

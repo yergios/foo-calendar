@@ -202,18 +202,6 @@ namespace Api.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Email")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("EmailOnAbsenceReviewed")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("EmailOnNewAbsenceRequest")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("EmailOnWeeklyDigest")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("FirstName")
                         .HasColumnType("TEXT");
 

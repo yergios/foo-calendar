@@ -16,8 +16,21 @@ export interface NotificationDto {
   readAt: string | null;
 }
 
-/** Mirrors the API's NotificationsResponse. Newest first. */
+/** Mirrors the API's PendingApprovalDto. A live view over what's currently Pending, not a
+ * one-time event: it has no id of its own to key off besides the absence it's about, and
+ * no read state - it simply stops appearing once the request is resolved. */
+export interface PendingApprovalDto {
+  absenceId: number;
+  personName: string;
+  type: AbsenceType;
+  startDate: string; // yyyy-MM-dd
+  endDate: string;
+}
+
+/** Mirrors the API's NotificationsResponse. Newest first. pendingApprovals is empty for
+ * anyone without AbsencesApprove, rather than omitted. */
 export interface NotificationsResponse {
   notifications: NotificationDto[];
   unreadCount: number;
+  pendingApprovals: PendingApprovalDto[];
 }

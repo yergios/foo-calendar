@@ -20,7 +20,8 @@ public sealed class RecordingNotificationService : INotificationService
         return Task.CompletedTask;
     }
 
-    public Task<NotificationsResponse> GetForPersonAsync(int personId, CancellationToken ct = default) =>
+    public Task<NotificationsResponse> GetForPersonAsync(
+        int personId, bool includePendingApprovals, CancellationToken ct = default) =>
         throw new NotSupportedException("Use NotificationService itself to test reading a feed back.");
 
     public Task MarkAllReadAsync(int personId, CancellationToken ct = default) =>

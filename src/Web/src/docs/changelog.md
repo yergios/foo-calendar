@@ -10,6 +10,7 @@
 - [`docs/data-protection.md`](https://github.com/your-org/foo-calendar/blob/main/docs/data-protection.md): every personal-data field the app stores, everywhere data leaves, and what is the deploying team's own responsibility.
 - `Team:OrgName` puts your team's name in the header.
 - Your email address is now part of the profile form, prefilled from your identity provider's email claim and editable. It used to be read from that claim once when the profile was created and could never be corrected afterwards, so a wrong or missing address stayed wrong.
+- Whoever holds `AbsencesApprove` sees every request currently waiting on them under "Waiting on you" in the notification bell, badging both the bell and the "Absence approvals" admin link with the count. Clicking one goes straight to the approvals page. Unlike the review notifications next to it, this is a live view of what's still pending, not a one-time event, so it can't go stale and clears itself the moment a request is resolved from either place.
 
 ### Changed
 
@@ -33,3 +34,7 @@
 - A new `Appointment` absence type, and an `Other` absence may now optionally be time-based too: a single day with a start and end time instead of a whole-day date range. Any number of time-based absences can share a day; a whole-day absence still takes the day exclusively. `Team:HomeTimeZone`, an IANA timezone id (e.g. `Europe/Zurich`), is required — every time-based absence's start/end time is wall-clock time in this one zone, for every viewer, and every displayed time is labeled with it.
 - A "Who's off today" button on the home page lists everyone out today: approved personal absences plus anyone whose home region has a bank holiday, without listing a person twice for both.
 - Arrow buttons alongside the calendar grid page it horizontally by about a viewport's width; holding one down ramps into a continuous scroll instead of repeated clicking.
+- The team view now defaults to sorting you first, then everyone else by name, instead of a plain alphabetical list. Sort by Name is still there if you'd rather have that.
+- The Sort and Region/year icons, and the admin table's sort arrows and region filter, now show what they do on hover.
+- **Email is gone**, notifications and all: no more SMTP relay, per-person `EmailOn…` preferences, weekly digest, or `Person.Email` address field, on the profile form or in bulk CSV import/export. The in-app notification bell already tells the requester the outcome of their own request unconditionally, with nothing to configure, and now also tells an approver what's waiting on them (see Added, above) - the two together covered what email was for. `Email:*` configuration is gone; nothing replaces it.
+- **The webhook is gone.** It had no consumer built into the app and nothing here depended on it; if you were posting `absence.*` events somewhere, that integration needs to move to polling `GET /api/absences` instead. `Webhook:*` configuration is gone.

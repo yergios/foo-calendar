@@ -5,7 +5,7 @@
         v-for="item in navItems"
         :key="item.path"
         :to="`/admin/${item.path}`"
-        class="text-sm px-3 py-2 rounded-8 transition-colors"
+        class="text-sm px-3 py-2 rounded-8 transition-colors flex items-center justify-between gap-2"
         :class="
           isActive(item.path)
             ? 'bg-surface text-ink font-semibold'
@@ -13,6 +13,12 @@
         "
       >
         {{ item.label }}
+        <span
+          v-if="item.path === 'approvals' && pendingApprovalCount > 0"
+          class="min-w-[16px] h-4 px-1 rounded-pill bg-error text-white text-[10px] font-bold flex items-center justify-center"
+        >
+          {{ pendingApprovalCount > 9 ? "9+" : pendingApprovalCount }}
+        </span>
       </RouterLink>
     </nav>
 
@@ -26,11 +32,13 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/auth";
 import { ADMIN_SECTIONS } from "@/router/adminSections";
+import { useNotificationsStore } from "@/stores/notifications";
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -41,6 +49,11 @@ const route = useRoute();
 const navItems = computed(() =>
   ADMIN_SECTIONS.filter((section) => section.permissions.some((p) => authStore.can(p))),
 );
+
+// Shared with the header bell (see NotificationBell.vue): one store, one fetch, so this
+// badge and the bell's own pending list can never disagree about the count.
+const { pendingApprovals } = storeToRefs(useNotificationsStore());
+const pendingApprovalCount = computed(() => pendingApprovals.value.length);
 
 function isActive(path: string): boolean {
   return route.path === `/admin/${path}`;

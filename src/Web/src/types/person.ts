@@ -32,12 +32,6 @@ export interface PersonDto {
   username: string;
   displayName: string;
   homeCity: string | null;
-  // Only present on the /me responses; the colleagues list from getAllPeople() carries
-  // none of these, an address being as much someone's own as their preferences are.
-  email?: string | null;
-  emailOnAbsenceReviewed?: boolean;
-  emailOnNewAbsenceRequest?: boolean;
-  emailOnWeeklyDigest?: boolean;
 }
 
 export interface CreatePersonRequest {
@@ -51,12 +45,6 @@ export interface CreatePersonRequest {
 export interface UpdatePersonRequest {
   displayName?: string | null;
   homeCity?: string | null;
-  /** Where this person's notifications go. Prefilled from the identity provider's email
-   * claim when there is one, but stored on the person and editable either way. */
-  email?: string | null;
-  emailOnAbsenceReviewed?: boolean;
-  emailOnNewAbsenceRequest?: boolean;
-  emailOnWeeklyDigest?: boolean;
 }
 
 export interface AbsenceStatsResponse {

@@ -166,13 +166,6 @@ export const useAuthStore = defineStore("auth", () => {
     return parts.length > 0 ? parts.join(" ") : null;
   };
 
-  /** The signed-in user's address as the identity provider stated it, for prefilling the
-   * profile form. Null when there is no provider, or when it sent no email claim. */
-  const getEmail = (): string | null => {
-    const claim = currentUser.value?.email;
-    return typeof claim === "string" && claim.length > 0 ? claim : null;
-  };
-
   // Case-insensitive to match the API's own check: group identifiers are often GUIDs
   // whose casing differs between a provider's dashboard and its tokens.
   const holdsAnyOf = (accepted: string[]): boolean =>
@@ -211,7 +204,6 @@ export const useAuthStore = defineStore("auth", () => {
     setToken,
     setUser,
     getFullName,
-    getEmail,
     getCachedToken,
     reset,
   };

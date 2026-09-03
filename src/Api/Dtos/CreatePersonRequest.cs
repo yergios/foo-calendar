@@ -11,9 +11,5 @@ public sealed record CreatePersonRequest(
     [property: MaxLength(100)] string FirstName,
     [property: MaxLength(100)] string LastName,
     [property: MaxLength(100)] string DisplayName,
-    [property: RegularExpression(ValidationPatterns.RegionCode)] string HomeCity, // Format according to ISO 3166-2, e.g. "ES-MD"
-    [property: MaxLength(255)] string Email = null,
-    bool EmailOnAbsenceReviewed = false,
-    bool EmailOnNewAbsenceRequest = false,
-    bool EmailOnWeeklyDigest = false
+    [property: RegularExpression(ValidationPatterns.RegionCode)] string HomeCity // Format according to ISO 3166-2, e.g. "ES-MD"
 );

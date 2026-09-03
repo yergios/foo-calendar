@@ -9,8 +9,11 @@ public interface INotificationService
         Absence absence, NotificationType type, string note, CancellationToken ct = default);
 
     /// <summary>Newest first, capped: this is a feed of recent reviews, not a full history
-    /// someone needs to page back through.</summary>
-    Task<NotificationsResponse> GetForPersonAsync(int personId, CancellationToken ct = default);
+    /// someone needs to page back through. <paramref name="includePendingApprovals"/> is
+    /// decided by the caller against the AbsencesApprove policy, not looked up again here,
+    /// so this stays a plain data query with no authorization logic of its own.</summary>
+    Task<NotificationsResponse> GetForPersonAsync(
+        int personId, bool includePendingApprovals, CancellationToken ct = default);
 
     /// <summary>Marks every one of this person's unread notifications read. Per-notification
     /// read state would be more precise, but nobody has asked to dismiss one at a time out

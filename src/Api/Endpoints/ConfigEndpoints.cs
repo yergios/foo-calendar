@@ -12,10 +12,6 @@ namespace Api.Endpoints;
 public sealed record AppConfigResponse(
     string HomeRegion,
     bool AbsenceApprovalsEnabled,
-    // Whether the deployment can send email at all, i.e. Email:Host is configured. Same
-    // reasoning as AbsenceApprovalsEnabled: the SPA uses this to hide the opt-in checkboxes
-    // rather than showing toggles that would save fine but never actually do anything.
-    bool EmailEnabled,
     // The raw IANA id, e.g. "Europe/Zurich". Always set: Team:HomeTimeZone is required.
     // Printed verbatim next to a time-based absence's time inputs, no formatting.
     string HomeTimeZone);
@@ -28,7 +24,7 @@ public sealed record AppConfigResponse(
 /// The /401 and /500 routes sit outside the authenticated layout and have to render when
 /// signing in is the thing that failed, so their two links qualify. The header's team name
 /// qualifies because reading it asynchronously would flash the wrong name first. What
-/// shapes the signed-in app - approvals, email, regions, the timezone - does not: that is
+/// shapes the signed-in app - approvals, regions, the timezone - does not: that is
 /// AppConfigResponse above. The product's own name is in neither, being a constant.</summary>
 public sealed record BootstrapConfigResponse(
     // The deploying team's own name for the header. Empty falls back to the product's
@@ -71,12 +67,10 @@ public static class ConfigEndpoints
 
     private static IResult GetConfig(
         IOptions<TeamOptions> team,
-        IOptions<AbsenceApprovalOptions> absenceApprovals,
-        IOptions<EmailOptions> email) =>
+        IOptions<AbsenceApprovalOptions> absenceApprovals) =>
         Results.Ok(new AppConfigResponse(
             team.Value.HomeRegion,
             absenceApprovals.Value.Enabled,
-            !string.IsNullOrWhiteSpace(email.Value.Host),
             team.Value.HomeTimeZone));
 
     private static IResult GetBootstrapConfig(

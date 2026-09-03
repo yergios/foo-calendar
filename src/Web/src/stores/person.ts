@@ -7,9 +7,10 @@ import type { PersonDto, UpdatePersonRequest } from "@/types/person";
 
 // Bump the version suffix whenever PersonDto's shape changes: the key carries it, so an old
 // browser's copy simply misses and refetches instead of being trusted with fields it
-// predates. v2 added `email`, and a v1 copy without it would have rendered the profile form
-// with an empty address box and saved that emptiness back over the stored one.
-const PERSON_CACHE_KEY = "person.v2";
+// predates. v3 dropped `email` and the EmailOn* preferences along with email notifications
+// entirely; a v2 copy still carrying them is harmless since nothing reads those fields
+// anymore, but there's no reason to keep serving it either.
+const PERSON_CACHE_KEY = "person.v3";
 
 export const usePersonStore = defineStore("person", () => {
   // Evicts copies written under older schema versions, including the unversioned "person"

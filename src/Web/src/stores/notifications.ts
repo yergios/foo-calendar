@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 import { getNotifications, markNotificationsRead } from "@/api/notifications";
-import type { NotificationDto } from "@/types/notification";
+import type { NotificationDto, PendingApprovalDto } from "@/types/notification";
 
 // A store rather than state local to NotificationBell so the fetch can start from
 // AppHeader's mount, in parallel with the person check. The bell itself only renders once
@@ -12,6 +12,10 @@ import type { NotificationDto } from "@/types/notification";
 export const useNotificationsStore = defineStore("notifications", () => {
   const notifications = ref<NotificationDto[]>([]);
   const unreadCount = ref(0);
+  // Empty for anyone without AbsencesApprove - the API decides that, not this store. Also
+  // read by AdminLayout for the approvals nav badge, so this one store is the single
+  // source both places agree on.
+  const pendingApprovals = ref<PendingApprovalDto[]>([]);
   const loading = ref(false);
 
   async function load() {
@@ -20,6 +24,7 @@ export const useNotificationsStore = defineStore("notifications", () => {
       const response = await getNotifications();
       notifications.value = response.notifications;
       unreadCount.value = response.unreadCount;
+      pendingApprovals.value = response.pendingApprovals;
     } catch (error: unknown) {
       console.error("ERROR => Failed to load notifications:", error);
     } finally {
@@ -36,5 +41,20 @@ export const useNotificationsStore = defineStore("notifications", () => {
     }
   }
 
-  return { notifications, unreadCount, loading, load, markAllRead };
+  // Called by the approvals page right after it resolves one itself, so the badge and the
+  // bell's list update in the same frame as the action that caused it rather than waiting
+  // for this store's next load().
+  function removePendingApproval(absenceId: number) {
+    pendingApprovals.value = pendingApprovals.value.filter((p) => p.absenceId !== absenceId);
+  }
+
+  return {
+    notifications,
+    unreadCount,
+    pendingApprovals,
+    loading,
+    load,
+    markAllRead,
+    removePendingApproval,
+  };
 });

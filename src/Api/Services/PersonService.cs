@@ -20,18 +20,6 @@ public sealed class PersonService(
     private static string Describe(Person person) =>
         person.HomeCity is null ? person.Username : $"{person.Username}, {person.HomeCity}";
 
-    // Says that an address changed without saying to what. The audit log is readable by
-    // anyone holding AuditRead and outlives the profile it describes, so it records that a
-    // contact detail moved, not a history of everyone's contact details.
-    private static string DescribeEmailChange(string before, string after) =>
-        (before is null, after is null) switch
-        {
-            (true, false) => "email set",
-            (false, true) => "email cleared",
-            _ => "email changed",
-        };
-
-
     public async Task<PersonDto> CreateAsync(
         CreatePersonRequest request, string actorUsername, CancellationToken ct = default)
     {
@@ -43,12 +31,8 @@ public sealed class PersonService(
             Username = request.Username,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            Email = request.Email,
             DisplayName = request.DisplayName,
             HomeCity = request.HomeCity,
-            EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed,
-            EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest,
-            EmailOnWeeklyDigest = request.EmailOnWeeklyDigest,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = actorUsername,
         };
@@ -61,7 +45,7 @@ public sealed class PersonService(
         // Somewhere new to the team brings its holidays in with it.
         await teamRegions.EnsureSyncedAsync(person.HomeCity, ct);
 
-        return PersonDto.FromEntity(person, includePreferences: true);
+        return PersonDto.FromEntity(person);
     }
 
     public async Task<PeopleResponse> GetAllAsync(CancellationToken ct = default)
@@ -80,7 +64,7 @@ public sealed class PersonService(
             labels[country] = regionLabels.For(country);
         }
 
-        return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], labels);
+        return new([.. people.Select(p => PersonDto.FromEntity(p))], labels);
     }
 
     public async Task<PeoplePageResponse> GetPageAsync(
@@ -137,7 +121,7 @@ public sealed class PersonService(
         var total = await query.CountAsync(ct);
         var people = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
-        return new([.. people.Select(p => PersonDto.FromEntity(p, includePreferences: false))], total);
+        return new([.. people.Select(p => PersonDto.FromEntity(p))], total);
     }
 
     // Vacation/sick/other aren't database columns - they're a per-year, day-by-day
@@ -178,7 +162,7 @@ public sealed class PersonService(
         var pageOfPeople = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         return new(
-            [.. pageOfPeople.Select(p => PersonDto.FromEntity(p, includePreferences: false))],
+            [.. pageOfPeople.Select(p => PersonDto.FromEntity(p))],
             people.Count);
     }
 
@@ -223,24 +207,11 @@ public sealed class PersonService(
         var changes = new List<string>();
         if (person.DisplayName != request.DisplayName)
             changes.Add($"name {person.DisplayName} → {request.DisplayName}");
-        // Both sides normalized before comparing, so an emptied box and a stored null read
-        // as the same absence of an address rather than as a change made on every save.
-        // Logged as "set"/"changed"/"cleared" rather than with the addresses in it: the
-        // audit log is readable by anyone holding AuditRead and outlives the profile, and
-        // a trail of everyone's email addresses is not what it is for.
-        var storedEmail = string.IsNullOrWhiteSpace(person.Email) ? null : person.Email;
-        if (request.EditsEmail
-            && !string.Equals(storedEmail, request.ResolvedEmail, StringComparison.OrdinalIgnoreCase))
-            changes.Add(DescribeEmailChange(storedEmail, request.ResolvedEmail));
         if (!string.Equals(person.HomeCity, request.HomeCity, StringComparison.Ordinal))
             changes.Add($"region {person.HomeCity ?? "none"} → {request.HomeCity ?? "none"}");
 
         person.DisplayName = request.DisplayName;
         person.HomeCity = request.HomeCity;
-        if (request.EditsEmail) person.Email = request.ResolvedEmail;
-        person.EmailOnAbsenceReviewed = request.EmailOnAbsenceReviewed;
-        person.EmailOnNewAbsenceRequest = request.EmailOnNewAbsenceRequest;
-        person.EmailOnWeeklyDigest = request.EmailOnWeeklyDigest;
         person.UpdatedAt = DateTime.UtcNow;
         person.UpdatedBy = actorUsername;
         await db.SaveChangesAsync(ct);
@@ -257,7 +228,7 @@ public sealed class PersonService(
             await teamRegions.PruneIfUnusedAsync(vacated, ct);
         }
 
-        return PersonDto.FromEntity(person, includePreferences: true);
+        return PersonDto.FromEntity(person);
     }
 
     // Column headers, normalized to letters and digits only and upper-cased, so
@@ -266,7 +237,6 @@ public sealed class PersonService(
     private const string FirstNameColumn = "FIRSTNAME";
     private const string LastNameColumn = "LASTNAME";
     private const string DisplayNameColumn = "DISPLAYNAME";
-    private const string EmailColumn = "EMAIL";
     private const string HomeCityColumn = "HOMECITY";
 
     private static string NormalizeColumn(string header) =>
@@ -334,8 +304,7 @@ public sealed class PersonService(
                 NullIfEmpty(firstName),
                 NullIfEmpty(lastName),
                 displayName,
-                NullIfEmpty(Field(row, columns, HomeCityColumn)),
-                NullIfEmpty(Field(row, columns, EmailColumn)));
+                NullIfEmpty(Field(row, columns, HomeCityColumn)));
 
             // The same annotations the API validates a single POST against, so an import
             // can't sneak in anything the endpoint would have rejected.
@@ -352,7 +321,6 @@ public sealed class PersonService(
                 Username = request.Username,
                 FirstName = request.FirstName,
                 LastName = request.LastName,
-                Email = request.Email,
                 DisplayName = request.DisplayName,
                 HomeCity = request.HomeCity,
                 CreatedAt = DateTime.UtcNow,

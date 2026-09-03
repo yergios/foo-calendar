@@ -84,12 +84,14 @@ import { storeToRefs } from "pinia";
 import { onMounted, ref } from "vue";
 
 import { approveAbsence, getPendingAbsences, rejectAbsence } from "@/api/admin";
+import { useNotificationsStore } from "@/stores/notifications";
 import { usePeopleStore } from "@/stores/people";
 import type { AbsenceDto } from "@/types/absence";
 
 // Only for personLabel() below - the people list itself lives on the People page.
 const peopleStore = usePeopleStore();
 const { people } = storeToRefs(peopleStore);
+const notificationsStore = useNotificationsStore();
 
 const pendingAbsences = ref<AbsenceDto[]>([]);
 const pendingLoading = ref(false);
@@ -137,6 +139,9 @@ async function review(
   try {
     await action(absence.id);
     pendingAbsences.value = pendingAbsences.value.filter((a) => a.id !== absence.id);
+    // Keeps the header bell and the approvals nav badge in step with this action
+    // immediately, rather than waiting for either to next reload on its own.
+    notificationsStore.removePendingApproval(absence.id);
     onSuccess?.();
   } catch (error: unknown) {
     console.error("ERROR => Failed to review absence:", error);

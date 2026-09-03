@@ -15,9 +15,6 @@ export interface AppConfig {
   /** Whether an absence needs approval before it counts. Off by default: everything is
    * approved the instant it's created, same as always. */
   absenceApprovalsEnabled: boolean;
-  /** Whether the deployment can send email at all. Off by default: no SMTP host is
-   * configured until an admin sets one. */
-  emailEnabled: boolean;
   /** The raw IANA timezone id (e.g. "Europe/Zurich"). Always set: Team:HomeTimeZone is
    * required. Display verbatim next to a time-based absence's time inputs, no formatting. */
   homeTimeZone: string;

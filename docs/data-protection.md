@@ -14,7 +14,7 @@ what this app aims at, and this document is the part you need to do the rest.
 **Who is who.** If you self-host this, you are the **controller** for the data in it. The
 project's author distributes software and never receives your data — not a processor, not
 a sub-processor, nothing to sign. Your processors are the services *you* point it at: your
-SMTP provider, your webhook receiver, your hosting.
+identity provider, your hosting.
 
 ---
 
@@ -26,10 +26,8 @@ SMTP provider, your webhook receiver, your hosting.
 |---|---|
 | `Username` | Identity. Comes from your identity provider's configured username claim. |
 | `FirstName`, `LastName`, `DisplayName` | Shown on the calendar row and anywhere a person is named. |
-| `Email` | Notification delivery, and nothing else. Optional — a person with no address simply gets no email. Prefilled from the identity provider's email claim where there is one, and editable on the profile page, so a wrong or missing address can be corrected. |
 | `HomeCity` | An ISO 3166-2 region code, e.g. `CH-ZH`. Decides which public holidays apply to them. Not an address. |
 | `CreatedAt`, `UpdatedAt`, `CreatedBy`, `UpdatedBy` | Who set this record up and when. |
-| `EmailOn…` (three flags) | Per-person email preferences. **Off by default**; nobody is subscribed to anything without asking. |
 
 ### Absences (`Absence`)
 
@@ -47,8 +45,8 @@ The one place that guarantee can leak is the free-text **note**. It is the only 
 whose contents nobody can predict, and a person can type anything into it. Two things
 follow:
 
-- Notes never leave the app. They are excluded from webhooks unconditionally, with no
-  setting to change that, and the audit log never records them.
+- Notes never leave the app. Nothing transmits them anywhere, and the audit log never
+  records them.
 - Tell your team not to put health details, diagnoses, or anything similar in a note. That
   is the one instruction this app's design depends on and cannot enforce.
 
@@ -75,14 +73,17 @@ Absence notes are never written to the audit log.
 One per reviewed absence request: the person, the type, the dates, and the reviewer's note
 on a rejection. Deleted after `Retention:NotificationDays` (default 90).
 
+Whoever holds `AbsencesApprove` also sees pending requests waiting on them in the same
+bell. That is not a stored record of its own — nothing new is written for it — it is a live
+read over `Absence` rows already covered above, shown only to people who could already see
+the same thing on the approvals page.
+
 ---
 
 ## Where data leaves the system
 
 | Destination | What goes | Notes |
 |---|---|---|
-| **Your SMTP server** | Recipient name and address; who is off, and when | Only if `Email:Host` is configured. Only to people who opted in. Your SMTP provider is your processor. |
-| **Your webhook URL** | Event type, actor, person id and name, dates, absence type and status, times | Only if `Webhook:Url` is set. **Never notes.** Whatever receives this — Slack, Teams, a script, Zapier — is your processor, and usually a far wider audience than the people an absence was shared with. Point it somewhere you have thought about. |
 | **Nager.Date** (`https://date.nager.at`) | **No personal data.** Country and region codes only, to fetch public holidays. | Switch it off with `Holidays:Source=None`, or use `File` for an air-gapped network. |
 | **Your identity provider** | Standard OIDC sign-in traffic | Not applicable when running without one. |
 
@@ -116,8 +117,8 @@ guarantee.
 - **Access / portability (Art. 15, 20).** A person's own data is on their profile page and
   their calendar row. Admins can export the people list as CSV. For a complete extract,
   query the SQLite database directly — it is one file.
-- **Rectification (Art. 16).** Everyone can edit their own profile, including their email
-  address; admins can edit anyone's.
+- **Rectification (Art. 16).** Everyone can edit their own profile; admins can edit
+  anyone's.
 - **Erasure (Art. 17).** Deleting a person from the admin people page **cascades to their
   absences and notifications** — this is declared explicitly in `AppDbContext`, not left to
   a framework default. Their audit entries survive, per the section above. If you have
@@ -152,7 +153,6 @@ Nothing in this repository does any of this for you:
 2. Write your **privacy notice** and give it to your team. This document is the raw
    material; it is not that notice.
 3. Keep your **record of processing** (Art. 30), if you need one.
-4. Sign **processor agreements** (Art. 28) with your SMTP provider, your host, and whoever
-   receives your webhooks.
+4. Sign a **processor agreement** (Art. 28) with your host.
 5. Set the **retention periods** above to something you can justify.
 6. Tell your team **not to put health details in absence notes**.

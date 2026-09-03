@@ -33,22 +33,12 @@ public static class PeopleEndpoints
     {
         var claimTypes = authOptions.Value.ClaimTypes;
 
-        // Null is "not supplied", so the identity provider's claim stands in; anything else
-        // is what they typed, with an emptied box meaning they deliberately have no address.
-        var email = request.EditsEmail
-            ? request.ResolvedEmail
-            : user.FindFirstValue(claimTypes.Email);
-
         var create = new CreatePersonRequest(
             user.FindFirstValue(claimTypes.UserName),
             user.FindFirstValue(claimTypes.FirstName),
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
-            request.HomeCity,
-            email,
-            request.EmailOnAbsenceReviewed,
-            request.EmailOnNewAbsenceRequest,
-            request.EmailOnWeeklyDigest);
+            request.HomeCity);
 
         var created = await people.CreateAsync(create, create.Username, ct);
         return Results.Created("/api/people/me", created);
