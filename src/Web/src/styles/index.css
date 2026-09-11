@@ -39,9 +39,13 @@
   --color-green: light-dark(#047857, #34d399);
   --color-today: var(--color-primary-text);
 
-  /* Shadows */
-  --shadow-card: 0 1px 3px var(--brand-shadow), 0 1px 2px var(--brand-shadow-soft);
-  --shadow-card-hover: 0 4px 12px var(--brand-shadow), 0 2px 4px var(--brand-shadow-soft);
+  /* Shadows. Two of them, and which one to use is decided by how far off the page the
+     thing sits, not by what state it's in:
+       raised  - sits on the page: the calendar grid, and a filled button lifting on hover.
+       overlay - floats above the page: dropdowns, popovers, the modal dialog.
+     Nothing else carries a shadow; panels and cards separate themselves with a border. */
+  --shadow-raised: 0 1px 3px var(--brand-shadow), 0 1px 2px var(--brand-shadow-soft);
+  --shadow-overlay: 0 4px 12px var(--brand-shadow), 0 2px 4px var(--brand-shadow-soft);
 
   /* The single speed/easing knob for every bare `transition`/`transition-colors`/
      `transition-opacity`/`transition-all` utility in the app (Tailwind applies these

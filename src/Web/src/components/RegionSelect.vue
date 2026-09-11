@@ -40,7 +40,7 @@
         ref="list"
         role="listbox"
         :style="panel"
-        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-card-hover py-1"
+        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-overlay py-1"
       >
         <li
           v-for="(choice, i) in matches"

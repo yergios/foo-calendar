@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-5">
     <div class="flex flex-col gap-1.5">
       <label for="displayName" class="text-xs font-semibold text-secondary"
-        >Display name<span class="text-error ml-0.5" title="Required">*</span></label
+        >Display name<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
       >
       <input
         id="displayName"
@@ -16,17 +16,21 @@
 
     <RegionPicker v-model="homeCity" />
 
-    <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2">{{ error }}</p>
+    <AppAlert v-if="error">{{ error }}</AppAlert>
 
-    <button
-      type="button"
-      class="bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-card active:scale-98 disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
-      :title="canSubmit ? undefined : 'Set a display name first.'"
-      :disabled="!canSubmit || submitting"
-      @click="submit"
-    >
-      {{ submitting ? "Saving…" : submitLabel }}
-    </button>
+    <!-- The tooltip sits on a wrapper, not on the button: a disabled button fires no pointer
+         events, so an explanation attached to it is one the user can never read - which is
+         the one case where it matters most. -->
+    <span class="flex flex-col" :data-tooltip="canSubmit ? undefined : 'Set a display name first.'">
+      <button
+        type="button"
+        class="bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-raised active:scale-98 disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+        :disabled="!canSubmit || submitting"
+        @click="submit"
+      >
+        {{ submitting ? "Saving…" : submitLabel }}
+      </button>
+    </span>
   </div>
 </template>
 
@@ -34,6 +38,7 @@
 import { computed, ref } from "vue";
 
 import { useAuthStore } from "@/auth";
+import AppAlert from "@/components/AppAlert.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
 import type { UpdatePersonRequest } from "@/types/person";
 

@@ -3,7 +3,7 @@
     <button
       type="button"
       class="relative w-9 h-9 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 transition-colors"
-      :title="badgeCount > 0 ? `Notifications (${badgeCount} unread)` : 'Notifications'"
+      :data-tooltip="badgeCount > 0 ? `Notifications (${badgeCount} unread)` : 'Notifications'"
       @click="toggle"
     >
       <svg
@@ -31,7 +31,7 @@
 
     <div
       v-if="open"
-      class="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-background border border-border rounded-12 shadow-card z-40"
+      class="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-background border border-border rounded-8 shadow-overlay z-40"
     >
       <div class="px-4 py-3 border-b border-border">
         <h5>Notifications</h5>

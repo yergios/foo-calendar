@@ -1,5 +1,6 @@
 <template>
   <RouterView />
+  <AppTooltip />
   <OnboardingModal
     v-if="personStore.showOnboarding"
     @submit="completeOnboarding"
@@ -11,6 +12,7 @@
 import { watchEffect } from "vue";
 
 import { resolveAccessToken, useAuth, useAuthStore } from "@/auth";
+import AppTooltip from "@/components/AppTooltip.vue";
 import OnboardingModal from "@/components/OnboardingModal.vue";
 import { usePersonStore } from "@/stores/person";
 import type { UpdatePersonRequest } from "@/types/person";

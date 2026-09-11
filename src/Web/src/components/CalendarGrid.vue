@@ -20,7 +20,7 @@
          CSS below as a custom property, for the stripe and row-line gradients. -->
     <div
       ref="containerRef"
-      class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-card"
+      class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-raised"
       :class="reorderable ? undefined : 'reorder-off'"
       :style="{ '--row-h': `${ROW_H}px`, '--name-w': `${nameW}px` }"
       role="grid"
@@ -49,7 +49,7 @@
                  reorder grip on the name cells below. -->
             <div
               class="calendar-resizer absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize"
-              title="Drag to resize"
+              data-tooltip="Drag to resize"
               @pointerdown="startResize"
             />
           </div>
@@ -83,7 +83,7 @@
               width: `${COL_W}px`,
               height: `${DAY_H}px`,
             }"
-            :title="dayRenderInfo[i]!.headerTitle"
+            :data-tooltip="dayRenderInfo[i]!.headerTitle"
             role="columnheader"
           >
             <div class="font-semibold" :class="day.isToday ? 'text-today' : 'text-ink'">
@@ -123,7 +123,7 @@
             class="absolute top-0 bottom-0"
             :class="dayRenderInfo[i]!.columnClass"
             :style="{ left: dayAreaCss(dayX(i)), width: `${COL_W}px` }"
-            :title="dayRenderInfo[i]!.holidayTitle || undefined"
+            :data-tooltip="dayRenderInfo[i]!.holidayTitle || undefined"
           />
           <div class="calendar-lines absolute inset-0 pointer-events-none" />
 
@@ -162,7 +162,7 @@
                    advertising something the drop then silently ignores. -->
               <span
                 class="drag-grip text-secondary/40 select-none text-xs leading-none shrink-0"
-                title="Drag to reorder"
+                data-tooltip="Drag to reorder"
                 >⠿</span
               >
               <span
@@ -173,7 +173,7 @@
               <span
                 v-if="item.regionCode"
                 class="ml-auto text-xs text-secondary shrink-0"
-                :title="item.regionLabel ?? undefined"
+                :data-tooltip="item.regionLabel ?? undefined"
                 >{{ item.regionCode }}</span
               >
             </div>
@@ -298,6 +298,7 @@ import {
   rowY,
 } from "@/lib/gridGeometry";
 import { sameList } from "@/lib/reconcile";
+import { hideTooltip, showTooltip } from "@/lib/tooltip";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
 import { usePersonStore } from "@/stores/person";
@@ -467,7 +468,6 @@ function endResize() {
 // a render for something the DOM is already showing.
 let hoverDay = -1;
 let hoverRow = -1;
-let hoverTitle = "";
 let hoverPointer = false;
 // The last pointer position, replayed after a scroll so the highlight follows the content
 // moving under a still cursor.
@@ -505,15 +505,18 @@ function setHover(point: GridPoint | null) {
             configStore.config?.homeTimeZone,
           )
         : emptyCellTitle(item.isMine, dayRenderInfo.value[dayIdx]!.holidayTitle);
-      if (title !== hoverTitle) {
-        hoverTitle = title;
-        if (title) cell.title = title;
-        else cell.removeAttribute("title");
-      }
+      // Driven directly rather than through a data-tooltip attribute: this is one overlay
+      // element that moves from cell to cell under a still cursor, so it never re-enters
+      // anything and no delegated pointerover would ever fire for the new text. Called on
+      // every change, not only when the words differ - the same text one column over still
+      // has to move with the cell.
+      showTooltip(cell, title);
       if (item.isMine !== hoverPointer) {
         hoverPointer = item.isMine;
         cell.classList.toggle("cursor-pointer", item.isMine);
       }
+    } else {
+      hideTooltip();
     }
     hoverDay = dayIdx;
     hoverRow = rowIdx;

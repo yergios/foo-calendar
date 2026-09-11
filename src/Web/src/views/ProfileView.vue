@@ -33,12 +33,12 @@
           type="button"
           class="mt-5 w-full text-error border border-error rounded-8 px-3 py-2.5 hover:bg-error/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="deleting"
-          @click="handleDelete"
+          @click="confirmingDelete = true"
         >
           {{ deleting ? "Deleting…" : "Delete profile" }}
         </button>
-        <SuccessMessage v-if="saved" class="text-sm mt-2">Profile saved.</SuccessMessage>
-        <p v-if="deleteError" class="text-sm text-error mt-2">{{ deleteError }}</p>
+        <AppAlert v-if="saved" variant="success" class="text-sm mt-2">Profile saved.</AppAlert>
+        <AppAlert v-if="deleteError" class="mt-2">{{ deleteError }}</AppAlert>
       </div>
       <div>
         <YearPicker v-model="statsYear" class="justify-center">
@@ -71,6 +71,18 @@
         Set up profile
       </button>
     </div>
+
+    <ConfirmDialog
+      v-if="confirmingDelete"
+      title="Delete profile"
+      message="Delete your profile? This cannot be undone."
+      confirm-label="Delete"
+      busy-label="Deleting…"
+      destructive
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="confirmingDelete = false"
+    />
   </div>
 </template>
 
@@ -79,9 +91,10 @@ import { storeToRefs } from "pinia";
 import { onMounted, ref, watch } from "vue";
 
 import { deleteMe, getMyStats, updateMe } from "@/api/people";
+import AppAlert from "@/components/AppAlert.vue";
 import AppSkeleton from "@/components/AppSkeleton.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import ProfileForm from "@/components/ProfileForm.vue";
-import SuccessMessage from "@/components/SuccessMessage.vue";
 import YearPicker from "@/components/YearPicker.vue";
 import { useStaleGuard } from "@/composables/useStaleGuard";
 import { usePersonStore } from "@/stores/person";
@@ -153,9 +166,11 @@ async function handleSave(payload: UpdatePersonRequest, done: (error?: string | 
   }
 }
 
-async function handleDelete() {
-  if (!confirm("Delete your profile? This cannot be undone.")) return;
+// Two steps now that the confirmation is a dialog rather than a blocking confirm().
+const confirmingDelete = ref(false);
 
+async function confirmDelete() {
+  confirmingDelete.value = false;
   deleteError.value = null;
   deleting.value = true;
   try {

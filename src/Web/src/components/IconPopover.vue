@@ -9,7 +9,7 @@
           ? 'border-border-strong bg-surface text-ink'
           : 'border-transparent text-secondary hover:text-ink hover:bg-surface/60'
       "
-      :title="title"
+      :data-tooltip="title"
       :aria-expanded="open"
       @click="togglePanel"
     >
@@ -26,7 +26,7 @@
         v-if="open"
         ref="panel"
         :style="panelStyle"
-        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-card-hover py-1"
+        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-overlay py-1"
       >
         <slot />
       </div>

@@ -94,7 +94,7 @@
       <div v-if="total > AUDIT_PAGE_SIZE" class="flex items-center justify-end gap-3 mt-3">
         <button
           type="button"
-          class="text-sm text-secondary hover:text-ink transition-colors disabled:opacity-40 disabled:hover:text-secondary"
+          class="text-sm border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="page === 1 || auditLoading"
           @click="page--"
         >
@@ -103,7 +103,7 @@
         <span class="text-sm text-secondary">Page {{ page }} of {{ totalPages }}</span>
         <button
           type="button"
-          class="text-sm text-secondary hover:text-ink transition-colors disabled:opacity-40 disabled:hover:text-secondary"
+          class="text-sm border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="page === totalPages || auditLoading"
           @click="page++"
         >

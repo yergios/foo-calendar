@@ -4,7 +4,7 @@
       :id="id"
       type="button"
       class="h-9 w-48 flex items-center justify-between gap-2 border border-border-strong rounded-8 pl-3 pr-2 text-sm bg-background hover:bg-surface/60 transition-colors"
-      title="Filter by region"
+      data-tooltip="Filter by region"
       :aria-expanded="open"
       @click="togglePanel"
     >
@@ -29,7 +29,7 @@
         v-if="open"
         ref="panel"
         :style="panelStyle"
-        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-card-hover py-1"
+        class="fixed z-[60] overflow-y-auto bg-background border border-border-strong rounded-8 shadow-overlay py-1"
       >
         <RegionCheckboxList
           :model-value="modelValue"

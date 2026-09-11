@@ -104,7 +104,7 @@
                   type="button"
                   class="text-xs font-semibold text-error hover:opacity-70 transition-opacity ml-3"
                   :disabled="deletingId === person.id"
-                  @click="handleDelete(person)"
+                  @click="pendingDelete = person"
                 >
                   {{ deletingId === person.id ? "Deleting…" : "Delete" }}
                 </button>
@@ -121,7 +121,7 @@
         <div v-if="total > PEOPLE_PAGE_SIZE" class="flex items-center justify-end gap-3 mt-3">
           <button
             type="button"
-            class="text-sm text-secondary hover:text-ink transition-colors disabled:opacity-40 disabled:hover:text-secondary"
+            class="text-sm border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
             :disabled="page === 1 || pageLoading"
             @click="page--"
           >
@@ -130,7 +130,7 @@
           <span class="text-sm text-secondary">Page {{ page }} of {{ totalPages }}</span>
           <button
             type="button"
-            class="text-sm text-secondary hover:text-ink transition-colors disabled:opacity-40 disabled:hover:text-secondary"
+            class="text-sm border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
             :disabled="page === totalPages || pageLoading"
             @click="page++"
           >
@@ -144,7 +144,7 @@
         <div class="grid grid-cols-1 gap-3 mt-3">
           <div v-if="!editingId" class="flex flex-col gap-1.5">
             <label class="text-xs font-semibold text-secondary"
-              >Username<span class="text-error ml-0.5" title="Required">*</span></label
+              >Username<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
             >
             <input
               v-model="form.username"
@@ -176,7 +176,7 @@
           </div>
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-semibold text-secondary"
-              >Display name<span class="text-error ml-0.5" title="Required">*</span></label
+              >Display name<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
             >
             <input
               v-model="form.displayName"
@@ -191,14 +191,14 @@
           <RegionPicker :key="editingId ?? 'new'" v-model="form.homeCity" id-prefix="admin" />
         </div>
 
-        <p v-if="formError" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mt-3">
+        <AppAlert v-if="formError" class="mt-3">
           {{ formError }}
-        </p>
+        </AppAlert>
 
         <div class="flex gap-3 mt-4">
           <button
             type="button"
-            class="bg-primary text-on-primary border border-transparent rounded-8 px-4 py-2 text-sm transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+            class="bg-primary text-on-primary border border-transparent rounded-8 px-4 py-2 text-sm transition-all hover:bg-primary-hover hover:shadow-raised disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
             :disabled="!canSubmitForm || submittingForm"
             @click="submitForm"
           >
@@ -207,7 +207,7 @@
           <button
             v-if="editingId"
             type="button"
-            class="text-sm text-secondary hover:text-ink transition-colors"
+            class="text-sm border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors"
             @click="cancelEdit"
           >
             Cancel
@@ -215,6 +215,18 @@
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="pendingDelete"
+      title="Delete person"
+      :message="`Delete ${pendingDelete.displayName ?? pendingDelete.username}? This cannot be undone.`"
+      confirm-label="Delete"
+      busy-label="Deleting…"
+      destructive
+      :busy="deletingId === pendingDelete.id"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
   </section>
 </template>
 
@@ -225,6 +237,8 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { createPerson, deletePerson, getAllPeopleStats, updatePerson } from "@/api/admin";
 import { getPeoplePage } from "@/api/people";
 import { useAuthStore } from "@/auth";
+import AppAlert from "@/components/AppAlert.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import RegionFilterSelect from "@/components/RegionFilterSelect.vue";
 import RegionPicker from "@/components/RegionPicker.vue";
 import SortButton from "@/components/SortButton.vue";
@@ -461,8 +475,13 @@ async function submitForm() {
   }
 }
 
-async function handleDelete(person: PersonDto) {
-  if (!confirm(`Delete ${person.displayName ?? person.username}?`)) return;
+// Two steps now that the confirmation is a dialog rather than a blocking confirm(): the
+// person to delete is parked here, which is also what renders the dialog.
+const pendingDelete = ref<PersonDto | null>(null);
+
+async function confirmDelete() {
+  const person = pendingDelete.value;
+  if (!person) return;
 
   deletingId.value = person.id;
   try {
@@ -473,6 +492,7 @@ async function handleDelete(person: PersonDto) {
     console.error("ERROR => Failed to delete person:", error);
   } finally {
     deletingId.value = null;
+    pendingDelete.value = null;
   }
 }
 </script>

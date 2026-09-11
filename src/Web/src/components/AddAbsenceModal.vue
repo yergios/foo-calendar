@@ -24,7 +24,7 @@
         <button
           type="button"
           class="text-error shrink-0 px-1.5 text-lg leading-none hover:opacity-70 disabled:opacity-40"
-          title="Delete"
+          data-tooltip="Delete"
           :disabled="deletingId !== null"
           @click.stop="deleteFromList(a)"
         >
@@ -40,15 +40,15 @@
         + Add another for this day
       </button>
 
-      <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mt-1">
+      <AppAlert v-if="error" class="mt-1">
         {{ error }}
-      </p>
+      </AppAlert>
     </div>
 
     <div v-else class="flex flex-col gap-4">
       <div class="flex flex-col gap-1.5">
         <label for="absenceType" class="text-xs font-semibold text-secondary"
-          >Type<span class="text-error ml-0.5" title="Required">*</span></label
+          >Type<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
         >
         <select
           id="absenceType"
@@ -62,14 +62,14 @@
       </div>
 
       <label v-if="type === 'Other'" class="flex items-center gap-2 text-sm">
-        <input v-model="otherIsTimeBased" type="checkbox" class="rounded" />
+        <input v-model="otherIsTimeBased" type="checkbox" class="rounded-4" />
         Specific time instead of full days
       </label>
 
       <template v-if="!showTimeFields">
         <div class="flex flex-col gap-1.5">
           <label for="absenceStart" class="text-xs font-semibold text-secondary"
-            >Start date<span class="text-error ml-0.5" title="Required">*</span></label
+            >Start date<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
           >
           <input
             id="absenceStart"
@@ -81,7 +81,7 @@
 
         <div class="flex flex-col gap-1.5">
           <label for="absenceEnd" class="text-xs font-semibold text-secondary"
-            >End date<span class="text-error ml-0.5" title="Required">*</span></label
+            >End date<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
           >
           <input
             id="absenceEnd"
@@ -95,7 +95,7 @@
       <template v-else>
         <div class="flex flex-col gap-1.5">
           <label for="apptDate" class="text-xs font-semibold text-secondary"
-            >When?<span class="text-error ml-0.5" title="Required">*</span></label
+            >When?<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
           >
           <input
             id="apptDate"
@@ -109,7 +109,7 @@
         <div class="flex gap-3">
           <div class="flex flex-col gap-1.5 flex-1">
             <label for="apptStart" class="text-xs font-semibold text-secondary">
-              Start time<span class="text-error ml-0.5" title="Required">*</span>
+              Start time<span class="text-error ml-0.5" data-tooltip="Required">*</span>
               <span class="font-normal text-secondary/70">
                 ({{ configStore.config?.homeTimeZone }})</span
               >
@@ -124,7 +124,7 @@
 
           <div class="flex flex-col gap-1.5 flex-1">
             <label for="apptEnd" class="text-xs font-semibold text-secondary">
-              End time<span class="text-error ml-0.5" title="Required">*</span>
+              End time<span class="text-error ml-0.5" data-tooltip="Required">*</span>
               <span class="font-normal text-secondary/70">
                 ({{ configStore.config?.homeTimeZone }})</span
               >
@@ -159,25 +159,31 @@
       >
         This was already approved. Saving changes sends it back for approval.
       </p>
-      <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mb-3">
+      <AppAlert v-if="error" class="mb-3">
         {{ error }}
-      </p>
+      </AppAlert>
       <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
-          :disabled="!canSubmit || submitting || deleting"
-          :title="
+        <!-- Wrapper carries the tooltip: a disabled button fires no pointer events, so the
+             explanation of why it's disabled would never be readable on the button itself. -->
+        <span
+          class="flex-1 flex"
+          :data-tooltip="
             canSubmit
               ? undefined
               : showTimeFields
                 ? 'Set a day and a valid time range first.'
                 : 'Set a valid start and end date first.'
           "
-          @click="submit"
         >
-          {{ submitting ? "Saving…" : isEditing ? "Save changes" : "Add absence" }}
-        </button>
+          <button
+            type="button"
+            class="w-full bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-raised disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+            :disabled="!canSubmit || submitting || deleting"
+            @click="submit"
+          >
+            {{ submitting ? "Saving…" : isEditing ? "Save changes" : "Add absence" }}
+          </button>
+        </span>
         <button
           v-if="isEditing"
           type="button"
@@ -196,6 +202,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import { createAbsence, deleteAbsence, updateAbsence } from "@/api/absences";
+import AppAlert from "@/components/AppAlert.vue";
 import AppModal from "@/components/AppModal.vue";
 import { formatLongDate, formatTimeRange, toApiTime, toDisplayTime, today } from "@/lib/dates";
 import { useConfigStore } from "@/stores/config";

@@ -42,8 +42,8 @@
           </button>
         </IconPopover>
 
-        <IconPopover ref="regionPopover" title="Region and year"
-          :active="regionFilter.length > 0 || year !== currentYear" :min-width="260">
+        <IconPopover ref="regionPopover" title="Filter" :active="regionFilter.length > 0 || year !== currentYear"
+          :min-width="260">
           <template #icon>
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -68,24 +68,30 @@
       </div>
 
       <button type="button"
-        class="shrink-0 h-9 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold transition-all hover:bg-primary-hover hover:shadow-card"
+        class="shrink-0 h-9 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold transition-all hover:bg-primary-hover hover:shadow-raised"
         @click="showWhosOffModal = true">
         Who's off today
       </button>
 
       <div class="flex-1 flex items-center justify-end gap-2">
-        <button type="button"
-          class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
-          :disabled="!personStore.person" :title="!personStore.person ? 'Set up your profile first!' : undefined"
-          @click="openAddAbsence()">
-          + Add absence
-        </button>
-        <button type="button"
-          class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
-          :disabled="!personStore.person" :title="!personStore.person ? 'Set up your profile first!' : undefined"
-          @click="openAddBankHoliday()">
-          + Add bank holiday
-        </button>
+        <!-- Wrapper carries the tooltip: a disabled button fires no pointer events, so the
+             explanation of why it's disabled would never be readable on the button itself. -->
+        <span class="inline-flex" :data-tooltip="!personStore.person ? 'Set up your profile first!' : undefined">
+          <button type="button"
+            class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
+            :disabled="!personStore.person" @click="openAddAbsence()">
+            + Add absence
+          </button>
+        </span>
+        <!-- Wrapper carries the tooltip: a disabled button fires no pointer events, so the
+             explanation of why it's disabled would never be readable on the button itself. -->
+        <span class="inline-flex" :data-tooltip="!personStore.person ? 'Set up your profile first!' : undefined">
+          <button type="button"
+            class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
+            :disabled="!personStore.person" @click="openAddBankHoliday()">
+            + Add bank holiday
+          </button>
+        </span>
       </div>
     </header>
 

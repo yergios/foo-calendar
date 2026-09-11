@@ -22,7 +22,7 @@
       />
       <button
         type="button"
-        class="h-10 bg-primary text-on-primary border border-transparent rounded-8 px-4 text-sm transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+        class="h-10 bg-primary text-on-primary border border-transparent rounded-8 px-4 text-sm transition-all hover:bg-primary-hover hover:shadow-raised disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
         :disabled="syncing"
         @click="handleSync"
       >
@@ -30,13 +30,13 @@
       </button>
     </div>
 
-    <p v-if="syncError" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mt-3">
+    <AppAlert v-if="syncError" class="mt-3">
       {{ syncError }}
-    </p>
+    </AppAlert>
     <div v-if="syncResult" class="text-sm mt-3">
-      <SuccessMessage v-if="syncResult.syncedRegions.length > 0">
+      <AppAlert v-if="syncResult.syncedRegions.length > 0" variant="success">
         Synced: {{ syncResult.syncedRegions.join(", ") }}
-      </SuccessMessage>
+      </AppAlert>
       <p v-else class="text-secondary">No regions were synced.</p>
       <p v-if="syncResult.failedRegions.length > 0" class="text-error mt-1">
         Failed: {{ syncResult.failedRegions.join(", ") }}
@@ -50,8 +50,8 @@ import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 
 import { syncBankHolidays } from "@/api/admin";
+import AppAlert from "@/components/AppAlert.vue";
 import RegionSelect, { type RegionSelectOption } from "@/components/RegionSelect.vue";
-import SuccessMessage from "@/components/SuccessMessage.vue";
 import { groupRegions } from "@/lib/regionGroups";
 import { usePeopleStore } from "@/stores/people";
 import type { SyncBankHolidaysResponse } from "@/types/bankHoliday";

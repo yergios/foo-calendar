@@ -3,7 +3,7 @@
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-1.5">
         <label for="holidayDate" class="text-xs font-semibold text-secondary"
-          >Date<span class="text-error ml-0.5" title="Required">*</span></label
+          >Date<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
         >
         <input
           id="holidayDate"
@@ -15,7 +15,7 @@
 
       <div class="flex flex-col gap-1.5">
         <label for="holidayRegion" class="text-xs font-semibold text-secondary"
-          >Region<span class="text-error ml-0.5" title="Required">*</span></label
+          >Region<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
         >
         <select
           id="holidayRegion"
@@ -34,7 +34,7 @@
 
       <div class="flex flex-col gap-1.5">
         <label for="holidayName" class="text-xs font-semibold text-secondary"
-          >Name<span class="text-error ml-0.5" title="Required">*</span></label
+          >Name<span class="text-error ml-0.5" data-tooltip="Required">*</span></label
         >
         <input
           id="holidayName"
@@ -53,19 +53,25 @@
     </div>
 
     <template #footer>
-      <p v-if="error" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mb-3">
+      <AppAlert v-if="error" class="mb-3">
         {{ error }}
-      </p>
+      </AppAlert>
       <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
-          :disabled="!canSubmit || submitting || deleting"
-          :title="canSubmit ? undefined : 'Select a region, date, and name first.'"
-          @click="submit"
+        <!-- Wrapper carries the tooltip: a disabled button fires no pointer events, so the
+             explanation of why it's disabled would never be readable on the button itself. -->
+        <span
+          class="flex-1 flex"
+          :data-tooltip="canSubmit ? undefined : 'Select a region, date, and name first.'"
         >
-          {{ submitting ? "Saving…" : isEditing ? "Save changes" : "Add bank holiday" }}
-        </button>
+          <button
+            type="button"
+            class="w-full bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-raised disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+            :disabled="!canSubmit || submitting || deleting"
+            @click="submit"
+          >
+            {{ submitting ? "Saving…" : isEditing ? "Save changes" : "Add bank holiday" }}
+          </button>
+        </span>
         <button
           v-if="isEditing"
           type="button"
@@ -85,6 +91,7 @@ import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 
 import { addManualHoliday, deleteBankHoliday, updateBankHoliday } from "@/api/bankHolidays";
+import AppAlert from "@/components/AppAlert.vue";
 import AppModal from "@/components/AppModal.vue";
 import { groupRegions } from "@/lib/regionGroups";
 import { usePeopleStore } from "@/stores/people";

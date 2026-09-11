@@ -2,8 +2,8 @@
   <section>
     <h4>Absence approvals</h4>
     <p class="text-sm text-secondary mt-1">
-      Requests waiting for a decision, oldest first. Approving needs nothing further;
-      rejecting can carry a note explaining why, which the requester sees.
+      Requests waiting for a decision, oldest first. Approving needs nothing further; rejecting can
+      carry a note explaining why, which the requester sees.
     </p>
 
     <p v-if="pendingLoading && pendingAbsences.length === 0" class="text-sm text-secondary mt-3">
@@ -63,16 +63,16 @@
           </button>
           <button
             type="button"
-            class="text-xs text-secondary hover:text-ink transition-colors"
+            class="text-xs border border-accent text-accent rounded-8 px-3 py-1.5 font-semibold hover:bg-accent/10 transition-colors"
             @click="rejectingId = null"
           >
             Cancel
           </button>
         </div>
 
-        <p v-if="reviewError === absence.id" class="text-sm text-error bg-error-bg rounded-8 px-3 py-2 mt-2">
+        <AppAlert v-if="reviewError === absence.id" class="mt-2">
           {{ reviewErrorMessage }}
-        </p>
+        </AppAlert>
       </li>
     </ul>
     <p v-else class="text-sm text-secondary mt-3">Nothing waiting for review.</p>
@@ -84,6 +84,7 @@ import { storeToRefs } from "pinia";
 import { onMounted, ref } from "vue";
 
 import { approveAbsence, getPendingAbsences, rejectAbsence } from "@/api/admin";
+import AppAlert from "@/components/AppAlert.vue";
 import { useNotificationsStore } from "@/stores/notifications";
 import { usePeopleStore } from "@/stores/people";
 import type { AbsenceDto } from "@/types/absence";
