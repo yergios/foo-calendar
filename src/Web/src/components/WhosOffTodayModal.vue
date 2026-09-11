@@ -12,7 +12,7 @@
     <ul v-else class="divide-y divide-border">
       <li v-for="entry in entries" :key="entry.key" class="flex items-center gap-3 py-2.5">
         <span
-          class="inline-flex shrink-0 items-center justify-center w-5 h-5 rounded-4 text-[10px] font-bold"
+          class="inline-flex shrink-0 items-center justify-center w-5 h-5 rounded-4 text-xs font-bold"
           :class="entry.badgeClass"
           >{{ entry.badgeInitial }}</span
         >

@@ -165,7 +165,7 @@
       <div class="flex items-center gap-3">
         <button
           type="button"
-          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
+          class="flex-1 bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40"
           :disabled="!canSubmit || submitting || deleting"
           :title="
             canSubmit
@@ -181,7 +181,7 @@
         <button
           v-if="isEditing"
           type="button"
-          class="flex-1 text-error border border-error rounded-8 py-2.5 hover:bg-error-bg transition-all duration-150 ease-out disabled:opacity-40"
+          class="flex-1 text-error border border-error rounded-8 py-2.5 hover:bg-error-bg transition-all disabled:opacity-40"
           :disabled="submitting || deleting"
           @click="handleDelete"
         >

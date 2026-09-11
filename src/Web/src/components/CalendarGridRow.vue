@@ -2,7 +2,7 @@
   <div
     v-for="segment in segments"
     :key="segment.start"
-    class="absolute top-0 text-center text-[10px] font-bold"
+    class="absolute top-0 text-center text-xs font-bold"
     :class="segment.painted ? 'bg-accent-solid text-on-accent' : ''"
     :style="{
       left: `${colX(segment.start) + DIVIDER_W}px`,

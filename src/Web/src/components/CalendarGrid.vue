@@ -81,7 +81,7 @@
               {{ day.dayNum }}
             </div>
             <div
-              class="text-[10px]"
+              class="text-xs"
               :class="day.isToday ? 'text-today font-semibold' : 'text-secondary'"
             >
               {{ day.weekdayLabel }}
@@ -163,7 +163,7 @@
               >
               <span
                 v-if="item.regionCode"
-                class="ml-auto text-[9px] text-secondary shrink-0"
+                class="ml-auto text-xs text-secondary shrink-0"
                 :title="item.regionLabel ?? undefined"
                 >{{ item.regionCode }}</span
               >

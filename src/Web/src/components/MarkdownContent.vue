@@ -19,49 +19,49 @@ const rendered = computed(() => marked.parse(props.content) as string);
 }
 .prose :deep(h1) {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.25rem;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-xl);
   margin: 1.5rem 0 0.75rem;
   color: var(--color-ink);
 }
 .prose :deep(h2) {
   font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-base);
   margin: 1.25rem 0 0.5rem;
   color: var(--color-ink);
 }
 .prose :deep(h3) {
   font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 0.875rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
   margin: 1rem 0 0.5rem;
   color: var(--color-primary);
 }
 .prose :deep(p) {
   margin: 0.5rem 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 .prose :deep(ul) {
   margin: 0.5rem 0 0.5rem 1.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   list-style: disc;
 }
 .prose :deep(ol) {
   margin: 0.5rem 0 0.5rem 1.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   list-style: decimal;
 }
 .prose :deep(li) {
   margin: 0.25rem 0;
 }
 .prose :deep(strong) {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-ink);
 }
 .prose :deep(code) {
   font-family: var(--font-mono, monospace);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   background: var(--color-surface);
   padding: 0.1rem 0.3rem;
   border-radius: var(--radius-4);
@@ -75,7 +75,7 @@ const rendered = computed(() => marked.parse(props.content) as string);
   color: var(--color-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
-  transition: color var(--transition-fast);
+  transition: color var(--default-transition-duration) var(--default-transition-timing-function);
 }
 
 .prose :deep(a:hover) {

@@ -23,7 +23,7 @@
       </svg>
       <span
         v-if="badgeCount > 0"
-        class="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-pill bg-error text-white text-[10px] font-bold flex items-center justify-center"
+        class="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-pill bg-error-solid text-on-error text-xs font-bold flex items-center justify-center"
       >
         {{ badgeCount > 9 ? "9+" : badgeCount }}
       </span>

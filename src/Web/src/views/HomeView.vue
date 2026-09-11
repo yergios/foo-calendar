@@ -1,7 +1,5 @@
 <template>
-  <div
-    class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] h-full flex flex-col gap-4 min-h-0"
-  >
+  <div class="w-[min(100vw,1920px)] ml-[calc(50%-min(50vw,960px))] h-full flex flex-col gap-4 min-h-0">
     <header class="flex items-center gap-3 flex-wrap">
       <!-- Everything that changes what the grid shows, or in what order. Only the search
            box is always out: the rest sit behind an icon each, so the header costs the
@@ -12,25 +10,14 @@
         <div class="relative">
           <!-- The input comes first so the icon can be a `peer-focus:` sibling of it;
                it's absolutely positioned, so DOM order costs nothing visually. -->
-          <input
-            id="personSearch"
-            ref="searchInput"
-            v-model="searchQuery"
-            type="search"
-            aria-label="Search people"
+          <input id="personSearch" ref="searchInput" v-model="searchQuery" type="search" aria-label="Search people"
             :placeholder="searchPlaceholder"
             class="peer h-9 w-56 border border-border-strong rounded-8 pl-9 pr-3 text-sm bg-background hover:border-secondary focus:outline-none focus:border-primary"
-            @keydown.escape="searchQuery = ''"
-          />
+            @keydown.escape="searchQuery = ''" />
           <svg
             class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary peer-focus:text-primary pointer-events-none"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -38,15 +25,8 @@
 
         <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'mine'" :min-width="230">
           <template #icon>
-            <svg
-              class="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
               <path d="M8 20V4" />
               <path d="M4 8l4-4 4 4" />
               <path d="M16 4v16" />
@@ -54,35 +34,19 @@
             </svg>
           </template>
 
-          <button
-            v-for="option in SORT_OPTIONS"
-            :key="option.value"
-            type="button"
+          <button v-for="option in SORT_OPTIONS" :key="option.value" type="button"
             class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left text-ink hover:bg-surface"
-            :class="sortMode === option.value ? 'font-semibold' : undefined"
-            @click="selectSort(option.value)"
-          >
+            :class="sortMode === option.value ? 'font-semibold' : undefined" @click="selectSort(option.value)">
             <span class="w-3 shrink-0 text-accent">{{ sortMode === option.value ? "✓" : "" }}</span>
             {{ option.label }}
           </button>
         </IconPopover>
 
-        <IconPopover
-          ref="regionPopover"
-          title="Region and year"
-          :active="regionFilter.length > 0 || year !== currentYear"
-          :min-width="260"
-        >
+        <IconPopover ref="regionPopover" title="Region and year"
+          :active="regionFilter.length > 0 || year !== currentYear" :min-width="260">
           <template #icon>
-            <svg
-              class="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
             </svg>
           </template>
@@ -103,31 +67,23 @@
         </IconPopover>
       </div>
 
-      <button
-        type="button"
+      <button type="button"
         class="shrink-0 h-9 flex items-center justify-center border border-primary-text text-primary-text rounded-8 px-3 text-sm font-semibold hover:bg-primary-text/10 transition-colors"
-        @click="showWhosOffModal = true"
-      >
+        @click="showWhosOffModal = true">
         Who's off today
       </button>
 
       <div class="flex-1 flex items-center justify-end gap-2">
-        <button
-          type="button"
+        <button type="button"
           class="h-9 w-42 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
-          :disabled="!personStore.person"
-          :title="!personStore.person ? 'Set up your profile first!' : undefined"
-          @click="openAddAbsence()"
-        >
+          :disabled="!personStore.person" :title="!personStore.person ? 'Set up your profile first!' : undefined"
+          @click="openAddAbsence()">
           + Add absence
         </button>
-        <button
-          type="button"
+        <button type="button"
           class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
-          :disabled="!personStore.person"
-          :title="!personStore.person ? 'Set up your profile first!' : undefined"
-          @click="openAddBankHoliday()"
-        >
+          :disabled="!personStore.person" :title="!personStore.person ? 'Set up your profile first!' : undefined"
+          @click="openAddBankHoliday()">
           + Add bank holiday
         </button>
       </div>
@@ -135,81 +91,47 @@
 
     <p v-if="emptyMessage" class="text-sm text-secondary">{{ emptyMessage }}</p>
 
-    <CalendarGrid
-      ref="calendarGridRef"
-      :people="filteredPeople"
-      :order="visibleOrder"
-      :absences="absences"
-      :holidays="holidays"
-      :year="year"
-      :loading="loading"
-      :reorderable="searchScores === null"
-      @add-absence="openAddAbsence"
-      @edit-absence="openEditAbsence"
-      @edit-holiday="openEditHoliday"
-      @add-holiday="openAddBankHoliday"
-      @reorder="handleReorder"
-    />
+    <CalendarGrid ref="calendarGridRef" :people="filteredPeople" :order="visibleOrder" :absences="absences"
+      :holidays="holidays" :year="year" :loading="loading" :reorderable="searchScores === null"
+      @add-absence="openAddAbsence" @edit-absence="openEditAbsence" @edit-holiday="openEditHoliday"
+      @add-holiday="openAddBankHoliday" @reorder="handleReorder" />
 
     <div class="flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-4 text-xs text-secondary flex-wrap">
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-background ring-2 ring-inset ring-today"
-          />
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-background ring-2 ring-inset ring-today" />
           <span>Today</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-holiday border border-border-strong"
-          />
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-holiday border border-border-strong" />
           <span>Bank holiday</span>
         </div>
-        <div
-          v-for="(initial, label) in ABSENCE_TYPE_INITIALS"
-          :key="label"
-          class="flex items-center gap-1.5"
-        >
+        <div v-for="(initial, label) in ABSENCE_TYPE_INITIALS" :key="label" class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
-            >{{ initial }}</span
-          >
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-xs font-bold">{{
+            initial }}</span>
           <span>{{ label }}</span>
         </div>
         <div v-if="configStore.config?.absenceApprovalsEnabled" class="flex items-center gap-1.5">
           <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-[8px] font-bold"
-            >?</span
-          >
+            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-xs font-bold">?</span>
           <span>Pending approval</span>
         </div>
       </div>
 
-      <button
-        type="button"
+      <button type="button"
         class="text-sm font-semibold text-accent border border-accent rounded-pill px-3.5 py-1.5 hover:bg-accent/10 transition-colors"
-        @click="goToToday"
-      >
+        @click="goToToday">
         Go to today
       </button>
     </div>
 
-    <AddAbsenceModal
-      v-if="showAbsenceModal"
-      :initial-date="prefillDate"
-      :day-absences="dayAbsences"
-      @close="showAbsenceModal = false"
-      @saved="handleAbsenceSaved"
-      @deleted="handleAbsenceDeleted"
-    />
-    <AddBankHolidayModal
-      v-if="showHolidayModal"
-      :holiday="editingHoliday"
-      :initial-date="prefillHolidayDate"
-      @close="showHolidayModal = false"
-      @saved="handleHolidaySaved"
-      @deleted="handleHolidayDeleted"
-    />
+    <AddAbsenceModal v-if="showAbsenceModal" :initial-date="prefillDate" :day-absences="dayAbsences"
+      @close="showAbsenceModal = false" @saved="handleAbsenceSaved" @deleted="handleAbsenceDeleted" />
+    <AddBankHolidayModal v-if="showHolidayModal" :holiday="editingHoliday" :initial-date="prefillHolidayDate"
+      @close="showHolidayModal = false" @saved="handleHolidaySaved" @deleted="handleHolidayDeleted" />
     <WhosOffTodayModal v-if="showWhosOffModal" @close="showWhosOffModal = false" />
   </div>
 </template>
@@ -245,8 +167,8 @@ type SortMode = "name" | "mine" | "absentToday" | "region" | "custom";
 // A list rather than <option>s now that the sort control lives in a popover. Order here is
 // the order the panel shows them in.
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: "name", label: "Name" },
   { value: "mine", label: "Me first, then name" },
+  { value: "name", label: "Name" },
   { value: "absentToday", label: "Absent today, then name" },
   { value: "region", label: "Region, then name" },
   { value: "custom", label: "Custom order" },
@@ -512,9 +434,8 @@ onUnmounted(() => window.removeEventListener("keydown", onSearchShortcut));
 // Spelled out in the placeholder, since a shortcut nobody can see is a shortcut nobody
 // uses. Named for the key the reader's own machine actually wants: the handler above takes
 // either modifier, but telling a Mac user to press Ctrl would just be wrong.
-const searchPlaceholder = `Search people… (${
-  navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl+K"
-})`;
+const searchPlaceholder = `Search people… (${navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl+K"
+  })`;
 
 // Picking a sort mode is a one-off choice, so the panel gets out of the way afterwards.
 // The region checkboxes deliberately don't do this - those are picked several at a time.

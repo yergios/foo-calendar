@@ -22,7 +22,7 @@
       />
       <button
         type="button"
-        class="h-10 bg-primary text-on-primary border border-transparent rounded-8 px-4 text-sm transition-all duration-150 ease-out hover:bg-primary-hover disabled:opacity-40"
+        class="h-10 bg-primary text-on-primary border border-transparent rounded-8 px-4 text-sm transition-all hover:bg-primary-hover disabled:opacity-40"
         :disabled="syncing"
         @click="handleSync"
       >

@@ -20,7 +20,7 @@
 
     <button
       type="button"
-      class="bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all duration-150 ease-out hover:bg-primary-hover hover:shadow-card active:scale-98 disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+      class="bg-primary text-on-primary border border-transparent rounded-8 py-2.5 transition-all hover:bg-primary-hover hover:shadow-card active:scale-98 disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
       :title="canSubmit ? undefined : 'Set a display name first.'"
       :disabled="!canSubmit || submitting"
       @click="submit"

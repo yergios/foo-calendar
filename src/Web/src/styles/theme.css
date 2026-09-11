@@ -41,6 +41,12 @@
 
   --brand-secondary: light-dark(#586479, #9dabc2); /* secondary text/icons, muted UI */
 
+  /* --color-error (below) is tuned as text/outline on the page and isn't dark enough
+     to carry white text as a solid fill in dark mode, so count badges get their own
+     fill + label pair, same split as primary/accent above. */
+  --brand-error-solid: light-dark(#c8232c, #b91c1c); /* solid fill: unread/count badges */
+  --brand-on-error: light-dark(#ffffff, #ffffff); /* label sitting on that fill */
+
   /* Base surfaces */
   --brand-bg: light-dark(#ffffff, #0f1522); /* page background */
   --brand-surface: light-dark(#e6ecf6, #1f2a3d); /* inset panels, tiles, weekend columns */

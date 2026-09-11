@@ -14,7 +14,7 @@
          the same ref to every column's button, so an inactive one ignores it and always
          shows the neutral ascending arrow rather than borrowing whichever direction the
          active column happens to be sorted in. -->
-    <span class="text-[10px]" aria-hidden="true">{{ active && descending ? "▼" : "▲" }}</span>
+    <span class="text-xs" aria-hidden="true">{{ active && descending ? "▼" : "▲" }}</span>
   </button>
 </template>
 

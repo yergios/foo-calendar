@@ -31,7 +31,7 @@
         />
         <button
           type="button"
-          class="mt-5 w-full text-error border border-error rounded-8 px-3 py-2.5 hover:bg-error-bg transition-all duration-150 ease-out disabled:opacity-40"
+          class="mt-5 w-full text-error border border-error rounded-8 px-3 py-2.5 hover:bg-error-bg transition-all disabled:opacity-40"
           :disabled="deleting"
           @click="handleDelete"
         >
