@@ -5,7 +5,7 @@
     class="absolute top-0 text-center text-xs font-bold"
     :class="segment.painted ? 'bg-accent-solid text-on-accent' : ''"
     :style="{
-      left: `${colX(segment.start) + DIVIDER_W}px`,
+      left: dayAreaCss(dayX(segment.start) + DIVIDER_W),
       width: `${(segment.end - segment.start + 1) * COL_W - DIVIDER_W}px`,
       height: `${ROW_H - DIVIDER_W}px`,
       lineHeight: `${ROW_H - DIVIDER_W}px`,
@@ -19,7 +19,7 @@
 
 <script setup lang="ts">
 import { type AbsenceSegment, absenceTooltip } from "@/lib/absenceSegments";
-import { COL_W, DIVIDER_W, ROW_H, colX } from "@/lib/gridGeometry";
+import { COL_W, DIVIDER_W, ROW_H, dayAreaCss, dayX } from "@/lib/gridGeometry";
 import type { PersonDto } from "@/types/person";
 
 // The segments of one calendar row, split out of CalendarGrid for one reason: a component

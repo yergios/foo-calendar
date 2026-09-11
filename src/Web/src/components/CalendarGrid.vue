@@ -22,7 +22,7 @@
       ref="containerRef"
       class="overflow-auto flex-1 min-w-0 border border-border rounded-12 shadow-card"
       :class="reorderable ? undefined : 'reorder-off'"
-      :style="{ '--row-h': `${ROW_H}px` }"
+      :style="{ '--row-h': `${ROW_H}px`, '--name-w': `${nameW}px` }"
       role="grid"
       :aria-rowcount="rows.length"
       :aria-colcount="days.length + 1"
@@ -31,7 +31,7 @@
       @scroll="handleScroll"
       @click="handleClick"
     >
-      <div class="relative" :style="{ width: `${contentWidth}px` }">
+      <div class="relative" :style="{ width: contentWidth }">
         <div
           class="sticky top-0 z-20 bg-background"
           :style="{ height: `${HEADER_H}px` }"
@@ -39,10 +39,19 @@
         >
           <div
             class="sticky left-0 z-30 h-full bg-background border-b border-border shadow-[2px_0_0_0_var(--color-border)] flex items-center justify-center text-xs font-semibold text-secondary"
-            :style="{ width: `${NAME_W}px` }"
+            style="width: var(--name-w)"
             role="columnheader"
           >
             Team
+            <!-- The grip for resizing the column. It lives in the corner cell because that
+                 cell is sticky on both axes - always in view, whatever the scroll - so the
+                 column can be resized from anywhere in the grid. Pointer-only, like the
+                 reorder grip on the name cells below. -->
+            <div
+              class="calendar-resizer absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize"
+              title="Drag to resize"
+              @pointerdown="startResize"
+            />
           </div>
 
           <div
@@ -50,7 +59,7 @@
             :key="group.month"
             class="absolute top-0 border-l-2 border-b border-border text-center text-xs font-semibold text-ink bg-surface truncate"
             :style="{
-              left: `${colX(group.start)}px`,
+              left: dayAreaCss(dayX(group.start)),
               width: `${group.span * COL_W}px`,
               height: `${MONTH_H}px`,
               lineHeight: `${MONTH_H}px`,
@@ -69,7 +78,7 @@
             class="absolute border-b border-border flex flex-col items-center justify-center text-xs"
             :class="dayRenderInfo[i]!.headerClass"
             :style="{
-              left: `${colX(i)}px`,
+              left: dayAreaCss(dayX(i)),
               top: `${MONTH_H}px`,
               width: `${COL_W}px`,
               height: `${DAY_H}px`,
@@ -95,7 +104,7 @@
             v-if="todayIdx >= 0"
             class="absolute border-l-2 border-r-2 border-t-2 border-today pointer-events-none"
             :style="{
-              left: `${colX(todayIdx)}px`,
+              left: dayAreaCss(dayX(todayIdx)),
               top: `${MONTH_H}px`,
               width: `${COL_W}px`,
               height: `${DAY_H}px`,
@@ -113,7 +122,7 @@
             v-memo="[dayRenderInfo[i]]"
             class="absolute top-0 bottom-0"
             :class="dayRenderInfo[i]!.columnClass"
-            :style="{ left: `${colX(i)}px`, width: `${COL_W}px` }"
+            :style="{ left: dayAreaCss(dayX(i)), width: `${COL_W}px` }"
             :title="dayRenderInfo[i]!.holidayTitle || undefined"
           />
           <div class="calendar-lines absolute inset-0 pointer-events-none" />
@@ -123,7 +132,7 @@
                underneath it. Only the rows in the window exist, same as the grid rows. -->
           <div
             class="calendar-names sticky left-0 z-10 h-full shadow-[2px_0_0_0_var(--color-border)]"
-            :style="{ width: `${NAME_W}px` }"
+            style="width: var(--name-w)"
           >
             <template v-if="loading">
               <div
@@ -176,7 +185,7 @@
               :key="`skeleton-${n}`"
               class="absolute top-0 right-0 p-1.5"
               :style="{
-                left: `${NAME_W}px`,
+                left: 'var(--name-w)',
                 height: `${ROW_H}px`,
                 transform: `translateY(${rowY(n - 1)}px)`,
               }"
@@ -215,7 +224,7 @@
           <div
             v-if="todayIdx >= 0"
             class="absolute top-0 bottom-0 border-l-2 border-r-2 border-b-2 border-today pointer-events-none"
-            :style="{ left: `${colX(todayIdx)}px`, width: `${COL_W}px` }"
+            :style="{ left: dayAreaCss(dayX(todayIdx)), width: `${COL_W}px` }"
           />
           <div
             ref="hoverColRef"
@@ -275,7 +284,19 @@ import {
   segmentsForPerson,
 } from "@/lib/absenceSegments";
 import { toIso, today } from "@/lib/dates";
-import { COL_W, DAY_H, HEADER_H, MONTH_H, NAME_W, ROW_H, colX, rowY } from "@/lib/gridGeometry";
+import {
+  COL_W,
+  DAY_H,
+  HEADER_H,
+  MONTH_H,
+  NAME_W_DEFAULT,
+  NAME_W_MAX,
+  NAME_W_MIN,
+  ROW_H,
+  dayAreaCss,
+  dayX,
+  rowY,
+} from "@/lib/gridGeometry";
 import { sameList } from "@/lib/reconcile";
 import { useConfigStore } from "@/stores/config";
 import { usePeopleStore } from "@/stores/people";
@@ -361,7 +382,8 @@ interface GridPoint {
 
 // Where a viewport point falls in the grid. The header and the name column are sticky,
 // so the visible box is split first: anything within HEADER_H of the top is the header
-// whatever the scroll position, anything within NAME_W of the left is a name.
+// whatever the scroll position, anything within the name column's width of the left is a
+// name.
 function locate(clientX: number, clientY: number): GridPoint | null {
   // Rows and their segments aren't rendered while loading (see the template), and the
   // skeleton beneath is a placeholder, not clickable content - hover and click both no-op.
@@ -374,11 +396,69 @@ function locate(clientX: number, clientY: number): GridPoint | null {
   if (x < 0 || y < 0 || x >= container.clientWidth || y >= container.clientHeight) return null;
 
   const inDayHeader = y >= MONTH_H && y < HEADER_H;
-  let dayIdx = x < NAME_W ? -1 : Math.floor((x + container.scrollLeft - NAME_W) / COL_W);
+  let dayIdx = x < nameW ? -1 : Math.floor((x + container.scrollLeft - nameW) / COL_W);
   if (dayIdx >= days.value.length) dayIdx = -1;
   let rowIdx = y < HEADER_H ? -1 : Math.floor((y + container.scrollTop - HEADER_H) / ROW_H);
   if (rowIdx >= rows.value.length) rowIdx = -1;
   return { dayIdx, rowIdx, inDayHeader };
+}
+
+// The name column's width. A plain variable, not a ref, for the same reason as the hover
+// state below: the day columns, rows and segments are all positioned with
+// calc(var(--name-w) + ...), so a drag only has to write that one custom property on the
+// scroller. Through a ref it would instead re-run this component's render on every
+// pointermove - and the memoized columns and rows would have to list it as a dependency
+// to move at all, which is exactly the per-frame re-diff of hundreds of elements the memos
+// exist to prevent. The template reads it for the property's initial value, and re-reads
+// the current one if some other state happens to re-render the grid mid-drag.
+let nameW = NAME_W_DEFAULT;
+let resizeStartX = 0;
+let resizeStartW = 0;
+// Set once a drag has actually moved the edge, and consumed by handleClick below. Ending a
+// drag also fires a click on the grid: cancelling pointerdown suppresses the compatibility
+// mouse events but, per the Pointer Events spec, not click. While the edge is still
+// following the cursor that click lands inside the name column and locate() discards it,
+// but once the width clamps the cursor runs on over the day columns - and the click would
+// then open the add-holiday or add-absence dialog for whatever cell it was released over.
+let resizeMoved = false;
+
+function startResize(event: PointerEvent) {
+  // Primary button only: a right-click would otherwise arm a drag that the context menu
+  // can then swallow the pointerup for, leaving the column stuck to the cursor.
+  if (event.button !== 0) return;
+  // Stops the drag from turning into a text selection of the header.
+  event.preventDefault();
+  resizeStartX = event.clientX;
+  resizeStartW = nameW;
+  resizeMoved = false;
+  (event.target as HTMLElement).setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", handleResizeMove);
+  window.addEventListener("pointerup", endResize);
+  // A touch that the browser decides was a scroll of the grid after all ends in
+  // pointercancel rather than pointerup. Without this the move listener would outlive the
+  // gesture and every later pointermove - a scroll, a mouse crossing the page - would go
+  // on resizing the column against a start position from minutes ago.
+  window.addEventListener("pointercancel", endResize);
+}
+
+function handleResizeMove(event: PointerEvent) {
+  const next = Math.min(
+    NAME_W_MAX,
+    Math.max(NAME_W_MIN, resizeStartW + event.clientX - resizeStartX),
+  );
+  if (next === nameW) return;
+  nameW = next;
+  resizeMoved = true;
+  containerRef.value?.style.setProperty("--name-w", `${next}px`);
+}
+
+function endResize() {
+  window.removeEventListener("pointermove", handleResizeMove);
+  window.removeEventListener("pointerup", endResize);
+  window.removeEventListener("pointercancel", endResize);
+  // The content box grew or shrank with the column, so how far the grid can scroll - and
+  // whether the arrow buttons are live - changed with it.
+  updateScrollButtons();
 }
 
 // The hover highlight is applied by moving three overlay elements, not by touching any
@@ -404,7 +484,7 @@ function setHover(point: GridPoint | null) {
 
   if (dayIdx !== hoverDay) {
     col.hidden = dayIdx < 0;
-    if (dayIdx >= 0) col.style.transform = `translateX(${colX(dayIdx)}px)`;
+    if (dayIdx >= 0) col.style.transform = `translateX(${dayAreaCss(dayX(dayIdx))})`;
   }
   if (rowIdx !== hoverRow) {
     row.hidden = rowIdx < 0;
@@ -414,7 +494,7 @@ function setHover(point: GridPoint | null) {
     const over = dayIdx >= 0 && rowIdx >= 0;
     cell.hidden = !over;
     if (over) {
-      cell.style.transform = `translate(${colX(dayIdx)}px, ${rowY(rowIdx)}px)`;
+      cell.style.transform = `translate(${dayAreaCss(dayX(dayIdx))}, ${rowY(rowIdx)}px)`;
       const item = rows.value[rowIdx]!;
       const segment = segmentAt(segmentsFor(item.person.id, item.person.homeCity), dayIdx);
       const title = segment
@@ -457,6 +537,11 @@ function handleMouseLeave() {
 // letter currently shown", so the whole cell is clickable for the viewer's own row
 // regardless of what it holds. Non-owned rows stay non-clickable (tooltip only).
 function handleClick(event: MouseEvent) {
+  // The click that ends a resize drag isn't a click on a cell - see resizeMoved above.
+  if (resizeMoved) {
+    resizeMoved = false;
+    return;
+  }
   const point = locate(event.clientX, event.clientY);
   if (!point || point.dayIdx < 0) return;
   const day = days.value[point.dayIdx]!;
@@ -496,15 +581,23 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   stopHold();
+  endResize();
 });
 
-/** Scrolls the grid so today's column is centered in the day area. No-op if today isn't in the displayed year. */
+/** Scrolls the grid so today's column is centered on screen. No-op if today isn't in the displayed year. */
 async function scrollToToday() {
   await nextTick();
   const container = containerRef.value;
   if (!container || todayIdx.value < 0) return;
-  container.scrollLeft =
-    colX(todayIdx.value) - NAME_W + COL_W / 2 - (container.clientWidth - NAME_W) / 2;
+  // Centered on the middle of the scroller, not the middle of the day area: the name
+  // column sits over the left of the scroller rather than beside it, so centering today
+  // in the space left over parks it half a name column right of where the eye expects.
+  const centered = nameW + dayX(todayIdx.value) + COL_W / 2 - container.clientWidth / 2;
+  // ...except that a name column wider than half the scroller would put the middle of the
+  // screen underneath it. dayX() is the scroll position that leaves today flush against
+  // the column's right edge, which is as far as centering can go before it hides today.
+  // (The browser clamps the other end: in early January this goes negative and means 0.)
+  container.scrollLeft = Math.min(centered, dayX(todayIdx.value));
 }
 
 defineExpose({ scrollToToday });
@@ -623,7 +716,7 @@ const days = computed(() => {
 
 const dayIndex = computed(() => dayIndexOf(days.value));
 const todayIdx = computed(() => days.value.findIndex((day) => day.isToday));
-const contentWidth = computed(() => NAME_W + days.value.length * COL_W);
+const contentWidth = computed(() => dayAreaCss(days.value.length * COL_W));
 
 const monthGroups = computed(() => {
   const fmt = new Intl.DateTimeFormat(navigator.language, { month: "long" });
@@ -728,7 +821,8 @@ watch(holidayMap, () => segmentCache.clear(), { flush: "sync" });
 function segmentsFor(personId: number, homeCity: string | null): AbsenceSegment[] {
   const source = absencesByPerson.value.get(personId);
   const entry = segmentCache.get(personId);
-  if (entry && entry.sourceAbsences === source && entry.homeCity === homeCity) return entry.segments;
+  if (entry && entry.sourceAbsences === source && entry.homeCity === homeCity)
+    return entry.segments;
   const segments = source
     ? segmentsForPerson(source, days.value, dayIndex.value, homeCity, holidayMap.value)
     : NO_SEGMENTS;
@@ -788,7 +882,11 @@ const visibleRows = computed(() => {
   const result = [];
   for (let i = start; i <= end; i++) {
     const row = all[i]!;
-    result.push({ ...row, segments: segmentsFor(row.person.id, row.person.homeCity), top: rowY(i) });
+    result.push({
+      ...row,
+      segments: segmentsFor(row.person.id, row.person.homeCity),
+      top: rowY(i),
+    });
   }
   return result.sort((a, b) => a.person.id - b.person.id);
 });
@@ -962,6 +1060,33 @@ function emptyCellTitle(isMine: boolean, holidayTitle: string): string {
 
 .calendar-mine {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+/* The resize grip is a wide-ish hit target with a hairline of feedback: the line marks the
+   edge being dragged without the grip itself having to be that visible at rest. Drawn on
+   top of the column's own right-hand divider (the corner cell's shadow) rather than beside
+   it, so the column doesn't shift by a pixel when the line appears. */
+/* The grid itself scrolls, so without this a touch drag on the grip would be claimed as a
+   pan of the scroller and cancel the resize before it starts. */
+.calendar-resizer {
+  touch-action: none;
+}
+
+.calendar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-accent);
+  opacity: 0;
+  transition: opacity var(--default-transition-duration) var(--default-transition-timing-function);
+}
+
+.calendar-resizer:hover::after,
+.calendar-resizer:active::after {
+  opacity: 1;
 }
 
 /* Name cells keep their `draggable` attribute and their grab cursor when reordering is
