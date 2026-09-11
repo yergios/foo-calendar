@@ -72,13 +72,11 @@ const rendered = computed(() => marked.parse(props.content) as string);
   margin: 1.25rem 0;
 }
 .prose :deep(a) {
-  color: var(--color-accent);
-  text-decoration: underline;
+  color: var(--color-primary-text);
   text-underline-offset: 2px;
-  transition: color var(--default-transition-duration) var(--default-transition-timing-function);
 }
 
 .prose :deep(a:hover) {
-  color: var(--color-primary);
+  text-decoration: underline;
 }
 </style>

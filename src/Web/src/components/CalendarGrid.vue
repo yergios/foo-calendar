@@ -2,7 +2,7 @@
   <div class="flex gap-1.5 flex-1 min-h-0">
     <button
       type="button"
-      class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      class="shrink-0 w-7 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
       aria-label="Scroll left"
       :disabled="!canScrollLeft"
       @click="handlePageClick(-1)"
@@ -248,7 +248,7 @@
 
     <button
       type="button"
-      class="shrink-0 w-7 flex items-center justify-center rounded-8 hover:bg-surface text-primary-text text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      class="shrink-0 w-7 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
       aria-label="Scroll right"
       :disabled="!canScrollRight"
       @click="handlePageClick(1)"

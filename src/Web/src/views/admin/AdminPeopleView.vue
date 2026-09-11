@@ -198,7 +198,7 @@
         <div class="flex gap-3 mt-4">
           <button
             type="button"
-            class="bg-primary text-on-primary border border-transparent rounded-8 px-4 py-2 text-sm transition-all hover:bg-primary-hover disabled:opacity-40"
+            class="bg-primary text-on-primary border border-transparent rounded-8 px-4 py-2 text-sm transition-all hover:bg-primary-hover hover:shadow-card disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
             :disabled="!canSubmitForm || submittingForm"
             @click="submitForm"
           >

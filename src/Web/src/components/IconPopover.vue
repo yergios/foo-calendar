@@ -3,7 +3,7 @@
     <button
       ref="trigger"
       type="button"
-      class="relative w-9 h-9 flex items-center justify-center rounded-8 border transition-colors"
+      class="relative w-9 h-9 flex items-center justify-center rounded-pill border transition-colors"
       :class="
         open
           ? 'border-border-strong bg-surface text-ink'

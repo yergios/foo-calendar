@@ -5,7 +5,7 @@
     <RouterLink
       v-if="action?.internal"
       :to="action.href"
-      class="text-sm text-accent font-semibold hover:underline"
+      class="text-sm text-primary-text font-semibold hover:underline"
     >
       {{ action.label }}
     </RouterLink>
@@ -13,7 +13,7 @@
       v-else-if="action"
       :href="action.href"
       target="_blank"
-      class="text-sm text-accent font-semibold hover:underline"
+      class="text-sm text-primary-text font-semibold hover:underline"
     >
       {{ action.label }}
     </a>

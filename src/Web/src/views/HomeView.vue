@@ -68,14 +68,14 @@
       </div>
 
       <button type="button"
-        class="shrink-0 h-9 flex items-center justify-center border border-primary-text text-primary-text rounded-8 px-3 text-sm font-semibold hover:bg-primary-text/10 transition-colors"
+        class="shrink-0 h-9 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold transition-all hover:bg-primary-hover hover:shadow-card"
         @click="showWhosOffModal = true">
         Who's off today
       </button>
 
       <div class="flex-1 flex items-center justify-end gap-2">
         <button type="button"
-          class="h-9 w-42 flex items-center justify-center bg-primary text-on-primary border border-transparent rounded-8 px-3 text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:hover:bg-primary disabled:hover:shadow-none"
+          class="h-9 w-42 flex items-center justify-center border border-accent text-accent rounded-8 px-3 text-sm font-semibold hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-background"
           :disabled="!personStore.person" :title="!personStore.person ? 'Set up your profile first!' : undefined"
           @click="openAddAbsence()">
           + Add absence
@@ -122,7 +122,7 @@
       </div>
 
       <button type="button"
-        class="text-sm font-semibold text-accent border border-accent rounded-pill px-3.5 py-1.5 hover:bg-accent/10 transition-colors"
+        class="text-sm font-semibold text-accent border border-accent rounded-8 px-3.5 py-1.5 hover:bg-accent/10 transition-colors"
         @click="goToToday">
         Go to today
       </button>

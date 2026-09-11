@@ -10,7 +10,10 @@
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h5 class="font-display text-ink">{{ title }}</h5>
-          <button class="text-secondary hover:text-ink transition" @click="$emit('close')">
+          <button
+            class="w-9 h-9 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 transition-colors"
+            @click="$emit('close')"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="w-5 h-5"

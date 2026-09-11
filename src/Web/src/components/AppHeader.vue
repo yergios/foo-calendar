@@ -3,7 +3,7 @@
     <div class="max-w-[1920px] mx-auto flex items-center justify-between gap-6">
       <RouterLink
         to="/"
-        class="font-display font-bold text-2xl text-ink hover:text-accent transition shrink-0"
+        class="font-display font-bold text-2xl text-ink shrink-0"
       >
         {{ orgName }}
       </RouterLink>
@@ -30,7 +30,7 @@
       <button
         v-else
         type="button"
-        class="border border-accent text-accent rounded-pill px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors shrink-0"
+        class="border border-accent text-accent rounded-8 px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors shrink-0"
         @click="personStore.ensurePerson()"
       >
         Set up profile
