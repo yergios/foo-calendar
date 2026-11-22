@@ -9,6 +9,14 @@ A self-hostable calendar for coordinating international teams. Tracking vacation
 Usage documentation, FAQ, privacy notice, and terms of use are served in-app from the
 footer's Documentation link and rendered from [`src/Web/src/docs`](src/Web/src/docs/).
 
+How it is built, and why:
+
+| Guide | Covers |
+| --- | --- |
+| [Architecture](docs/architecture.md) | The system, startup, the request pipeline, the absence lifecycle, the frontend |
+| [Decision records](docs/decisions/README.md) | Every significant design decision, with what was considered and rejected |
+| [Threat model](docs/threat-model.md) | Trust boundaries, what is exposed, mitigations, and the risks accepted |
+
 Running and operating it:
 
 | Guide | Covers |
@@ -43,6 +51,9 @@ Handling personal data with this? Read [docs/data-protection.md](docs/data-prote
 ## Developer guide
 
 ### Architecture overview
+
+A short version follows; [docs/architecture.md](docs/architecture.md) has the full picture
+with diagrams.
 
 The project is a single deployable unit: a .NET 10 Minimal API that serves both the backend and the Vue 3 frontend from the same process.
 
