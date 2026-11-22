@@ -13,6 +13,7 @@ How it is built, and why:
 
 | Guide | Covers |
 | --- | --- |
+| [Specification](SPEC.md) | What the system must do, as numbered requirements traced to tests; pending changes in [docs/specs](docs/specs/README.md) |
 | [Architecture](docs/architecture.md) | The system, startup, the request pipeline, the absence lifecycle, the frontend |
 | [Decision records](docs/decisions/README.md) | Every significant design decision, with what was considered and rejected |
 | [Threat model](docs/threat-model.md) | Trust boundaries, what is exposed, mitigations, and the risks accepted |
