@@ -200,6 +200,19 @@ if (config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"] is not null)
         "Auth:ClaimTypes:Permissions is now a list, e.g. [\"roles\"] or " +
         "Auth__ClaimTypes__Permissions__0=roles.");
 
+// Settings of a feature that no longer exists (docs/decisions/0014). Ignoring them would
+// leave a deployment believing absences still wait for review, so asking for the feature
+// stops the app. Leaving it off is harmless and passes.
+if (config.GetValue<bool>("AbsenceApprovals:Enabled"))
+    throw new InvalidOperationException(
+        "AbsenceApprovals:Enabled is set, but absence approvals were removed: every absence " +
+        "is in effect when it is created. Remove the setting.");
+
+if (config.GetSection($"{AuthOptions.SectionName}:Permissions:AbsencesApprove").Exists())
+    throw new InvalidOperationException(
+        "Auth:Permissions:AbsencesApprove is set, but absence approvals were removed along " +
+        "with that permission. Remove the setting.");
+
 var isDevelopment = builder.Environment.IsDevelopment();
 
 services.AddOptions<AuthOptions>()
@@ -397,6 +410,11 @@ if (authConfig.Provider == AuthOptions.ProviderNone)
         authConfig.DevUser.Username,
         string.Join(", ", authConfig.EffectiveDevPermissions()));
 
+// The checks ValidateOnStart registered would otherwise run only when the host starts,
+// which is after the migration below: a misconfigured deployment would then stop with its
+// database already migrated. Running them first leaves the database untouched.
+app.Services.GetRequiredService<IStartupValidator>().Validate();
+
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -424,22 +442,30 @@ app.UseStatusCodePages();
 // No UseDefaultFiles: "/" is left to fall through to MapSpaFallback below, which serves
 // the one copy of index.html that has had its <base href> rewritten. Serving it off disk
 // here as a default document would hand out the un-rewritten file instead.
-app.UseStaticFiles(new StaticFileOptions
+//
+// Skipped when there is no frontend build, which is normal when the API runs on its own
+// behind the Vite dev server (see SpaShell) and in the API's own tests: the file provider
+// refuses a directory that doesn't exist.
+var webRoot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+if (Directory.Exists(webRoot))
 {
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(app.Environment.ContentRootPath, "wwwroot")),
-    OnPrepareResponse = ctx =>
+    app.UseStaticFiles(new StaticFileOptions
     {
-        // Vite writes every bundled file under assets/ with a content hash in its name, so
-        // a changed file always ships under a new URL. That is what makes immutable safe:
-        // the shell (served no-store by SpaShell) is the only mutable entry point, and it
-        // names which hashed files to load. Without this, browsers revalidate each asset
-        // with a 304 round trip on every cold load. Path is post-UsePathBase, so this
-        // matches under sub-path deployments too. favicon.svg is unhashed and gets nothing.
-        if (ctx.Context.Request.Path.StartsWithSegments("/assets", StringComparison.OrdinalIgnoreCase))
-            ctx.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
-    }
-});
+        FileProvider = new PhysicalFileProvider(webRoot),
+        OnPrepareResponse = ctx =>
+        {
+            // Vite writes every bundled file under assets/ with a content hash in its name,
+            // so a changed file always ships under a new URL. That is what makes immutable
+            // safe: the shell (served no-store by SpaShell) is the only mutable entry point,
+            // and it names which hashed files to load. Without this, browsers revalidate
+            // each asset with a 304 round trip on every cold load. Path is post-UsePathBase,
+            // so this matches under sub-path deployments too. favicon.svg is unhashed and
+            // gets nothing.
+            if (ctx.Context.Request.Path.StartsWithSegments("/assets", StringComparison.OrdinalIgnoreCase))
+                ctx.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        }
+    });
+}
 
 // Explicit, and deliberately placed here. Left implicit, WebApplication inserts routing at
 // the very start of the pipeline, where it would match against the path before UsePathBase
