@@ -22,6 +22,8 @@ public static class AbsencesEndpoints
         IAbsenceService absences,
         CancellationToken ct)
     {
+        ReadRange.EnsureValid(from, to);
+
         // FindAsync, not GetAsync: the calendar is readable from the first sign-in, before
         // anyone has set up a profile. Someone with none simply owns no notes.
         var viewer = await currentPerson.FindAsync(ct);

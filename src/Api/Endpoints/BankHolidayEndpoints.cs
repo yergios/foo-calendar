@@ -28,6 +28,8 @@ public static class BankHolidaysEndpoints
         IBankHolidayService bankHolidays,
         CancellationToken ct)
     {
+        ReadRange.EnsureValid(from, to);
+
         // Where the team actually is, which is also exactly what got synced. Read scope and
         // write scope come from the same place on purpose, so neither can drift into
         // showing holidays nobody stored or storing holidays nobody sees.
