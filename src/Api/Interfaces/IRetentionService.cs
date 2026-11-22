@@ -1,9 +1,9 @@
 namespace Api.Interfaces;
 
 /// <summary>How many rows one retention sweep deleted, per table.</summary>
-public readonly record struct RetentionSweepResult(int AuditEntries, int Notifications, int Absences)
+public readonly record struct RetentionSweepResult(int AuditEntries, int Absences)
 {
-    public int Total => AuditEntries + Notifications + Absences;
+    public int Total => AuditEntries + Absences;
 }
 
 public interface IRetentionService

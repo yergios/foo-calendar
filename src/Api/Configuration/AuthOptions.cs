@@ -88,7 +88,7 @@ public sealed class ClaimTypeOptions
     /// "groups", and a deployment may want to accept either.
     ///
     /// Deliberately empty rather than defaulting to ["permissions"]: configuration binds
-    /// into an existing list by appending, so a default here would stay accepted even
+    /// into an existing list by adding to it, so a default here would stay accepted even
     /// after a deployment configured its own claim names. The shipped default lives in
     /// appsettings.json, where overriding it actually replaces it.</summary>
     public List<string> Permissions { get; init; } = [];

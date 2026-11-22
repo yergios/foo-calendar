@@ -1,22 +1,18 @@
 ﻿using System.Data;
 
-using Api.Configuration;
 using Api.Data;
 using Api.Data.Models;
 using Api.Dtos;
 using Api.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Api.Services;
 
 public sealed class AbsenceService(
     AppDbContext db,
     IBankHolidayService bankHolidays,
-    IAuditLog audit,
-    INotificationService notifications,
-    IOptions<AbsenceApprovalOptions> approvalOptions) : IAbsenceService
+    IAuditLog audit) : IAbsenceService
 {
     // What an absence was, for an audit entry that still reads sensibly. Named to match
     // PersonService.Describe / BankHolidayService.Describe. A time-based absence is a
@@ -39,7 +35,7 @@ public sealed class AbsenceService(
         // team), and nothing here is edited, so tracking and the second pass over every
         // row were pure cost. The projection also applies the notes rule (see
         // AbsenceDto.Projection), so a note never leaves the database.
-        var absences = await VisibleOverlapping(db.Absences, from, to)
+        var absences = await Overlapping(db.Absences, from, to)
             .AsNoTracking()
             .OrderBy(a => a.StartDate)
             .ThenBy(a => a.Id)
@@ -53,7 +49,7 @@ public sealed class AbsenceService(
     {
         var (yearStart, yearEnd) = YearRange(year);
 
-        var absences = await ApprovedOverlapping(db.Absences.Where(a => a.PersonId == person.Id), yearStart, yearEnd)
+        var absences = await Overlapping(db.Absences.Where(a => a.PersonId == person.Id), yearStart, yearEnd)
             .ToListAsync(ct);
 
         var holidayDates = await HolidayDatesForAsync(person.HomeCity, yearStart, yearEnd, ct);
@@ -66,7 +62,7 @@ public sealed class AbsenceService(
         var (yearStart, yearEnd) = YearRange(year);
 
         var people = await db.People.Select(p => new { p.Id, p.HomeCity }).ToListAsync(ct);
-        var absences = await ApprovedOverlapping(db.Absences, yearStart, yearEnd).ToListAsync(ct);
+        var absences = await Overlapping(db.Absences, yearStart, yearEnd).ToListAsync(ct);
         var byPerson = absences.ToLookup(a => a.PersonId);
 
         // One fetch covering every region anyone's home city touches, rather than one round
@@ -129,9 +125,6 @@ public sealed class AbsenceService(
             Type = request.Type,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
-            // Approvals off (the default) keeps today's behavior: everything lands
-            // Approved the instant it's created. On, it waits for a reviewer.
-            Status = approvalOptions.Value.Enabled ? AbsenceStatus.Pending : AbsenceStatus.Approved,
             Note = request.Note,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = person.Username,
@@ -173,18 +166,6 @@ public sealed class AbsenceService(
         if (absence.PersonId != person.Id)
             throw new UnauthorizedAccessException("Cannot edit another person's absence.");
 
-        // Rejected is a dead end by design: it no longer shows on the calendar, and editing
-        // it back to life would resurrect a request the reviewer already turned down.
-        // Filing a new one is the only way forward from here.
-        if (absence.Status == AbsenceStatus.Rejected)
-            throw new InvalidOperationException(
-                "This request was rejected and can no longer be edited. Submit a new one instead.");
-
-        // Editing an absence that was already approved sends it through review again: what
-        // was approved was these specific dates, type and note, and any of the three could
-        // have just changed. A still-Pending one simply stays Pending, nothing to reset.
-        var justBecamePending = approvalOptions.Value.Enabled && absence.Status == AbsenceStatus.Approved;
-
         // Serializable, same reasoning as CreateAsync: guards the overlap check against a
         // concurrent create/update landing an overlapping absence before this one commits.
         await using (var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
@@ -198,14 +179,6 @@ public sealed class AbsenceService(
 
             if (overlaps)
                 throw new InvalidOperationException("This absence overlaps one you already have.");
-
-            if (justBecamePending)
-            {
-                absence.Status = AbsenceStatus.Pending;
-                absence.ReviewedBy = null;
-                absence.ReviewedAt = null;
-                absence.ReviewNote = null;
-            }
 
             absence.StartDate = request.StartDate;
             absence.EndDate = request.EndDate;
@@ -241,139 +214,23 @@ public sealed class AbsenceService(
         await audit.RecordAsync(AuditActions.AbsenceDeleted, person.DisplayName, Describe(absence), ct);
     }
 
-    // A generous cap on the review queue, not real pagination: this is meant to be worked
-    // down to zero, not browsed like the audit log, so a healthy deployment never gets
-    // near it. It exists only so a backlog can't make the admin page fetch and render an
-    // unbounded response.
-    private const int MaxPendingItems = 200;
-
-    // Deliberately not gated on AbsenceApprovals:Enabled, unlike CreateAsync/UpdateAsync:
-    // disabling the feature stops new absences from becoming Pending, but a Pending row
-    // left over from before that still needs a way to be resolved. Access is gated by the
-    // AbsencesApprove permission instead.
-    public async Task<PendingAbsencesResponse> GetPendingAsync(CancellationToken ct = default)
-    {
-        var absences = await db.Absences
-            .Where(a => a.Status == AbsenceStatus.Pending)
-            .OrderBy(a => a.CreatedAt)
-            .Take(MaxPendingItems)
-            .ToListAsync(ct);
-
-        // Deciding whether to approve is the one situation this app asks someone other
-        // than the author to read their note for, so unlike every other read path this
-        // includes it unconditionally.
-        return new([.. absences.Select(a => AbsenceDto.FromEntity(a, includeNote: true))]);
-    }
-
-    public Task<AbsenceDto> ApproveAsync(Person reviewer, int absenceId, CancellationToken ct = default) =>
-        ReviewAsync(
-            reviewer,
-            absenceId,
-            note: null,
-            AbsenceStatus.Approved,
-            unauthorizedMessage: "Cannot approve your own absence.",
-            pendingOnlyMessage: "Only a pending request can be approved.",
-            AuditActions.AbsenceApproved,
-            NotificationType.AbsenceApproved,
-            ct);
-
-    public Task<AbsenceDto> RejectAsync(Person reviewer, int absenceId, string note, CancellationToken ct = default) =>
-        ReviewAsync(
-            reviewer,
-            absenceId,
-            note,
-            AbsenceStatus.Rejected,
-            unauthorizedMessage: "Cannot reject your own absence.",
-            pendingOnlyMessage: "Only a pending request can be rejected.",
-            AuditActions.AbsenceRejected,
-            NotificationType.AbsenceRejected,
-            ct);
-
-    // Shared by ApproveAsync/RejectAsync, which differ only in the target status and the
-    // text/audit/notification that goes with it.
-    private async Task<AbsenceDto> ReviewAsync(
-        Person reviewer,
-        int absenceId,
-        string note,
-        AbsenceStatus newStatus,
-        string unauthorizedMessage,
-        string pendingOnlyMessage,
-        string auditAction,
-        NotificationType notificationType,
-        CancellationToken ct)
-    {
-        var absence = await db.Absences.Include(a => a.Person)
-            .FirstOrDefaultAsync(a => a.Id == absenceId, ct)
-            ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
-
-        if (absence.PersonId == reviewer.Id)
-            throw new UnauthorizedAccessException(unauthorizedMessage);
-
-        var reviewedAt = DateTime.UtcNow;
-
-        // One transaction for the whole review: audit and notifications share this same
-        // context, so if either write fails, the status flip rolls back with them instead
-        // of leaving the absence reviewed with no audit entry or notification, and no way
-        // back in since a retry would then fail the Pending check below.
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        // A conditional UPDATE rather than load-check-save: two reviewers racing to review
-        // the same absence would otherwise both pass an in-memory Pending check, and the
-        // second SaveChangesAsync would silently clobber whatever the first one wrote. This
-        // only flips a row that is still Pending, so whichever request loses the race gets
-        // pendingOnlyMessage instead of stomping the winner's decision.
-        var reviewed = await db.Absences
-            .Where(a => a.Id == absenceId && a.Status == AbsenceStatus.Pending)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(a => a.Status, newStatus)
-                .SetProperty(a => a.ReviewedBy, reviewer.Username)
-                .SetProperty(a => a.ReviewedAt, reviewedAt)
-                .SetProperty(a => a.ReviewNote, note), ct);
-
-        if (reviewed == 0)
-            throw new InvalidOperationException(pendingOnlyMessage);
-
-        // ExecuteUpdateAsync bypasses change tracking, so the entity loaded above needs to
-        // be brought up to date by hand for Describe/notifications/the response below to
-        // see the reviewed state rather than the stale Pending one.
-        absence.Status = newStatus;
-        absence.ReviewedBy = reviewer.Username;
-        absence.ReviewedAt = reviewedAt;
-        absence.ReviewNote = note;
-
-        // Dates and type, never the reviewer's reason: that reaches the requester through
-        // their notification instead, not through a log other people can read.
-        await audit.RecordAsync(auditAction, absence.Person.DisplayName, Describe(absence), ct);
-        await notifications.NotifyAsync(absence, notificationType, note, ct);
-
-        await transaction.CommitAsync(ct);
-
-        return AbsenceDto.FromEntity(absence, includeNote: absence.PersonId == reviewer.Id);
-    }
-
-    // Approved and Pending both belong on the calendar and both block a new request over
-    // the same dates; only Rejected is excluded, since a request that's been turned down
-    // shouldn't reserve dates or block a fresh attempt at them.
-    private static IQueryable<Absence> VisibleOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
-        query.Where(a => a.Status != AbsenceStatus.Rejected && a.StartDate <= to && a.EndDate >= from);
+    private static IQueryable<Absence> Overlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
+        query.Where(a => a.StartDate <= to && a.EndDate >= from);
 
     // A time-based request's own overlap check ignores other time-based absences,
     // regardless of type: any number may coexist on the same day, their times unchecked
     // against each other, while a whole-day absence still blocks it. A whole-day request
-    // needs no equivalent carve-out here: its own VisibleOverlapping call already sees a
-    // same-day time-based absence (StartDate == EndDate) and correctly blocks on it
-    // without any change.
+    // needs no equivalent carve-out here: its own Overlapping call already sees a same-day
+    // time-based absence (StartDate == EndDate) and correctly blocks on it without any
+    // change.
     private static IQueryable<Absence> OverlapCandidates(
         IQueryable<Absence> query, bool requestIsTimeBased, DateOnly from, DateOnly to)
     {
-        var overlapping = VisibleOverlapping(query, from, to);
+        var overlapping = Overlapping(query, from, to);
         return requestIsTimeBased
             ? overlapping.Where(a => a.StartTime == null)
             : overlapping;
     }
-
-    private static IQueryable<Absence> ApprovedOverlapping(IQueryable<Absence> query, DateOnly from, DateOnly to) =>
-        query.Where(a => a.Status == AbsenceStatus.Approved && a.StartDate <= to && a.EndDate >= from);
 
     private static (DateOnly Start, DateOnly End) YearRange(int year) =>
         (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));

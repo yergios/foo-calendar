@@ -11,8 +11,13 @@ public static class AuditActions
     public const string AbsenceCreated = "absence.created";
     public const string AbsenceUpdated = "absence.updated";
     public const string AbsenceDeleted = "absence.deleted";
+
+    // No longer recorded: approvals were removed (docs/decisions/0014). Kept because the
+    // log is append-only, so entries written before then still carry them until the
+    // retention sweep removes them, and the audit page still filters by them.
     public const string AbsenceApproved = "absence.approved";
     public const string AbsenceRejected = "absence.rejected";
+
     public const string BankHolidayCreated = "bank-holiday.created";
     public const string BankHolidayUpdated = "bank-holiday.updated";
     public const string BankHolidayDeleted = "bank-holiday.deleted";

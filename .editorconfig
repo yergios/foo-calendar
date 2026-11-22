@@ -468,8 +468,8 @@ dotnet_diagnostic.CA1054.severity = none
 dotnet_diagnostic.CA1056.severity = none
 
 # CA1805: Do not initialize unnecessarily. Carried over from the original configuration.
-# Today it fires only on the explicit "= null" of the Absence.Person and
-# Notification.Person navigations, which changes nothing at runtime.
+# Today it fires only on the explicit "= null" of the Absence.Person navigation, which
+# changes nothing at runtime.
 dotnet_diagnostic.CA1805.severity = none
 
 # CA1812: Internal class is never instantiated. Fires on the private records that

@@ -1,12 +1,9 @@
 using System.Globalization;
 
-using Api.Configuration;
 using Api.Data.Models;
 using Api.Dtos;
 using Api.Interfaces;
 using Api.Services;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -17,25 +14,13 @@ namespace UnitTests.Services;
 public sealed class AbsenceServiceTests : SqliteTestBase
 {
     private readonly RecordingAuditLog audit = new();
-    private readonly RecordingNotificationService notifications = new();
     private readonly RecordingBankHolidayService bankHolidays = new();
-
-    // Approvals off by default, matching every deployment until it opts in: the bulk of
-    // this file exercises today's behavior. Tests for the approval workflow itself build
-    // their own service with approvals turned on, see ApprovalsEnabledSut().
     private readonly AbsenceService sut;
 
     public AbsenceServiceTests()
     {
-        sut = ApprovalsEnabledSut(enabled: false);
+        sut = new AbsenceService(Db, bankHolidays, audit);
     }
-
-    private AbsenceService ApprovalsEnabledSut(bool enabled) => new(
-        Db,
-        bankHolidays,
-        audit,
-        notifications,
-        Options.Create(new AbsenceApprovalOptions { Enabled = enabled }));
 
     private Person CreatePerson(string username = "jdoe", string homeCity = null)
     {
@@ -61,6 +46,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
             endTime is null ? null : TimeOnly.Parse(endTime, CultureInfo.InvariantCulture));
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task CreateAsync_WhenNoOverlap_CreatesAbsence()
     {
         var person = CreatePerson();
@@ -72,6 +58,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_WhenDatesOverlapAnExistingAbsence_Throws()
     {
         var person = CreatePerson();
@@ -82,6 +69,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_WhenNewAbsenceStartsOnExistingEndDate_Throws()
     {
         // Touching ranges (new start == existing end) still share that one day, so it counts
@@ -94,6 +82,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_WhenNewAbsenceStartsTheDayAfterExistingEnds_Succeeds()
     {
         var person = CreatePerson();
@@ -105,6 +94,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_DoesNotConflictWithAnotherPersonsOverlappingAbsence()
     {
         var alice = CreatePerson("alice");
@@ -117,6 +107,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task UpdateAsync_WhenDatesUnchanged_DoesNotConflictWithItself()
     {
         var person = CreatePerson();
@@ -130,6 +121,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task UpdateAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
     {
         var owner = CreatePerson("alice");
@@ -141,6 +133,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task UpdateAsync_WhenAbsenceDoesNotExist_ThrowsKeyNotFoundException()
     {
         var person = CreatePerson();
@@ -150,6 +143,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task UpdateAsync_WhenNewDatesOverlapADifferentAbsence_Throws()
     {
         var person = CreatePerson();
@@ -161,6 +155,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task DeleteAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
     {
         var owner = CreatePerson("alice");
@@ -172,6 +167,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task DeleteAsync_WhenAbsenceDoesNotExist_ThrowsKeyNotFoundException()
     {
         var person = CreatePerson();
@@ -180,6 +176,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-4")]
     public async Task DeleteAsync_RemovesTheAbsence()
     {
         var person = CreatePerson();
@@ -193,6 +190,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetStatsAsync_CountsOnlyWeekdays()
     {
         var person = CreatePerson();
@@ -205,6 +203,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetStatsAsync_ClipsAbsenceToTheRequestedYear()
     {
         var person = CreatePerson();
@@ -217,6 +216,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetStatsAsync_SplitsDaysByAbsenceType()
     {
         var person = CreatePerson();
@@ -229,26 +229,6 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         stats.OtherDays.ShouldBe(1);
     }
 
-    [Fact]
-    public async Task GetStatsAsync_ExcludesNonApprovedAbsences()
-    {
-        var person = CreatePerson();
-        Db.Absences.Add(new Absence
-        {
-            PersonId = person.Id,
-            StartDate = new DateOnly(2026, 5, 4),
-            EndDate = new DateOnly(2026, 5, 8),
-            Type = AbsenceType.Vacation,
-            Status = AbsenceStatus.Pending,
-            CreatedBy = person.Username,
-        });
-        Db.SaveChanges();
-
-        var stats = await sut.GetStatsAsync(person, 2026);
-
-        stats.VacationDays.ShouldBe(0);
-    }
-
     private int nextHolidayId = 1;
 
     private void SeedHoliday(string region, string date) =>
@@ -256,6 +236,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
             nextHolidayId++, region, DateOnly.Parse(date, CultureInfo.InvariantCulture), "Test holiday", HolidaySource.Manual, false));
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetStatsAsync_ExcludesABankHolidayMatchingThePersonsExactRegion()
     {
         var person = CreatePerson(homeCity: "CH-ZH");
@@ -269,6 +251,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetStatsAsync_ExcludesANationwideBankHolidayForThePersonsCountry()
     {
         var person = CreatePerson(homeCity: "CH-ZH");
@@ -281,6 +265,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetStatsAsync_StillCountsABankHolidayForADifferentRegion()
     {
         var person = CreatePerson(homeCity: "CH-ZH");
@@ -293,6 +279,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetStatsAsync_StillCountsABankHolidayForASiblingRegionInTheSameCountry()
     {
         var person = CreatePerson(homeCity: "CH-ZH");
@@ -305,6 +293,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetStatsAsync_StillCountsABankHolidayWhenThePersonHasNoRegion()
     {
         var person = CreatePerson();
@@ -317,6 +307,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
+    [Trait("Spec", "HOL-9")]
     public async Task GetAllStatsAsync_ExcludesOnlyEachPersonsOwnBankHoliday()
     {
         var zurich = CreatePerson("alice", "CH-ZH");
@@ -332,6 +324,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetAllStatsAsync_ReturnsZeroForPersonWithNoAbsences()
     {
         var person = CreatePerson();
@@ -345,6 +338,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetAllStatsAsync_ComputesEachPersonIndependently()
     {
         var alice = CreatePerson("alice");
@@ -358,52 +352,47 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         stats.Stats.Single(s => s.PersonId == bob.Id).VacationDays.ShouldBe(0);
     }
 
+    // No state to wait in: what was just created is on the calendar and counts.
     [Fact]
-    public async Task GetOverlappingAsync_ReturnsApprovedAndPendingAbsencesWithinRange()
+    [Trait("Spec", "ABS-7")]
+    public async Task CreateAsync_IsInEffectImmediately()
     {
         var person = CreatePerson();
-        await sut.CreateAsync(person, Request("2026-07-06", "2026-07-10"));
-        Db.Absences.Add(new Absence
-        {
-            PersonId = person.Id,
-            StartDate = new DateOnly(2026, 8, 6),
-            EndDate = new DateOnly(2026, 8, 10),
-            Type = AbsenceType.Other,
-            Status = AbsenceStatus.Pending,
-            CreatedBy = person.Username,
-        });
-        Db.SaveChanges();
+        // Mon 2026-05-04 through Fri 2026-05-08.
+        var created = await sut.CreateAsync(person, Request("2026-05-04", "2026-05-08"));
 
-        var result = await sut.GetOverlappingAsync(
-            new DateOnly(2026, 7, 1), new DateOnly(2026, 8, 31), person.Id);
+        var calendar = await sut.GetOverlappingAsync(
+            new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), viewerPersonId: null);
+        var stats = await sut.GetStatsAsync(person, 2026);
 
-        result.Absences.Count.ShouldBe(2);
-        result.Absences.ShouldContain(a => a.Type == AbsenceType.Vacation && a.Status == AbsenceStatus.Approved);
-        result.Absences.ShouldContain(a => a.Type == AbsenceType.Other && a.Status == AbsenceStatus.Pending);
+        calendar.Absences.ShouldHaveSingleItem().Id.ShouldBe(created.Id);
+        stats.VacationDays.ShouldBe(5);
     }
 
     [Fact]
-    public async Task GetOverlappingAsync_ExcludesRejectedAbsences()
+    [Trait("Spec", "ABS-8")]
+    public async Task GetOverlappingAsync_ReturnsEveryAbsenceTouchingTheRange_ByStartDateThenId()
     {
-        var person = CreatePerson();
-        Db.Absences.Add(new Absence
-        {
-            PersonId = person.Id,
-            StartDate = new DateOnly(2026, 7, 6),
-            EndDate = new DateOnly(2026, 7, 10),
-            Type = AbsenceType.Other,
-            Status = AbsenceStatus.Rejected,
-            CreatedBy = person.Username,
-        });
-        Db.SaveChanges();
+        var alice = CreatePerson("alice");
+        var bob = CreatePerson("bob");
+        var later = await sut.CreateAsync(alice, Request("2026-07-20", "2026-07-24"));
+        var straddlingStart = await sut.CreateAsync(alice, Request("2026-06-29", "2026-07-01"));
+        var sameDayFirst = await sut.CreateAsync(bob, Request("2026-07-06", "2026-07-06"));
+        var sameDaySecond = await sut.CreateAsync(alice, Request("2026-07-06", "2026-07-06"));
+        var straddlingEnd = await sut.CreateAsync(bob, Request("2026-07-31", "2026-08-03"));
+        await sut.CreateAsync(bob, Request("2026-06-22", "2026-06-30"));
+        await sut.CreateAsync(alice, Request("2026-08-01", "2026-08-07"));
 
         var result = await sut.GetOverlappingAsync(
-            new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), person.Id);
+            new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), viewerPersonId: null);
 
-        result.Absences.ShouldBeEmpty();
+        result.Absences.Select(a => a.Id).ShouldBe(
+            [straddlingStart.Id, sameDayFirst.Id, sameDaySecond.Id, later.Id, straddlingEnd.Id]);
     }
 
     [Fact]
+    [Trait("Spec", "ABS-12")]
+    [Trait("Spec", "AUD-2")]
     public async Task CreateAsync_LogsWhatWasFiledWithoutTheNote()
     {
         var person = CreatePerson();
@@ -417,6 +406,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-12")]
+    [Trait("Spec", "AUD-2")]
     public async Task UpdateAsync_LogsWhatChangedWithoutTheNote()
     {
         var person = CreatePerson();
@@ -433,6 +424,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-9")]
     public async Task GetOverlappingAsync_ReturnsTheViewersOwnNote()
     {
         var person = CreatePerson();
@@ -447,6 +439,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     // The team can see that someone is off and what kind of absence it is. Why is between
     // them and the app.
     [Fact]
+    [Trait("Spec", "ABS-9")]
     public async Task GetOverlappingAsync_WithholdsEveryoneElsesNote()
     {
         var author = CreatePerson("jdoe");
@@ -462,6 +455,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-9")]
     public async Task GetOverlappingAsync_WhenTheViewerHasNoProfileYet_WithholdsEveryNote()
     {
         var author = CreatePerson();
@@ -474,6 +468,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-12")]
+    [Trait("Spec", "AUD-2")]
     public async Task DeleteAsync_LogsWhatWentWithoutTheNote()
     {
         var person = CreatePerson();
@@ -489,231 +485,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task CreateAsync_WhenApprovalsAreOff_IsApprovedImmediately()
-    {
-        var person = CreatePerson();
-
-        var created = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        created.Status.ShouldBe(AbsenceStatus.Approved);
-    }
-
-    [Fact]
-    public async Task CreateAsync_WhenApprovalsAreOn_StartsPending()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        created.Status.ShouldBe(AbsenceStatus.Pending);
-    }
-
-    [Fact]
-    public async Task CreateAsync_WhenApprovalsAreOn_StillConflictsWithAPendingAbsence()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => approvalSut.CreateAsync(person, Request("2026-03-05", "2026-03-10")));
-    }
-
-    [Fact]
-    public async Task UpdateAsync_WhenApprovalsAreOnAndTheAbsenceWasApproved_ResetsItToPending()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.ApproveAsync(CreatePerson("reviewer"), created.Id);
-
-        var updated = await approvalSut.UpdateAsync(
-            person, created.Id, Request("2026-04-01", "2026-04-05"));
-
-        updated.Status.ShouldBe(AbsenceStatus.Pending);
-    }
-
-    [Fact]
-    public async Task UpdateAsync_WhenApprovalsAreOnAndTheAbsenceIsStillPending_StaysPending()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        var updated = await approvalSut.UpdateAsync(
-            person, created.Id, Request("2026-04-01", "2026-04-05"));
-
-        updated.Status.ShouldBe(AbsenceStatus.Pending);
-    }
-
-    [Fact]
-    public async Task UpdateAsync_WhenTheAbsenceWasRejected_Throws()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.RejectAsync(CreatePerson("reviewer"), created.Id, note: null);
-
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => approvalSut.UpdateAsync(person, created.Id, Request("2026-04-01", "2026-04-05")));
-    }
-
-    [Fact]
-    public async Task ApproveAsync_WhenTheReviewerIsTheAbsencesOwner_Throws()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        await Should.ThrowAsync<UnauthorizedAccessException>(
-            () => approvalSut.ApproveAsync(person, created.Id));
-    }
-
-    [Fact]
-    public async Task ApproveAsync_WhenApprovalsAreLaterDisabled_StillResolvesALeftoverPendingRequest()
-    {
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await ApprovalsEnabledSut(enabled: true).CreateAsync(
-            person, Request("2026-03-02", "2026-03-06"));
-
-        var approved = await ApprovalsEnabledSut(enabled: false).ApproveAsync(reviewer, created.Id);
-
-        approved.Status.ShouldBe(AbsenceStatus.Approved);
-    }
-
-    [Fact]
-    public async Task ApproveAsync_WhenTheAbsenceIsNotPending_Throws()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.ApproveAsync(reviewer, created.Id);
-
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => approvalSut.ApproveAsync(reviewer, created.Id));
-    }
-
-    [Fact]
-    public async Task ApproveAsync_ApprovesLogsAndNotifies()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        var approved = await approvalSut.ApproveAsync(reviewer, created.Id);
-
-        approved.Status.ShouldBe(AbsenceStatus.Approved);
-
-        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceApproved);
-        entry.Target.ShouldBe(person.DisplayName);
-
-        var notified = notifications.Notified.ShouldHaveSingleItem();
-        notified.PersonId.ShouldBe(person.Id);
-        notified.Type.ShouldBe(NotificationType.AbsenceApproved);
-    }
-
-    [Fact]
-    public async Task RejectAsync_WhenTheReviewerIsTheAbsencesOwner_Throws()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        await Should.ThrowAsync<UnauthorizedAccessException>(
-            () => approvalSut.RejectAsync(person, created.Id, note: null));
-    }
-
-    [Fact]
-    public async Task RejectAsync_WhenTheAbsenceIsNotPending_Throws()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-        await approvalSut.RejectAsync(reviewer, created.Id, note: null);
-
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => approvalSut.RejectAsync(reviewer, created.Id, note: null));
-    }
-
-    [Fact]
-    public async Task RejectAsync_RejectsLogsAndNotifiesWithoutTheReviewNoteInTheAudit()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        var rejected = await approvalSut.RejectAsync(reviewer, created.Id, "Not enough coverage that week.");
-
-        rejected.Status.ShouldBe(AbsenceStatus.Rejected);
-
-        var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceRejected);
-        entry.Details.ShouldNotContain("Not enough coverage");
-
-        var notified = notifications.Notified.ShouldHaveSingleItem();
-        notified.Type.ShouldBe(NotificationType.AbsenceRejected);
-        notified.Note.ShouldBe("Not enough coverage that week.");
-    }
-
-    [Fact]
-    public async Task RejectAsync_RemovesTheAbsenceFromTheCalendar()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var created = await approvalSut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
-
-        await approvalSut.RejectAsync(reviewer, created.Id, note: null);
-
-        var result = await approvalSut.GetOverlappingAsync(
-            new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), person.Id);
-        result.Absences.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task GetPendingAsync_WhenApprovalsAreOff_ReturnsNothingByDefault()
-    {
-        // Approvals off means nothing is ever created Pending, not that the queue is
-        // unreachable: a leftover from before is still returned, see the test below.
-        (await sut.GetPendingAsync()).Absences.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task GetPendingAsync_WhenApprovalsAreLaterDisabled_StillReturnsALeftoverPendingRequest()
-    {
-        var person = CreatePerson();
-        var created = await ApprovalsEnabledSut(enabled: true).CreateAsync(
-            person, Request("2026-03-02", "2026-03-06"));
-
-        var result = await ApprovalsEnabledSut(enabled: false).GetPendingAsync();
-
-        result.Absences.ShouldHaveSingleItem().Id.ShouldBe(created.Id);
-    }
-
-    [Fact]
-    public async Task GetPendingAsync_ReturnsOnlyPendingAbsencesWithTheirNote()
-    {
-        var approvalSut = ApprovalsEnabledSut(enabled: true);
-        var person = CreatePerson();
-        var reviewer = CreatePerson("reviewer");
-        var pending = await approvalSut.CreateAsync(
-            person, Request("2026-03-02", "2026-03-06", AbsenceType.Other, "Flu"));
-        var approved = await approvalSut.CreateAsync(person, Request("2026-05-01", "2026-05-05"));
-        await approvalSut.ApproveAsync(reviewer, approved.Id);
-
-        var result = await approvalSut.GetPendingAsync();
-
-        var absence = result.Absences.ShouldHaveSingleItem();
-        absence.Id.ShouldBe(pending.Id);
-        absence.Note.ShouldBe("Flu");
-    }
-
-    [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_TwoAppointmentsSameDayWithOverlappingTimes_BothSucceed()
     {
         var person = CreatePerson();
@@ -727,6 +499,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_AppointmentOnADayWithAnExistingVacation_Throws()
     {
         var person = CreatePerson();
@@ -737,6 +510,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_VacationOnADayWithAnExistingAppointment_Throws()
     {
         var person = CreatePerson();
@@ -748,6 +522,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_AppointmentsOnDifferentDays_BothSucceed()
     {
         var person = CreatePerson();
@@ -761,6 +536,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task UpdateAsync_AppointmentOnADayWithAnExistingVacation_Throws()
     {
         var person = CreatePerson();
@@ -774,6 +550,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task UpdateAsync_TwoAppointmentsSameDay_DoesNotConflictWithItself()
     {
         var person = CreatePerson();
@@ -790,6 +567,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_TimeBasedOtherAndAppointmentSameDay_BothSucceed()
     {
         var person = CreatePerson();
@@ -803,6 +581,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_TimeBasedOtherOnADayWithAnExistingVacation_Throws()
     {
         var person = CreatePerson();
@@ -813,6 +592,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-5")]
     public async Task CreateAsync_WholeDayOtherOnADayWithAnExistingTimeBasedOther_Throws()
     {
         var person = CreatePerson();
@@ -824,6 +604,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "ABS-10")]
     public async Task GetStatsAsync_TimeBasedOther_DoesNotCountTowardOtherDays()
     {
         var person = CreatePerson();

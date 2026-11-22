@@ -11,7 +11,6 @@ namespace Api.Endpoints;
 /// derived from the people list instead.</summary>
 public sealed record AppConfigResponse(
     string HomeRegion,
-    bool AbsenceApprovalsEnabled,
     // The raw IANA id, e.g. "Europe/Zurich". Always set: Team:HomeTimeZone is required.
     // Printed verbatim next to a time-based absence's time inputs, no formatting.
     string HomeTimeZone);
@@ -24,7 +23,7 @@ public sealed record AppConfigResponse(
 /// The /401 and /500 routes sit outside the authenticated layout and have to render when
 /// signing in is the thing that failed, so their two links qualify. The header's team name
 /// qualifies because reading it asynchronously would flash the wrong name first. What
-/// shapes the signed-in app - approvals, regions, the timezone - does not: that is
+/// shapes the signed-in app - regions, the timezone - does not: that is
 /// AppConfigResponse above. The product's own name is in neither, being a constant.</summary>
 public sealed record BootstrapConfigResponse(
     // The deploying team's own name for the header. Empty falls back to the product's
@@ -65,13 +64,8 @@ public static class ConfigEndpoints
         app.MapGet("/api/config/bootstrap", GetBootstrapConfig).AllowAnonymous().WithTags("Config");
     }
 
-    private static IResult GetConfig(
-        IOptions<TeamOptions> team,
-        IOptions<AbsenceApprovalOptions> absenceApprovals) =>
-        Results.Ok(new AppConfigResponse(
-            team.Value.HomeRegion,
-            absenceApprovals.Value.Enabled,
-            team.Value.HomeTimeZone));
+    private static IResult GetConfig(IOptions<TeamOptions> team) =>
+        Results.Ok(new AppConfigResponse(team.Value.HomeRegion, team.Value.HomeTimeZone));
 
     private static IResult GetBootstrapConfig(
         HttpContext http,

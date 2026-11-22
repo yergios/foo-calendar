@@ -34,12 +34,6 @@ public sealed class RetentionService(
                 .Where(e => e.OccurredAt < now.AddDays(-config.AuditEntryDays))
                 .ExecuteDeleteAsync(ct);
 
-        var notifications = config.NotificationDays == RetentionOptions.Never
-            ? 0
-            : await db.Notifications
-                .Where(n => n.CreatedAt < now.AddDays(-config.NotificationDays))
-                .ExecuteDeleteAsync(ct);
-
         // Measured from when the absence ended, not when it was created: a year-long leave
         // booked two years ago is still current if it runs until next month.
         var absences = 0;
@@ -49,14 +43,14 @@ public sealed class RetentionService(
             absences = await db.Absences.Where(a => a.EndDate < cutoff).ExecuteDeleteAsync(ct);
         }
 
-        var result = new RetentionSweepResult(auditEntries, notifications, absences);
+        var result = new RetentionSweepResult(auditEntries, absences);
 
         // Logging every sweep would be a daily line saying nothing; logging only the ones
         // that deleted something is what makes the line worth reading when it appears.
         if (result.Total > 0)
             logger.LogInformation(
-                "Retention sweep deleted {AuditEntries} audit entries, {Notifications} notifications, {Absences} absences.",
-                result.AuditEntries, result.Notifications, result.Absences);
+                "Retention sweep deleted {AuditEntries} audit entries, {Absences} absences.",
+                result.AuditEntries, result.Absences);
 
         return result;
     }

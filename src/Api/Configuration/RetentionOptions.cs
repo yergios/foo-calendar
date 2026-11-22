@@ -27,10 +27,6 @@ public sealed class RetentionOptions
     /// survive their own profile.</summary>
     public int AuditEntryDays { get; init; } = 365;
 
-    /// <summary>Days a notification is kept after it was created. These are read once and
-    /// never referred to again, so they need no long life.</summary>
-    public int NotificationDays { get; init; } = 90;
-
     /// <summary>Days an absence is kept after it ended. Off by default, and deliberately:
     /// looking back over previous years is what a leave calendar is *for*, so a default
     /// that quietly deleted last year's absences would be deleting the product. A team

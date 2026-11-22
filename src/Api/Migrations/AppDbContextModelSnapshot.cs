@@ -43,23 +43,11 @@ namespace Api.Migrations
                     b.Property<int>("PersonId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("ReviewNote")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ReviewedBy")
-                        .HasColumnType("TEXT");
-
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("TEXT");
 
                     b.Property<TimeOnly?>("StartTime")
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Type")
                         .HasColumnType("INTEGER");
@@ -146,45 +134,6 @@ namespace Api.Migrations
                     b.ToTable("BankHolidays");
                 });
 
-            modelBuilder.Entity("Api.Data.Models.Notification", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("AbsenceType")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<DateOnly>("EndDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("PersonId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PersonId", "Id");
-
-                    b.ToTable("Notifications");
-                });
-
             modelBuilder.Entity("Api.Data.Models.Person", b =>
                 {
                     b.Property<int>("Id")
@@ -232,17 +181,6 @@ namespace Api.Migrations
                 {
                     b.HasOne("Api.Data.Models.Person", "Person")
                         .WithMany("Absences")
-                        .HasForeignKey("PersonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Person");
-                });
-
-            modelBuilder.Entity("Api.Data.Models.Notification", b =>
-                {
-                    b.HasOne("Api.Data.Models.Person", "Person")
-                        .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

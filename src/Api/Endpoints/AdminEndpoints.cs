@@ -26,9 +26,6 @@ public static class AdminEndpoints
         group.MapGet("/people/stats", GetAllPeopleStats).RequireAuthorization(Permissions.ReportsRead);
         group.MapPost("/bank-holidays/sync", SyncBankHolidays).RequireAuthorization(Permissions.HolidaysSync);
         group.MapGet("/audit", GetAuditLog).RequireAuthorization(Permissions.AuditRead);
-        group.MapGet("/absences/pending", GetPendingAbsences).RequireAuthorization(Permissions.AbsencesApprove);
-        group.MapPost("/absences/{id:int}/approve", ApproveAbsence).RequireAuthorization(Permissions.AbsencesApprove);
-        group.MapPost("/absences/{id:int}/reject", RejectAbsence).RequireAuthorization(Permissions.AbsencesApprove);
     }
 
     private static async Task<IResult> CreatePerson(
@@ -163,34 +160,5 @@ public static class AdminEndpoints
             ct);
 
         return Results.Ok(new SyncBankHolidaysResponse(synced, failed));
-    }
-
-    private static async Task<IResult> GetPendingAbsences(IAbsenceService absences, CancellationToken ct)
-    {
-        var result = await absences.GetPendingAsync(ct);
-        return Results.Ok(result);
-    }
-
-    private static async Task<IResult> ApproveAbsence(
-        int id,
-        ICurrentPersonAccessor currentPerson,
-        IAbsenceService absences,
-        CancellationToken ct)
-    {
-        var reviewer = await currentPerson.GetAsync(ct);
-        var approved = await absences.ApproveAsync(reviewer, id, ct);
-        return Results.Ok(approved);
-    }
-
-    private static async Task<IResult> RejectAbsence(
-        int id,
-        RejectAbsenceRequest request,
-        ICurrentPersonAccessor currentPerson,
-        IAbsenceService absences,
-        CancellationToken ct)
-    {
-        var reviewer = await currentPerson.GetAsync(ct);
-        var rejected = await absences.RejectAsync(reviewer, id, request.Note, ct);
-        return Results.Ok(rejected);
     }
 }

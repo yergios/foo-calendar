@@ -122,13 +122,6 @@ internal static class Program
     private static readonly string[] AppointmentNotes =
         ["Dentist", "Doctor's appointment", "Car service", "Parent-teacher meeting", "Bank appointment"];
 
-    private static readonly string[] RejectNotes =
-    [
-        "Coverage needed that week, please pick different dates",
-        "Please resubmit with more notice",
-        "Team is short-staffed those dates",
-    ];
-
     // Three types, each with its own typical shape: vacations are multi-day blocks,
     // appointments are single timed slots, "other" is a mix - it covers the short unplanned
     // absences too, since there is no Sick type (see Api's AbsenceType). Totals to 52 rows
@@ -491,27 +484,7 @@ internal static class Program
             absence.EndTime = startTime.AddMinutes(new[] { 30, 45, 60, 90 }[rng.Next(4)]);
         }
 
-        ApplyReviewState(absence, rng);
         return absence;
-    }
-
-    private static void ApplyReviewState(Absence absence, Random rng)
-    {
-        var roll = rng.Next(100);
-        absence.Status = roll switch
-        {
-            < 90 => AbsenceStatus.Approved,
-            < 95 => AbsenceStatus.Pending,
-            _ => AbsenceStatus.Rejected,
-        };
-
-        if (absence.Status == AbsenceStatus.Pending)
-            return;
-
-        absence.ReviewedBy = "dev-user";
-        absence.ReviewedAt = absence.CreatedAt;
-        if (absence.Status == AbsenceStatus.Rejected)
-            absence.ReviewNote = RejectNotes[rng.Next(RejectNotes.Length)];
     }
 
     private static string PickNote(AbsenceType type, Random rng)

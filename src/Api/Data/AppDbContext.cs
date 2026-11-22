@@ -10,7 +10,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Absence> Absences => Set<Absence>();
     public DbSet<BankHoliday> BankHolidays => Set<BankHoliday>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
-    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,22 +20,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<Absence>()
             .HasIndex(a => new { a.PersonId, a.StartDate, a.EndDate });
 
-        // Erasure, spelled out rather than inherited. Both of these are what EF already
-        // infers from a required foreign key, so declaring them changes no schema; the
-        // point is that deleting a person is the app's answer to a GDPR Article 17 request
+        // Erasure, spelled out rather than inherited. This is what EF already infers from a
+        // required foreign key, so declaring it changes no schema; the point is that
+        // deleting a person is the app's answer to a GDPR Article 17 request
         // (docs/data-protection.md), which makes "what goes with them" a decision someone
-        // has to have made on purpose, not a default that could shift under a future
-        // EF version or a nullable-ing of the key.
+        // has to have made on purpose, not a default that could shift under a future EF
+        // version or a nullable-ing of the key.
         modelBuilder.Entity<Absence>()
             .HasOne(a => a.Person)
             .WithMany(p => p.Absences)
             .HasForeignKey(a => a.PersonId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<Notification>()
-            .HasOne(n => n.Person)
-            .WithMany()
-            .HasForeignKey(n => n.PersonId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // AuditEntry deliberately has no relationship to Person at all: it names its actor
@@ -58,16 +51,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<BankHoliday>()
             .Property(b => b.CreatedAt)
-            .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-        // Every lookup is "this person's own", newest first, so that's the one index worth
-        // having; the read query below sorts by Id for the same tie-breaking reason
-        // AuditLog does.
-        modelBuilder.Entity<Notification>()
-            .HasIndex(n => new { n.PersonId, n.Id });
-
-        modelBuilder.Entity<Notification>()
-            .Property(n => n.CreatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         base.OnModelCreating(modelBuilder);

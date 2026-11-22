@@ -19,7 +19,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     // A real AbsenceService, not a fake: sorting by a stats column (see
     // GetPageAsync_SortedByVacation_OrdersAcrossPagesByThatYearsStats below) exercises its
     // actual day-counting, which is the whole point of that path existing, and this is
-    // also what the tests for it use to give a person some approved vacation days.
+    // also what the tests for it use to give a person some vacation days.
     private readonly AbsenceService absences;
 
     public PersonServiceTests()

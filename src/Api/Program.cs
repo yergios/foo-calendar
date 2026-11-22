@@ -64,10 +64,6 @@ services.AddOptions<HolidayOptions>()
     .Validate(o => o.SyncInterval > TimeSpan.Zero, "Holidays:SyncInterval must be positive.")
     .ValidateOnStart();
 
-services.AddOptions<AbsenceApprovalOptions>()
-    .Bind(config.GetSection(AbsenceApprovalOptions.SectionName))
-    .ValidateOnStart();
-
 services.AddOptions<ApiDocsOptions>()
     .Bind(config.GetSection(ApiDocsOptions.SectionName))
     .Validate(o => o.RoutePrefix.StartsWith('/'), "ApiDocs:RoutePrefix must start with '/'.")
@@ -76,7 +72,6 @@ services.AddOptions<ApiDocsOptions>()
 services.AddOptions<RetentionOptions>()
     .Bind(config.GetSection(RetentionOptions.SectionName))
     .Validate(o => o.AuditEntryDays >= 0, "Retention:AuditEntryDays must not be negative.")
-    .Validate(o => o.NotificationDays >= 0, "Retention:NotificationDays must not be negative.")
     .Validate(o => o.AbsenceDays >= 0, "Retention:AbsenceDays must not be negative.")
     .Validate(o => o.SweepInterval > TimeSpan.Zero, "Retention:SweepInterval must be positive.")
     .ValidateOnStart();
@@ -148,13 +143,12 @@ services.AddScoped<IAbsenceService, AbsenceService>();
 services.AddScoped<IPersonService, PersonService>();
 services.AddScoped<ICurrentPersonAccessor, CurrentPersonAccessor>();
 services.AddScoped<IAuditLog, AuditLog>();
-services.AddScoped<INotificationService, NotificationService>();
 
 // ---- Retention ------------------------------------------------------------
 
-// Always on: the defaults keep audit entries a year and notifications 90 days, and a
-// deployment that wants either kept forever says so with 0 rather than by the job not
-// existing. Absences are the one thing it leaves alone by default, see RetentionOptions.
+// Always on: the default keeps audit entries a year, and a deployment that wants them kept
+// forever says so with 0 rather than by the job not existing. Absences are left alone by
+// default, see RetentionOptions.
 services.AddScoped<IRetentionService, RetentionService>();
 services.AddHostedService<RetentionBackgroundService>();
 
@@ -208,6 +202,8 @@ if (config.GetValue<bool>("AbsenceApprovals:Enabled"))
         "AbsenceApprovals:Enabled is set, but absence approvals were removed: every absence " +
         "is in effect when it is created. Remove the setting.");
 
+// Checked here rather than left to the unknown-permission check below, whose message
+// would read like a typo.
 if (config.GetSection($"{AuthOptions.SectionName}:Permissions:AbsencesApprove").Exists())
     throw new InvalidOperationException(
         "Auth:Permissions:AbsencesApprove is set, but absence approvals were removed along " +
@@ -238,8 +234,8 @@ services.AddOptions<AuthOptions>()
         $"Auth:Permissions must list at least one claim value for each of: {string.Join(", ", Permissions.All)}.")
     // A typo would otherwise sit there granting nothing, which reads exactly like a
     // provider that isn't sending the claim.
-    .Validate(o => o.Permissions.Keys.All(name => Permissions.Known.Contains(name, StringComparer.OrdinalIgnoreCase)),
-        $"Auth:Permissions names a permission that doesn't exist. The permissions are: {string.Join(", ", Permissions.Known)}.")
+    .Validate(o => o.Permissions.Keys.All(name => Permissions.All.Contains(name, StringComparer.OrdinalIgnoreCase)),
+        $"Auth:Permissions names a permission that doesn't exist. The permissions are: {string.Join(", ", Permissions.All)}.")
     .Validate(o => o.ClaimTypes.Permissions.Count > 0,
         "Auth:ClaimTypes:Permissions must list at least one claim name.")
     .ValidateOnStart();
@@ -261,14 +257,11 @@ services.AddAuthorization(options =>
         .Build();
 
     // One policy per permission, named after it, so an endpoint asks for the permission it
-    // needs by name and nothing here has to be touched to add another one. Known, not All:
-    // an optional permission left unconfigured still gets a policy, just one nobody's
-    // claims satisfy, which is exactly the "nobody can do this yet" an opt-in feature
-    // should start in.
+    // needs by name and nothing here has to be touched to add another one.
     //
     // Not RequireClaim: that pairs one claim name with its accepted values, and this has to
     // hold across several of each.
-    foreach (var permission in Permissions.Known)
+    foreach (var permission in Permissions.All)
     {
         var accepted = authConfig.ValuesFor(permission);
 
@@ -526,7 +519,6 @@ app.MapBankHolidaysEndpoints();
 app.MapAdminEndpoints();
 app.MapConfigEndpoints();
 app.MapRegionEndpoints();
-app.MapNotificationsEndpoints();
 app.MapWellKnownEndpoints();
 
 // Both anonymous, and both off outside Development by default: a browser opening either
