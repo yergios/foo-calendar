@@ -153,12 +153,6 @@
     </div>
 
     <template v-if="view === 'form'" #footer>
-      <p
-        v-if="resubmitsForApproval"
-        class="text-sm text-secondary bg-surface rounded-8 px-3 py-2 mb-3"
-      >
-        This was already approved. Saving changes sends it back for approval.
-      </p>
       <AppAlert v-if="error" class="mb-3">
         {{ error }}
       </AppAlert>
@@ -259,13 +253,6 @@ const modalTitle = computed(() => {
   if (view.value === "list") return "Choose an absence";
   return isEditing.value ? "Edit absence" : "Add absence";
 });
-
-const resubmitsForApproval = computed(
-  () =>
-    isEditing.value &&
-    editingAbsence.value?.status === "Approved" &&
-    configStore.config?.absenceApprovalsEnabled === true,
-);
 
 const startDate = ref("");
 const endDate = ref("");

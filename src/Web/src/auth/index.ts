@@ -212,7 +212,7 @@ export const useAuthStore = defineStore("auth", () => {
 // Shared across every caller (the router guard, App.vue's own sync, and every apiFetch
 // call): serve the cached token when it's still fresh, and let concurrent callers share
 // one in-flight request instead of each asking the IdP for their own.
-let pendingToken: Promise<string> | null = null;
+let inFlightToken: Promise<string> | null = null;
 
 export async function resolveAccessToken(): Promise<string> {
   const authStore = useAuthStore();
@@ -222,7 +222,7 @@ export async function resolveAccessToken(): Promise<string> {
   const cached = authStore.getCachedToken();
   if (cached) return cached;
 
-  pendingToken ??= (async () => {
+  inFlightToken ??= (async () => {
     let user = oidcUser.value;
     if (!user || user.expired) {
       user = await userManager!.signinSilent();
@@ -235,8 +235,8 @@ export async function resolveAccessToken(): Promise<string> {
     authStore.setToken(token);
     return token;
   })().finally(() => {
-    pendingToken = null;
+    inFlightToken = null;
   });
 
-  return pendingToken;
+  return inFlightToken;
 }

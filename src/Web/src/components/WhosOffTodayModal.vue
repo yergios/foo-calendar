@@ -133,8 +133,8 @@ const WHOLE_DAY_CATEGORY: Record<AbsenceType, number> = {
   Other: 3,
 };
 
-// Every date each person is already booked off again, from the approved whole-day absences
-// in the fetched window. A second absence starting the day after the first ends is
+// Every date each person is already booked off again, from the whole-day absences in the
+// fetched window. A second absence starting the day after the first ends is
 // perfectly legal - the server rejects overlapping absences, not adjacent ones - so without
 // this the "back on" date would announce a return that the next absence immediately
 // cancels. Time-based absences are left out on purpose: an appointment doesn't stop someone
@@ -143,7 +143,7 @@ const wholeDayAbsenceDates = computed(() => {
   const byPerson = new Map<number, Set<string>>();
 
   for (const absence of absences.value) {
-    if (absence.status !== "Approved" || absence.startTime) continue;
+    if (absence.startTime) continue;
 
     let dates = byPerson.get(absence.personId);
     if (dates === undefined) {
@@ -176,20 +176,13 @@ function unavailableCheckFor(person: PersonDto): (iso: string) => boolean {
       holidays.value.some((h) => h.date === iso && holidayAppliesToPerson(h.region, homeCity)));
 }
 
-// Approved only: a still-pending request hasn't actually been granted, so it isn't yet
-// "off" in the sense this list means.
 const entries = computed<Entry[]>(() => {
   const peopleById = new Map(people.value.map((person) => [person.id, person]));
 
   const absenceEntries: Entry[] = absences.value
     // The date check matters now that the fetch reaches forward for the "back on" dates:
     // an absence starting next month must not put anyone on today's list.
-    .filter(
-      (absence) =>
-        absence.status === "Approved" &&
-        absence.startDate <= todayIso &&
-        absence.endDate >= todayIso,
-    )
+    .filter((absence) => absence.startDate <= todayIso && absence.endDate >= todayIso)
     .map((absence): Entry | null => {
       const person = peopleById.get(absence.personId);
       if (!person) return null;

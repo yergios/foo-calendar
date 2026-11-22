@@ -32,12 +32,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     permissions: [Permission.holidaysSync],
   },
   {
-    path: "approvals",
-    label: "Absence approvals",
-    component: () => import("@/views/admin/AdminApprovalsView.vue"),
-    permissions: [Permission.absencesApprove],
-  },
-  {
     path: "audit",
     label: "Audit log",
     component: () => import("@/views/admin/AdminAuditView.vue"),

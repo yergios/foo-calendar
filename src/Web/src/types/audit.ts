@@ -25,6 +25,8 @@ export const AuditAction = {
   absenceCreated: "absence.created",
   absenceUpdated: "absence.updated",
   absenceDeleted: "absence.deleted",
+  // No longer recorded since approvals were removed; still offered as filters because the
+  // log keeps the entries written before then until retention removes them.
   absenceApproved: "absence.approved",
   absenceRejected: "absence.rejected",
   bankHolidayCreated: "bank-holiday.created",

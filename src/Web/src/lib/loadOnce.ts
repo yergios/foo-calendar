@@ -31,12 +31,12 @@ export function createLoadOnce<T>(
   // the whole team's people) would cost memory and proxy overhead for nothing.
   const data = shallowRef(cached) as Ref<T | null>;
   let loaded = false;
-  let pending: Promise<T> | null = null;
+  let inFlight: Promise<T> | null = null;
 
   function loadOnce(): Promise<T> {
     if (loaded) return Promise.resolve(data.value as T);
 
-    pending ??= fetcher()
+    inFlight ??= fetcher()
       .then((value) => {
         const merged = reconcile && data.value !== null ? reconcile(data.value, value) : value;
         if (merged !== data.value) data.value = merged;
@@ -45,10 +45,10 @@ export function createLoadOnce<T>(
         return merged;
       })
       .finally(() => {
-        pending = null;
+        inFlight = null;
       });
 
-    return pending;
+    return inFlight;
   }
 
   /** Forces the next loadOnce() call to re-fetch instead of returning the cached value. */

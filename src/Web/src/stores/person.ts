@@ -7,7 +7,7 @@ import type { PersonDto, UpdatePersonRequest } from "@/types/person";
 
 // Bump the version suffix whenever PersonDto's shape changes: the key carries it, so an old
 // browser's copy simply misses and refetches instead of being trusted with fields it
-// predates. v3 dropped `email` and the EmailOn* preferences along with email notifications
+// predates. v3 dropped `email` and the EmailOn* preferences along with outbound email
 // entirely; a v2 copy still carrying them is harmless since nothing reads those fields
 // anymore, but there's no reason to keep serving it either.
 const PERSON_CACHE_KEY = "person.v3";
@@ -31,7 +31,7 @@ export const usePersonStore = defineStore("person", () => {
   const version = ref(0);
 
   let resolveOnboarding: ((p: PersonDto | null) => void) | null = null;
-  let pendingCheck: Promise<PersonDto | null> | null = null;
+  let inFlightCheck: Promise<PersonDto | null> | null = null;
 
   function hydrate(p: PersonDto | null) {
     person.value = p;
@@ -55,16 +55,16 @@ export const usePersonStore = defineStore("person", () => {
   function checkOnce(): Promise<PersonDto | null> {
     if (hydrated.value) return Promise.resolve(person.value);
 
-    pendingCheck ??= tryGetMe()
+    inFlightCheck ??= tryGetMe()
       .then((p) => {
         hydrate(p);
         return p;
       })
       .finally(() => {
-        pendingCheck = null;
+        inFlightCheck = null;
       });
 
-    return pendingCheck;
+    return inFlightCheck;
   }
 
   /**

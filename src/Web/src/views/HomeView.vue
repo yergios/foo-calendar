@@ -197,13 +197,6 @@
           >
           <span>{{ label }}</span>
         </div>
-        <div v-if="configStore.config?.absenceApprovalsEnabled" class="flex items-center gap-1.5">
-          <span
-            class="inline-flex shrink-0 items-center justify-center w-4 h-4 rounded-4 bg-accent-solid text-on-accent text-xs font-bold"
-            >?</span
-          >
-          <span>Pending approval</span>
-        </div>
       </div>
 
       <button
@@ -384,12 +377,8 @@ function primaryRank(): (person: PersonDto) => number {
 
   if (sortMode.value === "absentToday") {
     const iso = today();
-    // Approved only, same distinction WhosOffTodayModal draws: a still-pending request
-    // hasn't actually taken anyone off the team yet.
     const absent = new Set(
-      absences.value
-        .filter((a) => a.status === "Approved" && a.startDate <= iso && a.endDate >= iso)
-        .map((a) => a.personId),
+      absences.value.filter((a) => a.startDate <= iso && a.endDate >= iso).map((a) => a.personId),
     );
     return (p) => (absent.has(p.id) ? 0 : 1);
   }
@@ -555,10 +544,11 @@ const isLatestYearLoad = useStaleGuard();
 
 // Bump the version suffix whenever AbsenceDto/BankHolidayDto's shape changes: the key
 // carries it, so an old browser's copy simply misses and refetches instead of being
-// trusted with fields it predates (the incident stores/config.ts describes).
+// trusted with fields it predates (the incident stores/config.ts describes). Absences v2
+// dropped `status`.
 const ABSENCES_CACHE_GROUP = "absences:";
 const HOLIDAYS_CACHE_GROUP = "holidays:";
-const absencesCacheKey = (y: number) => `${ABSENCES_CACHE_GROUP}${y}.v1`;
+const absencesCacheKey = (y: number) => `${ABSENCES_CACHE_GROUP}${y}.v2`;
 const holidaysCacheKey = (y: number) => `${HOLIDAYS_CACHE_GROUP}${y}.v1`;
 
 // One cached year per type: the sweep before the write is also what evicts other years

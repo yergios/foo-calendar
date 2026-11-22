@@ -2,7 +2,6 @@
 // is health data under GDPR Article 9. Illness is recorded as Other, which says someone
 // is away without saying why. Mirrors the API's AbsenceType.
 export type AbsenceType = "Vacation" | "Other" | "Appointment";
-export type AbsenceStatus = "Pending" | "Approved" | "Rejected";
 
 /** Single-letter marker painted into a calendar cell. Keyed by the label the legend shows;
  * HomeView.vue's legend iterates this object directly, so key order here is legend order. */
@@ -18,17 +17,11 @@ export interface AbsenceDto {
   startDate: string; // yyyy-MM-dd
   endDate: string;
   type: AbsenceType;
-  status: AbsenceStatus;
+  /** Only ever the viewer's own: the API leaves it null on everyone else's absences. */
   note: string | null;
   createdAt: string;
   startTime: string | null; // "HH:mm:ss", set only when type === "Appointment"
   endTime: string | null;
-}
-
-/** What a reviewer sees on /admin: always carries the requester's note, unlike AbsenceDto
- * everywhere else. */
-export interface PendingAbsencesResponse {
-  absences: AbsenceDto[];
 }
 
 export interface AbsencesResponse {

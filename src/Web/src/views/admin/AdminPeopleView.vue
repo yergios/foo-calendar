@@ -104,7 +104,7 @@
                   type="button"
                   class="text-xs font-semibold text-error hover:opacity-70 transition-opacity ml-3"
                   :disabled="deletingId === person.id"
-                  @click="pendingDelete = person"
+                  @click="personToDelete = person"
                 >
                   {{ deletingId === person.id ? "Deleting…" : "Delete" }}
                 </button>
@@ -217,15 +217,15 @@
     </div>
 
     <ConfirmDialog
-      v-if="pendingDelete"
+      v-if="personToDelete"
       title="Delete person"
-      :message="`Delete ${pendingDelete.displayName ?? pendingDelete.username}? This cannot be undone.`"
+      :message="`Delete ${personToDelete.displayName ?? personToDelete.username}? This cannot be undone.`"
       confirm-label="Delete"
       busy-label="Deleting…"
       destructive
-      :busy="deletingId === pendingDelete.id"
+      :busy="deletingId === personToDelete.id"
       @confirm="confirmDelete"
-      @cancel="pendingDelete = null"
+      @cancel="personToDelete = null"
     />
   </section>
 </template>
@@ -477,10 +477,10 @@ async function submitForm() {
 
 // Two steps now that the confirmation is a dialog rather than a blocking confirm(): the
 // person to delete is parked here, which is also what renders the dialog.
-const pendingDelete = ref<PersonDto | null>(null);
+const personToDelete = ref<PersonDto | null>(null);
 
 async function confirmDelete() {
-  const person = pendingDelete.value;
+  const person = personToDelete.value;
   if (!person) return;
 
   deletingId.value = person.id;
@@ -492,7 +492,7 @@ async function confirmDelete() {
     console.error("ERROR => Failed to delete person:", error);
   } finally {
     deletingId.value = null;
-    pendingDelete.value = null;
+    personToDelete.value = null;
   }
 }
 </script>

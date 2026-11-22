@@ -66,23 +66,14 @@ export function dayIndexOf(days: readonly SegmentDay[]): Map<string, number> {
   return new Map(days.map((day, index) => [day.iso, index]));
 }
 
-// The letter the legend shows, with a trailing "?" for anything still awaiting review, so a
-// pending absence reads as "color, but unconfirmed" without needing a second visual language
-// on top of the one the calendar already has.
-//
-// A day holds at most one whole-day absence (mutual exclusivity is enforced server-side),
-// which then owns the letter. Otherwise it holds only time-based ones, any number of which
-// can stack: pending if any one of them is, and the letter comes from the first entry's own
-// type - the stack is usually one type, and on the rare day it isn't (e.g. an Appointment
-// and a time-based Other), the tooltip is what disambiguates the rest.
+// The letter the legend shows. A day holds at most one whole-day absence (mutual
+// exclusivity is enforced server-side), which then owns the letter. Otherwise it holds only
+// time-based ones, any number of which can stack, and the letter comes from the first
+// entry's own type - the stack is usually one type, and on the rare day it isn't (e.g. an
+// Appointment and a time-based Other), the tooltip is what disambiguates the rest.
 function labelFor(dayAbsences: AbsenceDto[]): string {
-  const wholeDay = dayAbsences.find((a) => !a.startTime);
-  if (wholeDay) {
-    const initial = ABSENCE_TYPE_INITIALS[wholeDay.type];
-    return wholeDay.status === "Pending" ? `${initial}?` : initial;
-  }
-  const initial = ABSENCE_TYPE_INITIALS[dayAbsences[0]!.type];
-  return dayAbsences.some((a) => a.status === "Pending") ? `${initial}?` : initial;
+  const owner = dayAbsences.find((a) => !a.startTime) ?? dayAbsences[0]!;
+  return ABSENCE_TYPE_INITIALS[owner.type];
 }
 
 /**
@@ -175,10 +166,9 @@ export function absenceTooltip(
 ): string {
   const name = person.displayName ?? person.username;
   const lines = absences.map((a) => {
-    const status = a.status === "Pending" ? " (pending approval)" : "";
     const timeRange = a.startTime ? ` ${formatTimeRange(a.startTime, a.endTime)}` : "";
     const body = a.note ? `${a.type}${timeRange}: ${a.note}` : `${a.type}${timeRange}`;
-    return `${name} — ${body}${status}`;
+    return `${name} — ${body}`;
   });
   // Once at the end rather than repeated per line: every time here is in the same zone,
   // same as the add/edit form's own (Europe/Zurich) labels.

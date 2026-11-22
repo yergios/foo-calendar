@@ -12,9 +12,6 @@ export interface AvailableRegionsResponse {
 export interface AppConfig {
   /** The team's own region. Synced and shown whether or not anyone is in it. */
   homeRegion: string;
-  /** Whether an absence needs approval before it counts. Off by default: everything is
-   * approved the instant it's created, same as always. */
-  absenceApprovalsEnabled: boolean;
   /** The raw IANA timezone id (e.g. "Europe/Zurich"). Always set: Team:HomeTimeZone is
    * required. Display verbatim next to a time-based absence's time inputs, no formatting. */
   homeTimeZone: string;

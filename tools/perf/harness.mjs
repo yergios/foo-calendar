@@ -243,7 +243,6 @@ function synthetic(n) {
           startDate: iso(start),
           endDate: iso(end),
           type,
-          status: rnd() < 0.1 ? "Pending" : "Approved",
           note: null,
           createdAt: "2026-09-02T17:10:42.4785229",
           startTime: timed ? "09:00:00" : null,

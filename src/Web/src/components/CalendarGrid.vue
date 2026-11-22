@@ -651,7 +651,7 @@ function scrollByPage(direction: 1 | -1) {
 // A plain click still does the one-page jump above (bound via @click, so it also covers
 // keyboard activation); holding the button down instead ramps into a continuous scroll,
 // like an OS scrollbar's own arrow buttons. The delay before it kicks in is what stops an
-// ordinary click's mousedown from also starting one - mouseup cancels the pending timeout
+// ordinary click's mousedown from also starting one - mouseup cancels the waiting timeout
 // well before it'd fire.
 const HOLD_DELAY_MS = 350;
 const HOLD_SPEED_PX_PER_FRAME = 14;
