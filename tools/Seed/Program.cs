@@ -398,7 +398,6 @@ internal static class Program
                 FirstName = firstName,
                 LastName = lastName,
                 DisplayName = $"{firstName} {lastName}",
-                Email = $"{username}@example.test",
                 HomeCity = region,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = "seed-script",
