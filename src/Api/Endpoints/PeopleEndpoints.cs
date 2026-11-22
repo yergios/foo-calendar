@@ -73,7 +73,7 @@ public static class PeopleEndpoints
     {
         var sort = sortBy ?? PersonSortColumn.Name;
 
-        // Vacation/sick/other are the same per-year numbers the ReportsRead-gated stats
+        // Vacation/other are the same per-year numbers the ReportsRead-gated stats
         // endpoint hands out; sorting by one would otherwise let PeopleManage alone infer
         // them a page at a time.
         if (PersonSortColumn.StatsColumns.Contains(sort) && !user.HasAnyPermission(

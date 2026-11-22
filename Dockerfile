@@ -27,15 +27,24 @@ COPY src/Web/ ./
 RUN pnpm build
 
 # ---- API ------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api
+# Ubuntu's SDK rather than an mcr.microsoft.com/dotnet/sdk image: global.json pins the
+# 10.0.1xx feature band, and Microsoft publishes SDK images for the newest band only (its
+# 1xx images stopped at 10.0.103). Ubuntu ships the 1xx band with every servicing release,
+# so this stays patched. Only the build runs on it; the runtime stage below is Microsoft's.
+FROM ubuntu:24.04 AS api
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends dotnet-sdk-10.0 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
 # Same idea: restore against just the project files so a code change doesn't refetch NuGet.
-# .editorconfig comes along because the build treats warnings as errors: without it the
-# analyzers run with none of the repository's deliberate suppressions and fail the image
-# build on rules the source tree has turned off.
-COPY Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
+# global.json comes along so an SDK outside the pinned band fails the build instead of
+# quietly compiling it. .editorconfig comes along because the build treats warnings as
+# errors: without it the analyzers run with none of the repository's deliberate
+# suppressions and fail the image build on rules the source tree has turned off.
+COPY global.json Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
 COPY src/Api/Api.csproj src/Api/
 RUN dotnet restore src/Api/Api.csproj
 
