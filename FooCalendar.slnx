@@ -1,10 +1,6 @@
 <Solution>
   <Folder Name="/Pipelines/">
-    <File Path="pipelines/ci-premerge.yml" />
-    <File Path="pipelines/cicd-release.yml" />
-    <File Path="pipelines/cicd-test.yml" />
-    <File Path="pipelines/templates/cd-template.yml" />
-    <File Path="pipelines/templates/ci-template.yml" />
+    <File Path=".github/workflows/ci.yml" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
