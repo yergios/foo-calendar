@@ -6,7 +6,7 @@ namespace Api.Infrastructure;
 public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
-        HttpContext context, Exception exception, CancellationToken ct)
+        HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         var (status, title) = exception switch
         {
@@ -19,10 +19,10 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
 
         if (status == 0) return false; // default handler produces a 500
 
-        context.Response.StatusCode = status;
+        httpContext.Response.StatusCode = status;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
-            HttpContext = context,
+            HttpContext = httpContext,
             ProblemDetails = new ProblemDetails
             {
                 Status = status,

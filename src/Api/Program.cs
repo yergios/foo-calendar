@@ -1,7 +1,6 @@
 using System.Net;
 using System.Reflection;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 using Api.Configuration;
 using Api.Data;
@@ -40,7 +39,7 @@ services.AddOptions<TeamOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.HomeRegion),
         "Team:HomeRegion must be configured, e.g. \"CH-ZH\".")
     .Validate(o => string.IsNullOrWhiteSpace(o.HomeRegion)
-            || Regex.IsMatch(o.HomeRegion, ValidationPatterns.RegionCode),
+            || ValidationPatterns.RegionCodeRegex().IsMatch(o.HomeRegion),
         "Team:HomeRegion must be an ISO 3166-2 code, e.g. \"CH\" or \"CH-ZH\".")
     .Validate(o => !string.IsNullOrWhiteSpace(o.HomeTimeZone),
         "Team:HomeTimeZone must be configured, e.g. \"Europe/Zurich\".")
@@ -437,7 +436,7 @@ app.UseStaticFiles(new StaticFileOptions
         // names which hashed files to load. Without this, browsers revalidate each asset
         // with a 304 round trip on every cold load. Path is post-UsePathBase, so this
         // matches under sub-path deployments too. favicon.svg is unhashed and gets nothing.
-        if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+        if (ctx.Context.Request.Path.StartsWithSegments("/assets", StringComparison.OrdinalIgnoreCase))
             ctx.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
     }
 });

@@ -247,7 +247,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     [Fact]
     public async Task GetPageAsync_SortedByVacation_OrdersAcrossPagesByThatYearsStats()
     {
-        var noVacation = await sut.CreateAsync(CreateRequestNamed("noVacation", "No Vacation"), "admin");
+        await sut.CreateAsync(CreateRequestNamed("noVacation", "No Vacation"), "admin");
         var oneWeek = await sut.CreateAsync(CreateRequestNamed("oneWeek", "One Week"), "admin");
         var twoWeeks = await sut.CreateAsync(CreateRequestNamed("twoWeeks", "Two Weeks"), "admin");
 

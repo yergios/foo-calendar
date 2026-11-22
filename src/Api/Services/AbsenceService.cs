@@ -73,7 +73,7 @@ public sealed class AbsenceService(
         // trip per person: a team's home regions are few, however many people share them.
         var regions = people.Select(p => p.HomeCity).Where(c => c is not null).Distinct().ToList();
         var holidays = regions.Count > 0
-            ? (await bankHolidays.GetForRegionsAsync(regions!, yearStart, yearEnd, ct)).Holidays
+            ? (await bankHolidays.GetForRegionsAsync(regions, yearStart, yearEnd, ct)).Holidays
             : [];
         var holidaysByRegion = holidays.ToLookup(h => h.Region);
 

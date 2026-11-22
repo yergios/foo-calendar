@@ -44,7 +44,7 @@ public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolid
                     ? BankHoliday.OccurrenceIn(e.Date, year)
                     : e.Date))
                 .Where(x => x.Date is DateOnly d && d.Year == year)
-                .Select(x => new SourceHoliday(x.Entry.Region, x.Date!.Value, x.Entry.Name))
+                .Select(x => new SourceHoliday(x.Entry.Region, x.Date.Value, x.Entry.Name))
         ];
     }
 

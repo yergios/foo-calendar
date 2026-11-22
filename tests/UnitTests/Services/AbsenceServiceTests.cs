@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Api.Configuration;
 using Api.Data.Models;
 using Api.Dtos;
@@ -54,9 +56,9 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         string start, string end, AbsenceType type = AbsenceType.Vacation, string note = null,
         string startTime = null, string endTime = null) =>
         new(
-            DateOnly.Parse(start), DateOnly.Parse(end), type, note,
-            startTime is null ? null : TimeOnly.Parse(startTime),
-            endTime is null ? null : TimeOnly.Parse(endTime));
+            DateOnly.Parse(start, CultureInfo.InvariantCulture), DateOnly.Parse(end, CultureInfo.InvariantCulture), type, note,
+            startTime is null ? null : TimeOnly.Parse(startTime, CultureInfo.InvariantCulture),
+            endTime is null ? null : TimeOnly.Parse(endTime, CultureInfo.InvariantCulture));
 
     [Fact]
     public async Task CreateAsync_WhenNoOverlap_CreatesAbsence()
@@ -251,7 +253,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
     private void SeedHoliday(string region, string date) =>
         bankHolidays.Holidays.Add(new BankHolidayDto(
-            nextHolidayId++, region, DateOnly.Parse(date), "Test holiday", HolidaySource.Manual, false));
+            nextHolidayId++, region, DateOnly.Parse(date, CultureInfo.InvariantCulture), "Test holiday", HolidaySource.Manual, false));
 
     [Fact]
     public async Task GetStatsAsync_ExcludesABankHolidayMatchingThePersonsExactRegion()

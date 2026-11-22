@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Api.Configuration;
 using Api.Data.Models;
 using Api.Services;
@@ -46,8 +48,8 @@ public sealed class RetentionServiceTests : SqliteTestBase
         Db.Absences.Add(new Absence
         {
             PersonId = personId,
-            StartDate = DateOnly.Parse(start),
-            EndDate = DateOnly.Parse(end),
+            StartDate = DateOnly.Parse(start, CultureInfo.InvariantCulture),
+            EndDate = DateOnly.Parse(end, CultureInfo.InvariantCulture),
             Type = AbsenceType.Vacation,
             CreatedBy = "jdoe",
         });
@@ -145,10 +147,10 @@ public sealed class RetentionServiceTests : SqliteTestBase
         // Booked long ago but still running: it is current, whatever its start date says.
         var person = AddPerson();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        AddAbsence(person.Id, today.AddDays(-400).ToString("yyyy-MM-dd"),
-                              today.AddDays(30).ToString("yyyy-MM-dd"));
-        AddAbsence(person.Id, today.AddDays(-500).ToString("yyyy-MM-dd"),
-                              today.AddDays(-450).ToString("yyyy-MM-dd"));
+        AddAbsence(person.Id, today.AddDays(-400).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                              today.AddDays(30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        AddAbsence(person.Id, today.AddDays(-500).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                              today.AddDays(-450).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
         var result = await CreateSut(new RetentionOptions { AbsenceDays = 365 }).SweepAsync();
 

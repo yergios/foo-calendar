@@ -91,10 +91,13 @@ public sealed class PersonService(
             // Same "a country also matches its own subdivisions" rule as the home page's
             // region filter (HomeView.vue's matchesRegionFilter) - inlined rather than
             // RegionCode.BelongsTo() so EF can translate it into SQL, same as
-            // TeamRegionService.PruneIfUnusedAsync does for the same reason.
+            // TeamRegionService.PruneIfUnusedAsync does for the same reason. CA1310 assumes
+            // this StartsWith runs under the current culture; it is translated to SQL instead.
+#pragma warning disable CA1310
             query = query.Where(p =>
                 p.HomeCity != null
                 && regions.Any(r => p.HomeCity == r || p.HomeCity.StartsWith(r + RegionCode.Separator)));
+#pragma warning restore CA1310
         }
 
         if (PersonSortColumn.StatsColumns.Contains(sortBy))

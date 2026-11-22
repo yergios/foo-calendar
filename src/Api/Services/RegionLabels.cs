@@ -23,7 +23,9 @@ public sealed class RegionLabels
             using var stream = File.OpenRead(DataPath);
             names = JsonSerializer.Deserialize<Dictionary<string, string>>(stream) ?? [];
         }
+#pragma warning disable CA1031 // Catch-all on purpose: the name table is cosmetic, and no read failure is worth refusing to start over.
         catch (Exception ex)
+#pragma warning restore CA1031
         {
             // Labels are cosmetic. A missing table leaves raw codes in the UI, which is
             // worse than it should be but not worth refusing to serve over.

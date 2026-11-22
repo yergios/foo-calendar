@@ -67,7 +67,7 @@ public sealed class BankHolidayService(
                 h => Enumerable.Range(from.Year, to.Year - from.Year + 1),
                 (h, year) => (Holiday: h, Date: BankHoliday.OccurrenceIn(h.Date, year)))
             .Where(x => x.Date is DateOnly d && d >= from && d <= to)
-            .Select(x => BankHolidayDto.FromEntity(x.Holiday) with { Date = x.Date!.Value });
+            .Select(x => BankHolidayDto.FromEntity(x.Holiday) with { Date = x.Date.Value });
 
         var holidays = oneTime.Concat(recurring).OrderBy(h => h.Date).ToList();
 
@@ -116,7 +116,7 @@ public sealed class BankHolidayService(
             .ToDictionary(b => (b.Region, b.Date));
         var recurring = existing.Where(b => b.IsRecurringAnnually).ToList();
 
-        BankHoliday? FindExisting(string region, DateOnly date)
+        BankHoliday FindExisting(string region, DateOnly date)
         {
             if (exact.TryGetValue((region, date), out var match)) return match;
             return recurring.FirstOrDefault(b => b.Region == region && Collides(b.Date, true, date, false));
@@ -175,7 +175,9 @@ public sealed class BankHolidayService(
             {
                 await SyncCountryAsync(country.Key, [.. country], year, ct);
             }
+#pragma warning disable CA1031 // Catch-all on purpose: a failed country is reported in failedRegions, and must not stop the rest syncing.
             catch (Exception ex)
+#pragma warning restore CA1031
             {
                 // one country failing shouldn't block the rest
                 logger.LogWarning(ex, "Bank holiday sync failed for {Country} {Year}", country.Key, year);

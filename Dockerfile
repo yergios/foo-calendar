@@ -32,7 +32,10 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api
 WORKDIR /src
 
 # Same idea: restore against just the project files so a code change doesn't refetch NuGet.
-COPY Directory.Build.props Directory.Packages.props nuget.config ./
+# .editorconfig comes along because the build treats warnings as errors: without it the
+# analyzers run with none of the repository's deliberate suppressions and fail the image
+# build on rules the source tree has turned off.
+COPY Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
 COPY src/Api/Api.csproj src/Api/
 RUN dotnet restore src/Api/Api.csproj
 

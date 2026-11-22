@@ -16,5 +16,5 @@ public sealed class Person
     public required string CreatedBy { get; set; }
     public string UpdatedBy { get; set; }
 
-    public ICollection<Absence> Absences { get; set; } = [];
+    public ICollection<Absence> Absences { get; } = [];
 }

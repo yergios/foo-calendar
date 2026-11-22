@@ -82,7 +82,7 @@ public sealed class NagerHolidaySourceTests
 
         await sut.GetAsync("ES", 2027);
 
-        requested!.ToString().ShouldEndWith("PublicHolidays/2027/ES");
+        requested.ToString().ShouldEndWith("PublicHolidays/2027/ES");
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public sealed record CreateAbsenceRequest(
     TimeOnly? EndTime = null
 ) : IValidatableObject
 {
-    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (EndDate < StartDate)
             yield return new ValidationResult(

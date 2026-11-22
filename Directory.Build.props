@@ -10,6 +10,11 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>All</AnalysisMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Every analyzer rule is on (AnalysisMode=All) and every warning fails the build, so a
+         new warning is fixed, or suppressed with its reason in .editorconfig, on the commit
+         that introduces it. NuGet audit findings (NU190x) fail it too: a published advisory
+         against a dependency is a build break until it is upgraded or pinned past. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup Condition="'$(MSBuildProjectExtension)' != '.dcproj'">
     <PackageReference Include="SonarAnalyzer.CSharp">

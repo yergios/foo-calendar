@@ -24,7 +24,7 @@ public sealed class PersonImportTests : SqliteTestBase
         audit,
         TestAbsenceService.Create(Db));
 
-    private Person AddPerson(string username)
+    private void AddPerson(string username)
     {
         var person = new Person
         {
@@ -36,7 +36,6 @@ public sealed class PersonImportTests : SqliteTestBase
 
         Db.People.Add(person);
         Db.SaveChanges();
-        return person;
     }
 
     [Fact]

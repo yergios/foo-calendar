@@ -1,0 +1,3 @@
+# The repository stores LF everywhere, and .editorconfig asks editors for LF. This makes git
+# enforce the same on checkout and commit, whatever the platform's autocrlf setting.
+* text=auto eol=lf

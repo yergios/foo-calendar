@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Api.Data.Models;
 using Api.Services;
 
@@ -33,8 +35,8 @@ public sealed class NotificationServiceTests : SqliteTestBase
     private static Absence NewAbsence(int personId, string start, string end, AbsenceType type = AbsenceType.Vacation) => new()
     {
         PersonId = personId,
-        StartDate = DateOnly.Parse(start),
-        EndDate = DateOnly.Parse(end),
+        StartDate = DateOnly.Parse(start, CultureInfo.InvariantCulture),
+        EndDate = DateOnly.Parse(end, CultureInfo.InvariantCulture),
         Type = type,
         Status = AbsenceStatus.Approved,
         CreatedBy = "jdoe",
@@ -114,8 +116,8 @@ public sealed class NotificationServiceTests : SqliteTestBase
         Db.Absences.Add(new Absence
         {
             PersonId = personId,
-            StartDate = DateOnly.Parse(start),
-            EndDate = DateOnly.Parse(end),
+            StartDate = DateOnly.Parse(start, CultureInfo.InvariantCulture),
+            EndDate = DateOnly.Parse(end, CultureInfo.InvariantCulture),
             Type = type,
             Status = AbsenceStatus.Pending,
             // Each call a tick later than the last, so ordering-by-CreatedAt tests don't

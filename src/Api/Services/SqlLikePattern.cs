@@ -14,5 +14,8 @@ public static class SqlLikePattern
     public static string Contains(string term) => $"%{Escape(term)}%";
 
     private static string Escape(string term) =>
-        term.Replace(EscapeChar, EscapeChar + EscapeChar).Replace("%", EscapeChar + "%").Replace("_", EscapeChar + "_");
+        term
+            .Replace(EscapeChar, EscapeChar + EscapeChar, StringComparison.Ordinal)
+            .Replace("%", EscapeChar + "%", StringComparison.Ordinal)
+            .Replace("_", EscapeChar + "_", StringComparison.Ordinal);
 }

@@ -37,7 +37,9 @@ public sealed class RetentionBackgroundService(
             {
                 throw;
             }
+#pragma warning disable CA1031 // Catch-all on purpose: a failed sweep must not take the host down; the next tick retries.
             catch (Exception ex)
+#pragma warning restore CA1031
             {
                 // A failed sweep is data kept too long, which is worth a loud line, but it
                 // is not worth taking the host down for: the next tick will try again.

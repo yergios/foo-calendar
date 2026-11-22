@@ -13,7 +13,6 @@ src/Api/wwwroot/
 .git/
 .github/
 .claude/
-.editorconfig
 .gitignore
 
 **/.env
