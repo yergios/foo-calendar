@@ -36,6 +36,6 @@ public sealed class NagerOptions
 public sealed class HolidayFileOptions
 {
     /// <summary>Path to the JSON file, typically mounted into the container. See the
-    /// README for the format.</summary>
+    /// "The file source" in docs/regions-and-holidays.md for the format.</summary>
     public string Path { get; init; } = "";
 }
