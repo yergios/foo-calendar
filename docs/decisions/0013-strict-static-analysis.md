@@ -7,7 +7,7 @@
 ## Context
 
 `AnalysisMode=All` and the Sonar analyzer were already enabled, but warnings did not fail
-the build, so they accumulated. The suppressions meant to handle the inapplicable ones sat
+the build, so 159 had accumulated by 2026-11-22. The suppressions meant to handle the inapplicable ones sat
 under an `.editorconfig` section that matched no file, a seed tool had stopped compiling
 without anyone noticing, and a dependency carried a high-severity advisory.
 
@@ -32,6 +32,10 @@ without anyone noticing, and a dependency carried a high-severity advisory.
   of `var`, and `_camelCase` private fields. Overridden rather than adopted, so the rules
   describe the code as it is written (`99817b0`, and the reasons in `.editorconfig`'s
   overrides section).
+- **dotnet/runtime's style rules**, which many open-source .NET projects copy. Offered
+  alongside the SDK template on 2026-11-22 and declined: they call for `_camelCase` private
+  fields, `s_` static fields and explicit types, so adopting them meant renaming across the
+  codebase or keeping rules the code contradicts.
 - **Leaving warnings as warnings.** That is how they built up.
 
 ## Consequences

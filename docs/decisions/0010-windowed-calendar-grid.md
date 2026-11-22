@@ -34,10 +34,10 @@ Replace the table with a windowed, layered grid:
   to change: the cost was in the browser's passes over the DOM that existed, not in Vue
   re-rendering it, so this could not remove it.
 - **A canvas or WebGL grid.** Rejected on 2026-09-01, before the windowed grid was built;
-  the reasoning was not recorded. The private notes from that work keep it rejected unless
-  new profiling shows a new bottleneck.
-- **Progressive rendering of the full grid.** Cut; the private notes record only that
-  stale-while-revalidate covers repeat visits ([0011](0011-client-side-stale-while-revalidate.md)).
+  the reasoning was not recorded. It stays rejected unless new profiling shows a new
+  bottleneck.
+- **Progressive rendering of the full grid.** Cut. The only reason recorded is that
+  stale-while-revalidate already covers repeat visits ([0011](0011-client-side-stale-while-revalidate.md)).
 
 ## Consequences
 
