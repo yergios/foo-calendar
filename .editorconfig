@@ -424,6 +424,12 @@ dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
 # these as IDE suggestions; here they are conventions every file already follows.
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_style_prefer_primary_constructors = true:warning
+
+# Raised to warnings in the IDE only. The command-line build ignores a naming rule's own
+# severity and reports IDE1006 only when dotnet_diagnostic.IDE1006.severity is set, which
+# would enforce every naming rule above, the template's s_ prefix for static fields
+# included. In the build these two conventions are enforced by CA1715 (I and T prefixes)
+# and S101 (PascalCase types) instead.
 dotnet_naming_rule.interfaces_should_be_ipascalcase.severity = warning
 dotnet_naming_rule.types_and_namespaces_should_be_pascalcase.severity = warning
 
@@ -433,11 +439,13 @@ dotnet_naming_rule.types_and_namespaces_should_be_pascalcase.severity = warning
 # a reason at the one site, over adding a line here.
 
 # CA1002: Do not expose generic lists. Guards a library's public surface; the public types
-# here are DTOs serialized to JSON, which nobody outside this solution compiles against.
+# here are DTOs, options and services that nobody outside this solution compiles against.
 dotnet_diagnostic.CA1002.severity = none
 
 # CA1062: Validate public arguments for null. Same reasoning: there are no callers outside
-# the solution. Null-safety belongs to nullable reference types, not per-method guards.
+# the solution. Arguments come from model binding, DI or this solution's own code, and with
+# nullable annotations off (Directory.Build.props) a guard per method would only trade a
+# NullReferenceException for an ArgumentNullException.
 dotnet_diagnostic.CA1062.severity = none
 
 # CA1515: Make public types internal. They are public so the test project can use them;
@@ -452,14 +460,16 @@ dotnet_diagnostic.CA1716.severity = none
 # the collision with System.Security.Permissions, which nothing here imports.
 dotnet_diagnostic.CA1724.severity = none
 
-# CA1054/CA1056: URI parameters and properties should be System.Uri. These are config
-# values passed through to the browser untouched, never dereferenced server-side, and may
-# legitimately be mailto: or other non-HTTP schemes.
+# CA1054/CA1056: URI parameters and properties should be System.Uri. Most are config values
+# handed to the browser untouched, where Team:SupportUrl may be mailto: and
+# Auth:RedirectUri is relative by default. The one the server uses, Holidays:Nager:BaseUrl,
+# is bound from configuration as text and parsed once where its HttpClient is registered.
 dotnet_diagnostic.CA1054.severity = none
 dotnet_diagnostic.CA1056.severity = none
 
-# CA1805: Do not initialize unnecessarily. An explicit "= false" on an options property
-# documents the shipped default next to the setting it belongs to.
+# CA1805: Do not initialize unnecessarily. Carried over from the original configuration.
+# Today it fires only on the explicit "= null" of the Absence.Person and
+# Notification.Person navigations, which changes nothing at runtime.
 dotnet_diagnostic.CA1805.severity = none
 
 # CA1812: Internal class is never instantiated. Fires on the private records that
