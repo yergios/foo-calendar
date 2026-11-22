@@ -1,14 +1,17 @@
 # 2. One process serves both the API and the SPA
 
 - Status: Accepted
-- Date: 2026-08-12
-- Source: commit `45031df` (container image and compose deployment)
+- Date: 2026-08-11 (already in place at the first commit)
+- Source: commit `a6b3ad9` (README: "a single deployable unit"), commit `45031df`
+  (container image and compose deployment)
 
 ## Context
 
-The app has a .NET API and a Vue SPA. The usual split deploys them separately: a static
-host or CDN for the SPA, the API behind it, and CORS or a reverse proxy to join them. The
-people running this are a team self-hosting a tool for themselves, not an operations group.
+The app has a .NET API and a Vue SPA. The first commit's README already described it as a
+single deployable unit: one process, one port, one deployment artifact. The reasoning for
+that choice over deploying the two separately was not recorded. `45031df` then built the
+artifact the README described, which until then had no Dockerfile or documented way to run
+it anywhere but a dev machine.
 
 ## Decision
 

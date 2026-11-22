@@ -51,11 +51,13 @@ flowchart LR
     idp -. "signing keys" .-> api
 ```
 
-Anonymous routes, the complete list (`.AllowAnonymous()` in the code):
+Anonymous routes, the complete list: the routes marked `.AllowAnonymous()` in the code,
+plus the files under `wwwroot`, which the static file middleware serves before
+authentication runs.
 
 | Route | Exposes |
 | --- | --- |
-| SPA shell and static assets | Public build output, plus the OIDC settings the browser needs to start a sign-in |
+| SPA shell and static assets | Public build output, plus the inlined bootstrap payload: the OIDC settings the browser needs to start a sign-in, the team's name, support and issue links, and the claim types and values that grant each permission |
 | `GET /api/config/bootstrap` | The same bootstrap payload, for the Vite dev server |
 | `GET /healthchecks` | One word: `Healthy`, `Degraded` or `Unhealthy`. Per-check detail needs `AuditRead` |
 | `GET /.well-known/security.txt` | The configured security contact |
@@ -86,9 +88,15 @@ named permission on top ([0006](decisions/0006-fail-closed-per-permission-author
 
 ### Repudiation
 
-Every create, update, delete, import, review and hand-triggered sync is written to the audit
-log with the actor's username, and rows carry `CreatedBy`/`UpdatedBy`. Entries survive the
+Every create, update and delete someone makes through the API (people, absences, manual
+bank holidays), every import, review and hand-triggered sync is written to the audit log
+with the actor's username, and rows carry `CreatedBy`/`UpdatedBy`. Entries survive the
 people they name, bounded by `Retention:AuditEntryDays`.
+
+What follows on its own is not in the audit log: a region's holidays deleted when its last
+occupant leaves (manual ones included, `TeamRegionService.PruneIfUnusedAsync`), the
+absences that cascade with a deleted person (only their count is recorded), the scheduled
+holiday sync, and the retention sweep. Those reach the application log, if at all.
 
 ### Information disclosure
 
@@ -98,13 +106,13 @@ people they name, bounded by `Retention:AuditEntryDays`.
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |
-| Data leaving the system | Only region codes to the holiday source and sign-in traffic to the IdP; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
+| Data leaving the system | Only country codes to the holiday source, sign-in traffic to the IdP, and traces, metrics and logs to an OTLP collector if the deployer configures one; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
 
 ### Denial of service
 
 | Threat | Mitigation |
 | --- | --- |
-| An unbounded list response | Admin lists are paginated with a capped page size; the pending queue is capped at 200 |
+| An unbounded list response | The audit log and the admin people list are paged, at most 200 rows a page; the pending queue is capped at 200. The calendar's own reads (`GET /api/people`, `GET /api/absences` over the requested date range) are not capped |
 | A pathological regex input | The one hand-checked pattern is source-generated with a match timeout |
 | A huge request body (the CSV import reads it whole) | Kestrel's default 30 MB body limit applies; the endpoint needs `PeopleManage` |
 | A holiday source that is down | Failures are per country, reported and retried; a profile save never fails on it |
@@ -132,8 +140,9 @@ record when it is.
    into the page could read them. Vue escapes all interpolated data; the one `v-html` renders
    the bundled in-app docs, whose only dynamic parts are the operator's `Team:OrgName` and
    `Team:SupportUrl`.
-4. **No rate limiting.** Every API route needs a token, which bounds who can try, but not
-   how often.
+4. **No rate limiting.** Apart from the anonymous routes above, every API route needs a
+   token, which bounds who can try, but not how often. `/healthchecks` runs the database
+   check on every anonymous call.
 5. **Manual bank holidays are editable by every member**, by design
    ([0006](decisions/0006-fail-closed-per-permission-authorization.md)). Misuse is visible
    in the audit log rather than prevented.
@@ -142,6 +151,15 @@ record when it is.
    started with `Development` would run without authentication, announced in the log.
 8. **One instance** ([0003](decisions/0003-sqlite-single-instance.md)): availability is the
    container's and the host's.
+9. **The browser keeps a copy of the calendar.** A year of the team's absences (with the
+   viewer's own notes), the holidays, the people list and the viewer's profile are cached in
+   `localStorage` ([0011](decisions/0011-client-side-stale-while-revalidate.md)) and stay
+   there after the session ends. The app has no sign-out that clears them. On a shared
+   computer, the next user of the browser profile can read them.
+10. **The bootstrap payload is public.** It names the claim values that grant each
+    permission, such as group ids or role names, to anyone who can reach the app (see the
+    table above). `SpaShell` and `ConfigEndpoints` serve it anonymously because the SPA needs
+    it before sign-in.
 
 ## Reporting a vulnerability
 

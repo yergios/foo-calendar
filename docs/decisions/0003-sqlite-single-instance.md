@@ -1,14 +1,16 @@
 # 3. SQLite, and exactly one instance
 
 - Status: Accepted
-- Date: 2026-08-12
-- Source: [Scaling](../deployment.md#scaling), `Program.cs` startup tasks
+- Date: 2026-08-11 (SQLite, already in place at the first commit), 2026-08-12 (one instance)
+- Source: commit `a6b3ad9` (EF Core + SQLite), commit `45031df` (the Scaling section, now
+  [Scaling](../deployment.md#scaling)), `Program.cs` startup tasks
 
 ## Context
 
-The app holds a team's people, absences, holidays, an audit log and notifications: small,
-relational, and written a few times a day per person. Whoever deploys it should not need to
-run or back up a database server.
+The app holds a team's people, absences, holidays, an audit log and notifications. EF Core
+over SQLite was already the stack at the first commit; the reasoning for choosing it was
+not recorded. The single-instance shape was written down with the container image
+(`45031df`): "For the size of team this tool is for, one instance is the intended shape."
 
 ## Decision
 

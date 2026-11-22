@@ -10,7 +10,8 @@
 Public holidays differ by country and by subdivision (ISO 3166-2). The calendar used to read
 a hand-maintained `RegionCatalog` from `appsettings.json`, and that one list drove the
 profile dropdown, the region filter and which holidays were synced. Every new hire from a
-new place meant a configuration change and a redeploy.
+new place meant editing that list in the deployment's configuration. `14b62b1` has no
+commit message; the README it rewrote is the record of the change.
 
 ## Decision
 
@@ -32,7 +33,7 @@ The set of tracked regions is derived from people's profiles. The only configure
 
 ## Consequences
 
-- No configuration or redeploy when the team spreads somewhere new.
+- No configuration change when the team spreads somewhere new.
 - Deleting the last person in a region deletes hand-added holidays there. This is
   documented as a warning; the home region is exempt.
 - The prune queries inline the "a country matches its own subdivisions" rule instead of

@@ -29,15 +29,15 @@ Replace the table with a windowed, layered grid:
 
 ## Alternatives considered
 
-- **Keep the table and reduce re-rendering** (memoizing rows and cells). The cost was in
-  the browser's passes over the DOM that existed, not in Vue re-rendering it, so this
-  could not remove it.
+- **Keep the table and reduce re-rendering** (memoizing rows and cells, as `b10f996`,
+  `18d13d7` and `d5426d9` had done). `0320114` measured JavaScript as already proportional
+  to change: the cost was in the browser's passes over the DOM that existed, not in Vue
+  re-rendering it, so this could not remove it.
 - **A canvas or WebGL grid.** Rejected on 2026-09-01, before the windowed grid was built;
-  the reasoning was not recorded. Since then the windowed grid has measured every
-  interaction within a frame at 100 and 1000 people alike, so no measured bottleneck is
-  left for one to remove.
-- **Progressive rendering of the full grid.** Cut once the window made full renders
-  unnecessary; repeat visits paint from cache instead ([0011](0011-client-side-stale-while-revalidate.md)).
+  the reasoning was not recorded. The private notes from that work keep it rejected unless
+  new profiling shows a new bottleneck.
+- **Progressive rendering of the full grid.** Cut; the private notes record only that
+  stale-while-revalidate covers repeat visits ([0011](0011-client-side-stale-while-revalidate.md)).
 
 ## Consequences
 
@@ -47,5 +47,5 @@ Replace the table with a windowed, layered grid:
 - The grid's geometry is fixed (row height, column width), which is what makes coordinate
   lookup possible; a design that needs variable row heights would have to revisit this.
 - Measure grid changes before and after with `node tools/perf/harness.mjs [100|500|1000]`.
-  If it ever needs to go lower, the measured next step is pooling row DOM rather than
-  mounting and unmounting rows.
+  If it ever needs to go lower, the next step the harness README names is pooling row DOM
+  rather than mounting and unmounting rows.

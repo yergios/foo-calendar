@@ -24,14 +24,15 @@ event, so it cannot go stale and clears itself the moment a request is resolved 
 - **Keep email, opt-in.** An SMTP relay, templates, delivery preferences and a digest
   scheduler, for a channel nobody had turned on, holding an address field that existed
   only to serve it.
-- **Keep the webhook.** It had no consumer built into the app. Integrations can poll
-  `GET /api/absences` instead.
+- **Keep the webhook.** Rejected for the same recorded reason: an opt-in integration
+  surface nobody had configured.
 
 ## Consequences
 
-- Nothing leaves the app except holiday-source requests carrying region codes and the
-  sign-in traffic to the identity provider. That makes the
-  [data protection](../data-protection.md) "where data leaves" table two rows long.
+- Apart from telemetry to an OTLP collector, when the deployer configures one, nothing
+  leaves the app except holiday-source requests carrying country codes and the sign-in
+  traffic to the identity provider. Those two are the rows of the
+  [data protection](../data-protection.md) "where data leaves" table.
 - No SMTP credentials to configure or protect, and two fewer dependencies (MailKit,
   MimeKit).
 - People only learn of an outcome when they next open the app. Accepted for a tool that is
