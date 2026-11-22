@@ -32,7 +32,7 @@ flowchart LR
     browser -- "sign-in (authorization code flow)" --> idp
     pipeline -- "token validation keys" --> idp
     services --> db
-    services -- "region codes only" --> holidays
+    services -- "country codes and years only" --> holidays
     app -. "traces, metrics, logs" .-> otel
 ```
 
@@ -42,19 +42,29 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
 
 ## Startup
 
-`Program.cs` reads top to bottom in the order things happen:
+`Program.cs` reads top to bottom in the order things happen, with one catch: options are
+registered with their validation near the top, but most of that validation runs later,
+after migrations.
 
-1. **Options are bound and validated** (`ValidateOnStart`). A missing identity provider
-   setting, a permission with no claim values, or `Auth:Provider=None` outside Development
-   stops the process with a message saying what to set.
+1. **Options are bound and their validation rules attached** (`ValidateOnStart`). Two
+   retired setting shapes (`Auth:AdminPermission(s)`, a scalar
+   `Auth:ClaimTypes:Permissions`) are rejected on the spot.
 2. **Services are registered.** The holiday source is chosen here from `Holidays:Source`
    (Nager, File, or None), and the sync job is only registered when there is a source.
-3. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
-4. **The SPA shell is prepared once**: `index.html` is read, its `<base href>` rewritten for
-   a sub-path deployment, and the bootstrap config inlined as `window.__bootstrap`
-   ([0004](decisions/0004-runtime-configuration.md)).
-5. **Background services start**: the holiday sync runs immediately and then every
-   `Holidays:SyncInterval`; the retention sweep runs daily.
+3. **The dev bypass announces itself**: with `Auth:Provider=None` a warning is logged.
+4. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
+5. **The pipeline is assembled and the SPA shell prepared once**, when a frontend build is
+   present: `index.html` is read, its `<base href>` rewritten for a sub-path deployment,
+   and the bootstrap config inlined as `window.__bootstrap`
+   ([0004](decisions/0004-runtime-configuration.md)). Reading the team and auth options
+   for that payload is the first point their validation runs.
+6. **The host starts**: it validates the remaining options, then starts the background
+   services. The holiday sync runs immediately and then every `Holidays:SyncInterval`; the
+   retention sweep runs immediately and then every `Retention:SweepInterval` (daily).
+
+So a missing identity provider setting, a permission with no claim values, or
+`Auth:Provider=None` outside Development stops the process with a message saying what to
+set before it serves a request, but after migrations have run.
 
 ## A request through the pipeline
 
@@ -73,7 +83,7 @@ flowchart TB
     routing --> authn["Authentication<br/>JWT bearer, or the dev bypass in Development"]
     authn --> authz{"Authorization"}
     authz -- "fallback policy: signed in,<br/>or a named permission policy" --> endpoint["API endpoint"]
-    authz -- "AllowAnonymous: shell, bootstrap,<br/>/healthchecks, security.txt" --> endpoint
+    authz -- "AllowAnonymous: shell, bootstrap,<br/>/healthchecks, security.txt,<br/>API reference if enabled" --> endpoint
     authz -- denied --> deny(["401 / 403"])
     endpoint --> done
 ```
@@ -101,20 +111,24 @@ src/Api/
 ├── Program.cs         composition root: options, services, auth, pipeline, in that order
 ├── Configuration/     typed options, each validated at startup; the permission list
 ├── Endpoints/         minimal-API route groups; thin, they resolve the caller and delegate
-├── Services/          the domain logic, one service per concern, each behind an interface
+├── Services/          the domain logic, one service per concern, plus the holiday sources,
+│                      background jobs and small helpers (CSV, region codes, LIKE escaping)
 ├── Interfaces/        what endpoints and tests depend on
-├── Data/              EF Core context, entities, migrations, the bundled region name table
+├── Data/              EF Core context, entities, the bundled region name table
+├── Migrations/        EF Core migrations, applied at startup
 ├── Dtos/              request and response records; request validation lives on them
 └── Infrastructure/    SPA shell, dev auth bypass, exception mapping, OpenAPI transformer
 ```
 
-Services take each other through interfaces, which is what lets the unit tests swap a
-collaborator for a recording fake while running real queries against SQLite.
+The domain services take each other through interfaces, which is what lets the unit tests
+swap a collaborator for a recording fake while running real queries against SQLite.
 
 ## Absence lifecycle
 
 The approval workflow is off by default, in which case every absence is created
-`Approved`. With `AbsenceApprovals:Enabled` on, `AbsenceService` enforces:
+`Approved`. `AbsenceService` enforces these transitions; the ones marked "approvals on"
+need `AbsenceApprovals:Enabled`. Approving and rejecting do not, so a request left pending
+when the workflow is turned off can still be resolved.
 
 ```mermaid
 stateDiagram-v2
@@ -136,21 +150,28 @@ stateDiagram-v2
   Status = Pending`, so of two reviewers acting at once, one wins and the other is told the
   request is no longer pending. The audit entry and the notification commit in the same
   transaction as the status change.
-- **Overlaps are checked inside a serializable transaction.** A whole-day absence blocks
-  any other absence on its days; any number of time-based absences may share a day.
+- **Overlaps are checked inside a serializable transaction**, against the same person's
+  other absences. A whole-day absence blocks any other on its days; any number of
+  time-based absences may share a day.
 
 ## Frontend
 
 ```
 src/Web/src/
 ├── main.ts         reads the inlined bootstrap config, starts OIDC, mounts the app
+├── auth/           oidc-client-ts setup, the dev bypass, the token and permission store
 ├── router/         routes; the guard signs in, and checks permissions only where a route asks
 ├── api/            one module per API area; apiFetch attaches the bearer token
 ├── stores/         Pinia stores for config, people, the signed-in person, notifications
+├── composables/    small shared behaviours (floating panels, stale-response guards)
+├── layouts/        the signed-in shell and the admin shell with its sidebar
+├── types/          DTO and config types shared across the app
+├── styles/         theme.css, the design tokens a deployer re-skins
 ├── lib/            framework-free logic, unit tested: segments, geometry, caching, dates
 ├── components/     CalendarGrid is the windowed grid; the rest are views' building blocks
 ├── views/          pages, with admin sections behind their own permissions
-└── docs/           Markdown served in-app at /docs (usage, FAQ, privacy, changelog)
+└── docs/           Markdown served in-app at /docs (usage, FAQ, installation, privacy,
+                    terms, changelog)
 ```
 
 Two designs carry most of the frontend's performance:
