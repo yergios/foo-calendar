@@ -75,6 +75,9 @@ const router = createRouter({
         return sessionStorage.getItem("auth_redirect") ?? "/";
       },
     },
+    // Public on purpose: documentation, the privacy notice, and the terms of use have to
+    // be readable by someone who isn't signed in yet, same as the error routes below.
+    { path: "/docs", component: () => import("@/views/DocsView.vue") },
     { path: "/401", component: UnauthorizedView },
     { path: "/403", component: ForbiddenView },
     { path: "/500", component: ErrorView },

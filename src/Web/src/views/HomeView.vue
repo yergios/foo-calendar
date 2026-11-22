@@ -8,19 +8,27 @@
            can't tell is on. -->
       <div class="flex-1 flex items-center gap-2 flex-wrap">
         <div class="relative">
-          <!-- The input comes first so the icon can be a `peer-focus:` sibling of it;
-               it's absolutely positioned, so DOM order costs nothing visually. -->
+          <!-- The icon and the shortcut hint are absolutely positioned over the input's own
+               padding, so neither costs any layout and the input stays one element. -->
           <input id="personSearch" ref="searchInput" v-model="searchQuery" type="search" aria-label="Search people"
-            :placeholder="searchPlaceholder"
-            class="peer h-9 w-56 border border-border-strong rounded-8 pl-9 pr-3 text-sm bg-background hover:border-secondary focus:outline-none focus:border-primary"
+            placeholder="Search by name…"
+            class="h-9 w-56 border border-border-strong rounded-8 pl-9 pr-12 text-sm bg-background hover:border-secondary"
             @keydown.escape="searchQuery = ''" />
           <svg
-            class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary peer-focus:text-primary pointer-events-none"
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none"
             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round">
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
+          <!-- The shortcut sits here rather than inside the placeholder, which had to spell
+               it out in parentheses and lost it the moment you typed a character. Hidden
+               once there's text, where the browser puts type=search's own clear button. -->
+          <kbd
+            v-if="!searchQuery"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-4 border border-border px-1.5 py-0.5 font-body text-xs text-secondary pointer-events-none">
+            {{ searchShortcut }}
+          </kbd>
         </div>
 
         <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'mine'" :min-width="230">
@@ -440,8 +448,7 @@ onUnmounted(() => window.removeEventListener("keydown", onSearchShortcut));
 // Spelled out in the placeholder, since a shortcut nobody can see is a shortcut nobody
 // uses. Named for the key the reader's own machine actually wants: the handler above takes
 // either modifier, but telling a Mac user to press Ctrl would just be wrong.
-const searchPlaceholder = `Search people… (${navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl+K"
-  })`;
+const searchShortcut = navigator.userAgent.includes("Mac") ? "⌘K" : "Ctrl K";
 
 // Picking a sort mode is a one-off choice, so the panel gets out of the way afterwards.
 // The region checkboxes deliberately don't do this - those are picked several at a time.

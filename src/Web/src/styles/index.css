@@ -93,4 +93,42 @@
   input {
     @apply font-body text-base;
   }
+
+}
+
+/* Every text field focuses the same way: its border becomes a solid 2px in the brand
+   colour. Set here rather than per element - 31 of the 32 inputs and selects in the app
+   carried no focus style at all and fell back to the browser's own ring, the one piece of
+   chrome the theme can't reach.
+
+   No transition: focus is a state you want confirmed the instant it happens, and the same
+   going the other way. Nothing here animates.
+
+   This lives in the utilities layer rather than in base, and it has to: every
+   one of these fields carries a `border-border-strong` class, and a utility beats a base
+   rule whatever its specificity, so a focus border-color set in base is simply never
+   applied. In the same layer, `input:focus-visible` (element + pseudo-class) does outrank
+   a bare class, so the border does change here.
+
+   :focus-visible, not :focus - a text field still matches it when clicked, since that's
+   where typing is about to go, but a checkbox no longer keeps a ring after a mouse click. */
+@layer utilities {
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  /* A <button> standing in for a select (RegionFilterSelect): it looks like one, so it
+     focuses like one. */
+  .select-trigger:focus-visible {
+    /* Transparent rather than none: forced-colors mode repaints this outline in a system
+       colour, and drops the box-shadow below entirely. Removing it outright would leave
+       those users with no focus indicator at all. Invisible in normal rendering. */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    /* A second solid pixel of the same colour drawn hard against the border, so the field
+       reads as a 2px brand-coloured border. Done as a shadow rather than border-width
+       because growing the border by a pixel would shove the field's own text a pixel over
+       every time it took focus. Solid, not a tint - it is the border, not a glow. */
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+  }
 }

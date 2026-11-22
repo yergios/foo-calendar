@@ -502,6 +502,7 @@ app.MapAdminEndpoints();
 app.MapConfigEndpoints();
 app.MapRegionEndpoints();
 app.MapNotificationsEndpoints();
+app.MapWellKnownEndpoints();
 
 // Both anonymous, and both off outside Development by default: a browser opening either
 // carries no bearer token, so requiring one would serve a 401 to the only thing that ever

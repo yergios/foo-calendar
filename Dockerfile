@@ -17,6 +17,11 @@ WORKDIR /src/Web
 COPY src/Web/package.json src/Web/pnpm-lock.yaml src/Web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# vite.config.ts's copy-license plugin reads this two directories up from itself
+# (/src/Web/vite.config.ts -> /LICENSE.txt), the same relative position it has in the
+# source tree (src/Web/vite.config.ts -> LICENSE.txt at the repo root).
+COPY LICENSE.txt /LICENSE.txt
+
 COPY src/Web/ ./
 # vite.config.ts sends the build to ../Api/wwwroot, i.e. /src/Api/wwwroot here.
 RUN pnpm build

@@ -2,7 +2,7 @@
   <div class="flex gap-1.5 flex-1 min-h-0">
     <button
       type="button"
-      class="shrink-0 w-7 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      class="shrink-0 w-9 flex items-center justify-center rounded-pill border border-border bg-surface text-ink hover:bg-surface/60 hover:border-border-strong transition-colors disabled:opacity-40 disabled:hover:bg-surface disabled:hover:border-border disabled:cursor-not-allowed"
       aria-label="Scroll left"
       :disabled="!canScrollLeft"
       @click="handlePageClick(-1)"
@@ -10,7 +10,17 @@
       @mouseup="stopHold"
       @mouseleave="stopHold"
     >
-      ‹
+      <svg
+        class="w-5 h-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
     </button>
 
     <!-- Every pointer interaction with the grid is resolved here from coordinates: the
@@ -257,7 +267,7 @@
 
     <button
       type="button"
-      class="shrink-0 w-7 flex items-center justify-center rounded-pill text-secondary hover:text-ink hover:bg-surface/60 text-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+      class="shrink-0 w-9 flex items-center justify-center rounded-pill border border-border bg-surface text-ink hover:bg-surface/60 hover:border-border-strong transition-colors disabled:opacity-40 disabled:hover:bg-surface disabled:hover:border-border disabled:cursor-not-allowed"
       aria-label="Scroll right"
       :disabled="!canScrollRight"
       @click="handlePageClick(1)"
@@ -265,7 +275,17 @@
       @mouseup="stopHold"
       @mouseleave="stopHold"
     >
-      ›
+      <svg
+        class="w-5 h-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M9 18l6-6-6-6" />
+      </svg>
     </button>
   </div>
 </template>

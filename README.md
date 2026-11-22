@@ -4,7 +4,8 @@ Internal tool for coordinating the team. Tracking vacations, appointments, and o
 
 ## Documentation
 
-See [help.md](src/Web/src/docs/help.md) for usage documentation and FAQ.
+Usage documentation, FAQ, privacy notice, and terms of use are served in-app from the
+footer's Documentation link and rendered from [`src/Web/src/docs`](src/Web/src/docs/).
 
 ## Changelog
 

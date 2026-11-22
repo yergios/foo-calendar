@@ -32,4 +32,11 @@ public sealed class TeamOptions
 
     /// <summary>Where "Raise an issue" points, e.g. an issue tracker or a helpdesk form.</summary>
     public string IssueUrl { get; init; } = "";
+
+    /// <summary>Where a security researcher who found a vulnerability on this deployment
+    /// should report it, served at /.well-known/security.txt (RFC 9116). Empty falls back
+    /// to <see cref="SupportUrl"/>, the same fallback shape <see cref="OrgName"/> has onto
+    /// the product's name: a deployment that already set up one contact channel shouldn't
+    /// have to name it twice.</summary>
+    public string SecurityContact { get; init; } = "";
 }
