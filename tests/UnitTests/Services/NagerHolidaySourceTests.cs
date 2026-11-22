@@ -28,6 +28,7 @@ public sealed class NagerHolidaySourceTests
         });
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task GetAsync_MapsAGlobalHolidayToTheCountryCode()
     {
         const string json = """
@@ -44,6 +45,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task GetAsync_ExpandsANonGlobalHolidayToOneEntryPerCounty()
     {
         const string json = """
@@ -58,6 +60,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task GetAsync_SkipsANonGlobalHolidayWithNoCounties()
     {
         const string json = """
@@ -71,6 +74,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task GetAsync_RequestsTheYearAndCountryAsked()
     {
         Uri requested = null;
@@ -86,6 +90,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task GetAsync_WhenTheApiFails_Throws()
     {
         var sut = CreateSource(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
@@ -100,6 +105,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "REG-5")]
     public async Task GetCountriesAsync_ReturnsTheAvailableCountryCodes()
     {
         var sut = CreateSource(_ => JsonResponse("""
@@ -114,6 +120,7 @@ public sealed class NagerHolidaySourceTests
     // The enumeration cache is static, so these use country codes no other test touches.
     // Sharing one would mean whichever test ran first decided the answer for the others.
     [Fact]
+    [Trait("Spec", "REG-5")]
     public async Task GetRegionsAsync_ReturnsDistinctCountiesFromAYearOfHolidays()
     {
         var sut = CreateSource(_ => JsonResponse("""
@@ -130,6 +137,7 @@ public sealed class NagerHolidaySourceTests
     }
 
     [Fact]
+    [Trait("Spec", "REG-5")]
     public async Task GetRegionsAsync_WhenNoHolidayIsRegional_ReturnsNothing()
     {
         var sut = CreateSource(_ => JsonResponse("""

@@ -93,6 +93,22 @@ jobs:
       - name: Audit dependencies
         run: pnpm audit --audit-level high
 
+  trace:
+    name: Spec traceability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same Node as the web job. The script has no dependencies, so there is no install.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Every [test] requirement in SPEC.md is referenced by a test or on the gap list,
+      # and every ID a test references exists (TRC-1, TRC-2).
+      - name: Check
+        run: node scripts/check-spec-trace.mjs
+
   image:
     name: Container image
     runs-on: ubuntu-latest

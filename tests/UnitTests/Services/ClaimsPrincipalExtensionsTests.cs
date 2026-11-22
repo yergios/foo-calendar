@@ -12,6 +12,7 @@ public sealed class ClaimsPrincipalExtensionsTests
         new(new ClaimsIdentity(claims.Select(c => new Claim(c.Type, c.Value)), "test"));
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_WhenTheClaimCarriesAnAcceptedValue_IsTrue()
     {
         var user = User(("permissions", "APP_FOO_CALENDAR_ADMIN"));
@@ -20,6 +21,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_MatchesAnyOfSeveralAcceptedValues()
     {
         var user = User(("roles", "leave-admin"));
@@ -28,6 +30,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_SearchesEveryConfiguredClaimName()
     {
         // Entra ID puts app roles in "roles" and group ids in "groups"; a deployment can
@@ -40,6 +43,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_IgnoresValueCasing()
     {
         var user = User(("groups", "8F4C2F1A-0000-4C1E-9A3E-1C2D3E4F5A6B"));
@@ -48,6 +52,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_WhenTheValueSitsInAnUnconfiguredClaim_IsFalse()
     {
         var user = User(("groups", "leave-admin"));
@@ -56,6 +61,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_WhenTheUserHoldsOnlyOtherValues_IsFalse()
     {
         var user = User(("roles", "reader"), ("roles", "writer"));
@@ -64,6 +70,7 @@ public sealed class ClaimsPrincipalExtensionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void HasAnyPermission_WhenNoValuesAreAccepted_IsFalse()
     {
         var user = User(("roles", "leave-admin"));

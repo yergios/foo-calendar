@@ -16,6 +16,7 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void ValuesFor_WhenThePermissionIsNotConfigured_GrantsNothing()
     {
         var options = WithPermissions((Permissions.PeopleManage, ["ADMIN"]));
@@ -26,6 +27,7 @@ public sealed class AuthOptionsTests
     // Configuration keys are case-insensitive everywhere else in .NET, and a deployment
     // writing "peoplemanage" shouldn't silently end up granting nobody anything.
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void ValuesFor_MatchesThePermissionNameWhateverItsCasing()
     {
         var options = WithPermissions(("peoplemanage", ["ADMIN"]));
@@ -34,6 +36,7 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-2")]
     public void AllPermissionValues_DeduplicatesTheValueSharedBySeveralPermissions()
     {
         var options = WithPermissions(
@@ -44,6 +47,7 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-2")]
     public void EffectiveDevPermissions_WhenGrantingEverything_HoldsEveryConfiguredValue()
     {
         var options = WithPermissions(
@@ -54,6 +58,7 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
+    [Trait("Spec", "AUTH-2")]
     public void EffectiveDevPermissions_WhenNotGrantingEverything_HoldsOnlyWhatTheDevUserLists()
     {
         var options = WithPermissions(
@@ -72,6 +77,7 @@ public sealed class AuthOptionsTests
     // Shortening a list through environment variables blanks the leftover indexes rather
     // than removing them, and a blank accepted value would match a claim with no value.
     [Fact]
+    [Trait("Spec", "AUTH-4")]
     public void RemoveBlankEntries_DropsBlanksFromEveryPermission()
     {
         var options = WithPermissions((Permissions.PeopleManage, ["ADMIN", "", "  "]));

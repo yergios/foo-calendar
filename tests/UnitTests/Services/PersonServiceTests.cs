@@ -37,6 +37,7 @@ public sealed class PersonServiceTests : SqliteTestBase
         new(username, "Jane", "Doe", "Jane D.", null);
 
     [Fact]
+    [Trait("Spec", "PPL-2")]
     public async Task CreateAsync_WhenUsernameAlreadyExists_Throws()
     {
         await sut.CreateAsync(CreateRequest("jdoe"), "jdoe");
@@ -46,6 +47,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-4")]
     public async Task UpdateAsync_WhenPersonDoesNotExist_ThrowsKeyNotFoundException()
     {
         await Should.ThrowAsync<KeyNotFoundException>(
@@ -53,12 +55,14 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-4")]
     public async Task DeleteAsync_WhenPersonDoesNotExist_ThrowsKeyNotFoundException()
     {
         await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteAsync(999));
     }
 
     [Fact]
+    [Trait("Spec", "PPL-4")]
     public async Task DeleteAsync_RemovesThePerson()
     {
         var created = await sut.CreateAsync(CreateRequest("alice"), "alice");
@@ -73,6 +77,7 @@ public sealed class PersonServiceTests : SqliteTestBase
         new(username, "Jane", "Doe", "Jane D.", region);
 
     [Fact]
+    [Trait("Spec", "REG-3")]
     public async Task CreateAsync_SyncsTheRegionTheyJoined()
     {
         await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -82,6 +87,8 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-3")]
+    [Trait("Spec", "REG-4")]
     public async Task UpdateAsync_WhenTheRegionChanges_SyncsTheNewOneAndPrunesTheOld()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -94,6 +101,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-3")]
     public async Task UpdateAsync_WhenTheRegionIsUnchanged_LeavesHolidaysAlone()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -106,6 +114,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task DeleteAsync_PrunesTheRegionTheyLeft()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -116,6 +125,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetAllAsync_LabelsEveryRegionInUseAndItsCountry()
     {
         teamRegions.InUse = ["ES-MD"];
@@ -128,6 +138,8 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-6")]
+    [Trait("Spec", "AUD-1")]
     public async Task DeleteAsync_LogsWhoTheyWereAndHowMuchWentWithThem()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -150,6 +162,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-1")]
     public async Task UpdateAsync_LogsWhatMoved()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -164,6 +177,7 @@ public sealed class PersonServiceTests : SqliteTestBase
 
     // A save that changed nothing is still a save. Logging it would bury the ones that did.
     [Fact]
+    [Trait("Spec", "AUD-1")]
     public async Task UpdateAsync_WhenNothingChanged_LogsNothing()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");
@@ -178,6 +192,7 @@ public sealed class PersonServiceTests : SqliteTestBase
         new(username, "First", "Last", displayName, region);
 
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetPageAsync_FiltersBySearch_MatchingDisplayNameSubstringCaseInsensitively()
     {
         await sut.CreateAsync(CreateRequestNamed("asmith", "Alice Smith"), "admin");
@@ -190,6 +205,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-9")]
     public async Task GetPageAsync_SearchTreatsUnderscoreLiterally_NotAsAOneCharacterWildcard()
     {
         await sut.CreateAsync(CreateRequestNamed("jdoe1", "j_doe"), "admin");
@@ -202,6 +218,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetPageAsync_WhenDisplayNamesTie_PagesByIdWithNoDuplicatesOrGaps()
     {
         await sut.CreateAsync(CreateRequestNamed("a", "Same Name"), "admin");
@@ -216,6 +233,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetPageAsync_FiltersByRegion_MatchingItAndItsSubdivisionsOnly()
     {
         await sut.CreateAsync(CreateRequestIn("madrid", "ES-MD"), "admin");
@@ -229,6 +247,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetPageAsync_SortsByUsernameDescending()
     {
         await sut.CreateAsync(CreateRequest("alice"), "admin");
@@ -245,6 +264,7 @@ public sealed class PersonServiceTests : SqliteTestBase
     // just sort the first page it's handed - this pins that down with a page size that
     // splits the three people across two requests.
     [Fact]
+    [Trait("Spec", "PPL-7")]
     public async Task GetPageAsync_SortedByVacation_OrdersAcrossPagesByThatYearsStats()
     {
         await sut.CreateAsync(CreateRequestNamed("noVacation", "No Vacation"), "admin");

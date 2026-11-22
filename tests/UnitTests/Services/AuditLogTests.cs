@@ -29,6 +29,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-1")]
     public async Task RecordAsync_AttributesTheEntryToWhoeverIsSignedIn()
     {
         var sut = CreateSut("jdoe");
@@ -46,6 +47,7 @@ public sealed class AuditLogTests : SqliteTestBase
     // The scheduled jobs have nobody behind them, and a missing username must not be able
     // to fail the write and take the action it is recording down with it.
     [Fact]
+    [Trait("Spec", "AUD-1")]
     public async Task RecordAsync_WhenNobodyIsSignedIn_AttributesTheEntryToTheSystem()
     {
         var sut = CreateSut();
@@ -56,6 +58,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_ReturnsNewestFirstAndReportsTheWholeTotal()
     {
         var sut = CreateSut("jdoe");
@@ -69,6 +72,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_SkipsTheEntriesAlreadyRead()
     {
         var sut = CreateSut("jdoe");
@@ -81,6 +85,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_FiltersBySearch_MatchingActorSubstringCaseInsensitively()
     {
         var sut = CreateSut();
@@ -107,6 +112,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_SearchTreatsUnderscoreLiterally_NotAsAOneCharacterWildcard()
     {
         var sut = CreateSut();
@@ -133,6 +139,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_FiltersByAction()
     {
         var sut = CreateSut();
@@ -159,6 +166,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_FiltersByTimeRange_InclusiveFromExclusiveTo()
     {
         var sut = CreateSut();
@@ -197,6 +205,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_SortsByActorAscending()
     {
         var sut = CreateSut();
@@ -231,6 +240,7 @@ public sealed class AuditLogTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "AUD-4")]
     public async Task ReadAsync_SortsByActionDescending()
     {
         var sut = CreateSut();

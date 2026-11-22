@@ -17,6 +17,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_WellFormedAppointment_HasNoErrors()
     {
         var request = new CreateAbsenceRequest(
@@ -27,6 +28,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_NonAppointmentWithStartTimeSet_HasAnError()
     {
         var request = new CreateAbsenceRequest(
@@ -37,6 +39,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_AppointmentMissingStartTime_HasAnError()
     {
         var request = new CreateAbsenceRequest(
@@ -47,6 +50,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_AppointmentEndTimeNotAfterStartTime_HasAnError()
     {
         var request = new CreateAbsenceRequest(
@@ -57,6 +61,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_AppointmentSpanningMoreThanOneDay_HasAnError()
     {
         var request = new CreateAbsenceRequest(
@@ -67,6 +72,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_WholeDayOther_HasNoErrors()
     {
         var request = new CreateAbsenceRequest(
@@ -76,6 +82,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_WellFormedTimeBasedOther_HasNoErrors()
     {
         var request = new CreateAbsenceRequest(
@@ -86,6 +93,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_OtherWithOnlyStartTimeSupplied_HasAnError()
     {
         var request = new CreateAbsenceRequest(
@@ -96,6 +104,7 @@ public sealed class CreateAbsenceRequestTests
     }
 
     [Fact]
+    [Trait("Spec", "ABS-2")]
     public void Validate_TimeBasedOtherSpanningMoreThanOneDay_HasAnError()
     {
         var request = new CreateAbsenceRequest(

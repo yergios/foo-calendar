@@ -36,6 +36,7 @@ public sealed class ValidationPatternsTests
     }
 
     [Fact]
+    [Trait("Spec", "PPL-3")]
     [Trait("Spec", "REG-1")]
     public void CreatePersonRequest_WithATrailingNewlineInTheRegion_IsInvalid()
     {

@@ -31,6 +31,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "HOL-5")]
     public async Task GetAsync_ReturnsEntriesForTheCountryAndItsSubdivisions()
     {
         var sut = CreateSource("""
@@ -47,6 +48,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "HOL-5")]
     public async Task GetAsync_IgnoresEntriesForOtherYears()
     {
         var sut = CreateSource("""
@@ -62,6 +64,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "HOL-5")]
     public async Task GetAsync_ProjectsARecurringEntryOntoTheRequestedYear()
     {
         var sut = CreateSource("""
@@ -74,6 +77,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "HOL-5")]
     public async Task GetAsync_SkipsARecurringLeapDayOnANonLeapYear()
     {
         var sut = CreateSource("""
@@ -86,6 +90,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "HOL-5")]
     public async Task GetAsync_WhenTheFileIsMissing_Throws()
     {
         var missing = Path.Combine(Path.GetTempPath(), $"holidays-{Guid.NewGuid():N}.json");
@@ -108,6 +113,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "REG-5")]
     public async Task GetCountriesAsync_DerivesCountriesFromWhateverTheFileMentions()
     {
         var sut = CreateSource("""
@@ -124,6 +130,7 @@ public sealed class FileHolidaySourceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Spec", "REG-5")]
     public async Task GetRegionsAsync_ReturnsSubdivisionsOfOneCountryWithoutTheCountryItself()
     {
         var sut = CreateSource("""

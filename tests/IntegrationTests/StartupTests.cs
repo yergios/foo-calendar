@@ -14,6 +14,7 @@ public sealed class StartupTests
     private static Exception StartupFailure(TestApp app) => Should.Throw<Exception>(() => app.Services);
 
     [Fact]
+    [Trait("Spec", "CFG-2")]
     [Trait("Spec", "CFG-1")]
     public void InvalidSetting_StopsStartupNamingIt_WithTheDatabaseUntouched()
     {
@@ -23,6 +24,17 @@ public sealed class StartupTests
         StartupFailure(app).Message.ShouldContain("Team:HomeRegion");
 
         app.TableNames().ShouldBeEmpty();
+    }
+
+    [Theory]
+    [Trait("Spec", "HOL-1")]
+    [InlineData("Holidays:Source", "Calendarific", "Holidays:Source")]
+    [InlineData("Holidays:Source", "File", "Holidays:File:Path")]
+    public void InvalidHolidaySource_StopsStartupNamingTheSetting(string key, string value, string named)
+    {
+        using var app = new TestApp((key, value));
+
+        StartupFailure(app).Message.ShouldContain(named);
     }
 
     [Fact]

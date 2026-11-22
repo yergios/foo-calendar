@@ -7,7 +7,7 @@ import { stubLocalStorage } from "./localStorageStub";
 describe("createLoadOnce", () => {
   beforeEach(stubLocalStorage);
 
-  it("single-flights concurrent callers and serves later calls from memory", async () => {
+  it("[UI-7] single-flights concurrent callers and serves later calls from memory", async () => {
     const fetcher = vi.fn().mockResolvedValue("value");
     const { loadOnce } = createLoadOnce(fetcher);
     const [first, second] = await Promise.all([loadOnce(), loadOnce()]);
@@ -17,14 +17,14 @@ describe("createLoadOnce", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it("retries after a failure instead of caching it", async () => {
+  it("[UI-7] retries after a failure instead of caching it", async () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new Error("down")).mockResolvedValue("up");
     const { loadOnce } = createLoadOnce(fetcher);
     await expect(loadOnce()).rejects.toThrow("down");
     await expect(loadOnce()).resolves.toBe("up");
   });
 
-  it("hydrates from the cache for instant paint but still revalidates", async () => {
+  it("[UI-7] hydrates from the cache for instant paint but still revalidates", async () => {
     writeCache("swr.v1", "stale");
     const fetcher = vi.fn().mockResolvedValue("fresh");
     const { data, loadOnce } = createLoadOnce<string>(fetcher, "swr.v1");
@@ -36,7 +36,7 @@ describe("createLoadOnce", () => {
     expect(data.value).toBe("fresh");
   });
 
-  it("keeps the previous value's identity when reconcile says nothing changed", async () => {
+  it("[UI-7] keeps the previous value's identity when reconcile says nothing changed", async () => {
     const previous = { list: [1, 2] };
     writeCache("swr.v1", previous);
     const fetcher = vi.fn().mockResolvedValue({ list: [1, 2] });
@@ -48,7 +48,7 @@ describe("createLoadOnce", () => {
     expect(data.value).toBe(hydrated);
   });
 
-  it("invalidate() forces the next call to refetch and reconcile again", async () => {
+  it("[UI-7] invalidate() forces the next call to refetch and reconcile again", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 2 });
     const { data, loadOnce, invalidate } = createLoadOnce(fetcher);
     await loadOnce();
@@ -59,7 +59,7 @@ describe("createLoadOnce", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("writes the merged value back to the cache on success", async () => {
+  it("[UI-7] writes the merged value back to the cache on success", async () => {
     const fetcher = vi.fn().mockResolvedValue("fresh");
     const { loadOnce } = createLoadOnce<string>(fetcher, "swr.v1");
     await loadOnce();

@@ -52,6 +52,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
             NullLogger<BankHolidayService>.Instance);
 
     [Fact]
+    [Trait("Spec", "HOL-10")]
     public async Task GetForRegionsAsync_IncludesNationwideHolidaysWhenQueryingASpecificRegion()
     {
         var sut = CreateService();
@@ -67,6 +68,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-7")]
     public async Task AddManualAsync_WhenDuplicateRegionAndDate_Throws()
     {
         var sut = CreateService();
@@ -77,6 +79,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task AddManualAsync_CreatesHolidayWithManualSource()
     {
         var sut = CreateService();
@@ -88,6 +91,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task AddManualAsync_RecordsWhoCreatedIt()
     {
         var sut = CreateService();
@@ -101,6 +105,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task UpdateManualAsync_WhenHolidayDoesNotExist_ThrowsKeyNotFoundException()
     {
         var sut = CreateService();
@@ -110,6 +115,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task UpdateManualAsync_WhenHolidayIsNagerSourced_Throws()
     {
         var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 1, 1), Name = "New Year", Source = HolidaySource.Nager, CreatedBy = "nager-sync" };
@@ -122,6 +128,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-7")]
     public async Task UpdateManualAsync_WhenConflictingWithAnotherHoliday_Throws()
     {
         Db.BankHolidays.Add(new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Existing", Source = HolidaySource.Manual, CreatedBy = Actor });
@@ -135,6 +142,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task UpdateManualAsync_UpdatesTheHolidayWhenValid()
     {
         var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Old", Source = HolidaySource.Manual, CreatedBy = Actor };
@@ -150,6 +158,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task UpdateManualAsync_RecordsWhoUpdatedIt()
     {
         var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Old", Source = HolidaySource.Manual, CreatedBy = "alice" };
@@ -166,6 +175,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task DeleteManualAsync_WhenHolidayDoesNotExist_ThrowsKeyNotFoundException()
     {
         var sut = CreateService();
@@ -174,6 +184,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task DeleteManualAsync_WhenHolidayIsNagerSourced_Throws()
     {
         var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 1, 1), Name = "New Year", Source = HolidaySource.Nager, CreatedBy = "nager-sync" };
@@ -185,6 +196,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task DeleteManualAsync_RemovesAManualHoliday()
     {
         var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Custom", Source = HolidaySource.Manual, CreatedBy = Actor };
@@ -198,6 +210,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_AddsNationwideAndRegionalHolidaysFromTheSource()
     {
         var sut = CreateService((_, _) =>
@@ -217,6 +230,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_SkipsSubdivisionsNobodyIsIn()
     {
         // The source answers for the whole country whatever is asked of it, so filtering
@@ -235,6 +249,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_FetchesOnceForSeveralRegionsOfTheSameCountry()
     {
         var fetches = 0;
@@ -250,6 +265,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
     public async Task SyncRegionsAsync_NeverOverwritesAManuallyAddedHoliday()
     {
         Db.BankHolidays.Add(new BankHoliday
@@ -272,6 +288,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
     public async Task SyncRegionsAsync_RefreshesNameForAnExistingSyncedHoliday()
     {
         Db.BankHolidays.Add(new BankHoliday
@@ -292,6 +309,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
     public async Task SyncRegionsAsync_DedupesDuplicateEntriesWithinTheSameResponse()
     {
         var sut = CreateService((_, _) =>
@@ -308,6 +326,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_WhenOneCountryFails_StillSyncsTheOthersAndReportsTheFailure()
     {
         var sut = CreateService((country, _) => country == "DE"
@@ -321,6 +340,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-8")]
     public async Task GetForRegionsAsync_ProjectsARecurringHolidayIntoAYearOtherThanItsStoredOne()
     {
         var sut = CreateService();
@@ -343,6 +363,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-8")]
     public async Task GetForRegionsAsync_SkipsALeapDayRecurrenceOnANonLeapYear()
     {
         var sut = CreateService();
@@ -363,6 +384,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-7")]
     public async Task AddManualAsync_WhenCollidingWithARecurringHolidayInADifferentYear_Throws()
     {
         var sut = CreateService();
@@ -373,6 +395,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-7")]
     public async Task UpdateManualAsync_WhenCollidingWithARecurringHolidayInADifferentYear_Throws()
     {
         var recurring = new BankHoliday
@@ -395,6 +418,8 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
+    [Trait("Spec", "HOL-7")]
     public async Task SyncRegionsAsync_DoesNotDuplicateARecurringManualOverrideInADifferentYear()
     {
         Db.BankHolidays.Add(new BankHoliday
@@ -419,6 +444,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
     public async Task SyncRegionsAsync_StampsRowsWithTheConfiguredSource()
     {
         var sut = CreateService(
@@ -433,6 +459,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-4")]
     public async Task SyncRegionsAsync_RelabelsAnExistingRowWhenTheSourceChanges()
     {
         Db.BankHolidays.Add(new BankHoliday
@@ -456,6 +483,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_WhenACountryFails_ReportsEveryRegionOfIt()
     {
         // A source deals in whole countries, so one failed fetch takes every region of that
@@ -469,6 +497,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task RemoveForRegionsAsync_DeletesManuallyAddedHolidaysToo()
     {
         var sut = CreateService();
@@ -482,6 +511,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task RemoveForRegionsAsync_MatchesRegionsExactlyRatherThanByCountry()
     {
         var sut = CreateService();
@@ -499,6 +529,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task AddManualAsync_WhenNobodyIsInTheRegion_Throws()
     {
         var sut = CreateService();
@@ -509,6 +540,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task AddManualAsync_AllowsTheCountryOfATrackedRegion()
     {
         var sut = CreateService();
@@ -521,6 +553,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-6")]
     public async Task UpdateManualAsync_WhenMovedToAnUntrackedRegion_Throws()
     {
         var sut = CreateService();

@@ -39,6 +39,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_CreatesAPersonPerRow()
     {
         var result = await CreateService().ImportAsync(
@@ -58,6 +59,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-11")]
     public async Task ImportAsync_SkipsUsernamesThatAlreadyExist()
     {
         AddPerson("jdoe");
@@ -72,6 +74,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-11")]
     public async Task ImportAsync_SkipsARepeatedRowWithinTheSameFile()
     {
         var result = await CreateService().ImportAsync("username\njdoe\njdoe", Actor);
@@ -81,6 +84,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-11")]
     public async Task ImportAsync_ImportsTheValidRowsAndReportsTheRestByLineNumber()
     {
         var result = await CreateService().ImportAsync(
@@ -98,6 +102,8 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-11")]
+    [Trait("Spec", "PPL-3")]
     public async Task ImportAsync_RejectsAValueTheApiWouldReject()
     {
         var result = await CreateService().ImportAsync(
@@ -108,6 +114,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-12")]
     public async Task ImportAsync_FallsBackToTheNameThenTheUsernameForDisplayName()
     {
         await CreateService().ImportAsync(
@@ -122,6 +129,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_AcceptsHeadersInAnyOrderCaseOrSpelling()
     {
         await CreateService().ImportAsync("\"Home City\",USERNAME,First_Name\nES-MD,jdoe,Jane", Actor);
@@ -133,6 +141,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-11")]
     public async Task ImportAsync_ReportsARowWithNoUsername()
     {
         var result = await CreateService().ImportAsync("username,firstName\n,Jane", Actor);
@@ -141,6 +150,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_WhenThereIsNoUsernameColumn_Throws()
     {
         await Should.ThrowAsync<ArgumentException>(
@@ -148,12 +158,14 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_WhenTheFileIsEmpty_Throws()
     {
         await Should.ThrowAsync<ArgumentException>(() => CreateService().ImportAsync("", Actor));
     }
 
     [Fact]
+    [Trait("Spec", "PPL-13")]
     public async Task ImportAsync_SyncsEachDistinctRegionAmongTheImportedRows()
     {
         await CreateService().ImportAsync(
@@ -168,6 +180,7 @@ public sealed class PersonImportTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "PPL-13")]
     public async Task ImportAsync_DoesNotSyncARegionThatWasOnlyOnASkippedOrFailedRow()
     {
         AddPerson("jdoe");

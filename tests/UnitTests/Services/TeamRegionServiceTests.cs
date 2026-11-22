@@ -59,6 +59,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
         });
 
     [Fact]
+    [Trait("Spec", "REG-2")]
     public async Task InUseAsync_IncludesTheHomeRegionWhenNobodyIsInIt()
     {
         var sut = CreateService();
@@ -69,6 +70,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-2")]
     public async Task InUseAsync_ReturnsEachOccupiedRegionOnce()
     {
         AddPerson("ana", "ES-MD");
@@ -83,6 +85,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-2")]
     public async Task InUseAsync_IgnoresPeopleWithNoRegionSet()
     {
         AddPerson("ana", null);
@@ -95,6 +98,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_RemovesTheRegionAndItsCountryOnceNobodyIsLeft()
     {
         AddHoliday("ES", new DateOnly(2026, 1, 1), HolidaySource.Nager);
@@ -108,6 +112,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_RemovesManuallyAddedHolidaysToo()
     {
         AddHoliday("ES-MD", new DateOnly(2026, 5, 2), HolidaySource.Manual);
@@ -120,6 +125,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_KeepsTheCountryWhileAnotherRegionOfItIsOccupied()
     {
         // The last person in Madrid leaving doesn't take Spain's national holidays with
@@ -137,6 +143,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_KeepsTheRegionWhileSomeoneIsStillInIt()
     {
         AddPerson("ana", "ES-MD");
@@ -150,6 +157,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_NeverRemovesTheHomeRegion()
     {
         AddHoliday("CH", new DateOnly(2026, 8, 1), HolidaySource.Nager);
@@ -163,6 +171,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_KeepsTheHomeCountryWhenAnotherOfItsRegionsEmpties()
     {
         // Nobody is left in Bern, but Zürich is home, so Switzerland's own rows stay.
@@ -177,6 +186,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_WhenSomeoneOnlyEverPickedACountry_RemovesItOnce()
     {
         AddHoliday("ES", new DateOnly(2026, 1, 1), HolidaySource.Nager);
@@ -189,6 +199,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "REG-4")]
     public async Task PruneIfUnusedAsync_WhenTheRegionIsNullOrBlank_DoesNothing()
     {
         AddHoliday("ES", new DateOnly(2026, 1, 1), HolidaySource.Nager);
