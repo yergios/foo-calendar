@@ -4,7 +4,12 @@ import { toIso } from "@/lib/dates";
 import type { AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 
-import { dayIndexOf, holidayAppliesToPerson, segmentAt, segmentsForPerson } from "./absenceSegments";
+import {
+  dayIndexOf,
+  holidayAppliesToPerson,
+  segmentAt,
+  segmentsForPerson,
+} from "./absenceSegments";
 
 // January 2026: the 1st is a Thursday, so the 3rd/4th, 10th/11th, ... are weekends.
 const days = Array.from({ length: 31 }, (_, i) => {

@@ -14,7 +14,13 @@
           {{ link.label }}
         </RouterLink>
         <a :class="linkClass" :href="licenseUrl" target="_blank">License</a>
-        <a v-if="REPOSITORY_URL" :class="linkClass" :href="REPOSITORY_URL" target="_blank" rel="noopener">
+        <a
+          v-if="REPOSITORY_URL"
+          :class="linkClass"
+          :href="REPOSITORY_URL"
+          target="_blank"
+          rel="noopener"
+        >
           GitHub
         </a>
         <a v-if="supportUrl" :class="linkClass" :href="supportUrl" target="_blank">Contact</a>

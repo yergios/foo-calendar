@@ -41,7 +41,9 @@ export default defineConfig(({ mode }) => {
         closeBundle() {
           const licensePath = path.resolve(rootDir, "../../LICENSE.txt");
           if (!existsSync(licensePath)) {
-            this.warn(`LICENSE.txt not found at ${licensePath}; the footer's License link will 404.`);
+            this.warn(
+              `LICENSE.txt not found at ${licensePath}; the footer's License link will 404.`,
+            );
             return;
           }
           // resolve, not join: VITE_BUILD_OUT_DIR may be absolute (env.VITE_BUILD_OUT_DIR

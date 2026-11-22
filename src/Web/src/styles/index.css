@@ -15,7 +15,11 @@
   --color-primary: var(--brand-primary);
   --color-on-primary: var(--brand-on-primary);
   --color-primary-text: var(--brand-primary-text);
-  --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, black); /* filled-button hover */
+  --color-primary-hover: color-mix(
+    in srgb,
+    var(--color-primary) 85%,
+    black
+  ); /* filled-button hover */
   --color-ink: var(--brand-ink); /* the app's default text color */
   --color-secondary: var(--brand-secondary);
   --color-accent: var(--brand-accent);
@@ -93,7 +97,6 @@
   input {
     @apply font-body text-base;
   }
-
 }
 
 /* Every text field focuses the same way: its border becomes a solid 2px in the brand

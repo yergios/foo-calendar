@@ -1,10 +1,7 @@
 <template>
   <header class="bg-background border-b border-border px-6 py-3">
     <div class="max-w-[1920px] mx-auto flex items-center justify-between gap-6">
-      <RouterLink
-        to="/"
-        class="font-display font-bold text-2xl text-ink shrink-0"
-      >
+      <RouterLink to="/" class="font-display font-bold text-2xl text-ink shrink-0">
         {{ orgName }}
       </RouterLink>
 

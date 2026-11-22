@@ -1,4 +1,4 @@
-import { onUnmounted, ref, type Ref } from "vue";
+import { type Ref, onUnmounted, ref } from "vue";
 
 export interface FloatingPanelGeometry {
   /** Below this much room underneath the anchor, the panel drops upward instead - but
