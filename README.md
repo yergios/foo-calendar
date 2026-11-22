@@ -1,5 +1,7 @@
 # Foo Calendar
 
+[![CI](https://github.com/yergios/foo-calendar/actions/workflows/ci.yml/badge.svg)](https://github.com/yergios/foo-calendar/actions/workflows/ci.yml)
+
 Internal tool for coordinating the team. Tracking vacations, appointments, and other absences on a shared, year-at-a-glance calendar with automatic public holiday syncing per region.
 
 ## Documentation

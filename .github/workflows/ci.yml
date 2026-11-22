@@ -1,0 +1,133 @@
+# Every check that decides whether master is shippable. A red run means one of them failed;
+# none of them is advisory. Run the same commands locally before pushing (see each step).
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # Also the dependency audit: NuGet checks every package, transitive ones included,
+      # against the advisory database during restore, and Directory.Build.props turns
+      # those findings into errors.
+      - name: Restore
+        run: dotnet restore
+
+      # Every analyzer rule is on and warnings fail the build, so this is also the lint.
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release
+
+      # The version is written in two places that nothing else ties together.
+      - name: API and SPA versions agree
+        run: |
+          api=$(grep -oP '<Version>\K[^<]+' src/Api/Api.csproj)
+          web=$(jq -r .version src/Web/package.json)
+          if [ "$api" != "$web" ]; then
+            echo "::error::Api.csproj is $api but package.json is $web"
+            exit 1
+          fi
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Web
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the pnpm version pinned in package.json's packageManager field.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: src/Web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: src/Web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint:check
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test
+
+      # High and critical only, dev tooling included. Moderate findings in lint tooling
+      # often have no fix inside the ranges upstream allows yet, and failing on them would
+      # train everyone to ignore a red run.
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # The Dockerfile builds the SPA and publishes the API itself, so this is also the
+      # production build of both.
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: foo-calendar:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Proves the image starts, applies migrations to an empty database, and serves both
+      # the health endpoint and the SPA shell. Development is the only environment that
+      # starts without an identity provider; Holidays:Source=None keeps the run offline.
+      - name: Smoke test
+        run: |
+          docker run --detach --name app --publish 8080:8080 \
+            --env ASPNETCORE_ENVIRONMENT=Development \
+            --env Holidays__Source=None \
+            foo-calendar:ci
+
+          for _ in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8080/healthchecks; then break; fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error http://localhost:8080/healthchecks | grep -q '"Healthy"'
+          curl --fail --silent --show-error http://localhost:8080/ | grep -q '<base href='
+
+      - name: Container logs
+        if: failure()
+        run: docker logs app
