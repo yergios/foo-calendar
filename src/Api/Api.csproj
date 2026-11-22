@@ -23,6 +23,8 @@
 		<PackageReference Include="OpenTelemetry.Instrumentation.Http" />
 		<PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
 		<PackageReference Include="Scalar.AspNetCore" />
+		<!-- Security pin, see Directory.Packages.props. -->
+		<PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
 	</ItemGroup>
 
 	<ItemGroup>
