@@ -2,14 +2,19 @@
 
 - Status: Accepted
 - Date: 2026-08-15
-- Source: commit `ce05498`, `Program.cs` (Auth section), `Configuration/Permissions.cs`
+- Source: commits `a2f0bc8` (several claims and values), `ce05498` (per-permission
+  policies), `feab1aa` (`AbsencesApprove`), `Program.cs` (Auth section),
+  `Configuration/Permissions.cs`
 
 ## Context
 
-The first version had one admin role. In practice the people who maintain the team list,
-read absence totals, run holiday syncs, read the audit log and approve requests are not
-always the same people, and identity providers express membership in different claims
-(`roles`, `groups`) and formats (names, GUIDs).
+The first version had one admin role. `a2f0bc8` made it accept several claim types and
+values, because identity providers express membership in different claims (Entra ID puts
+app roles in `roles` and group memberships in `groups`) and formats (names, GUIDs).
+`ce05498` then split the role into four permissions, each configured on its own; that
+commit has no message, and the reason for the split was not recorded beyond what the code
+and README say per permission. `AbsencesApprove` followed the next day with the approval
+flow (`feab1aa`).
 
 ## Decision
 

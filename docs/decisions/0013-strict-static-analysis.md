@@ -7,7 +7,7 @@
 ## Context
 
 `AnalysisMode=All` and the Sonar analyzer were already enabled, but warnings did not fail
-the build, so 159 accumulated. The suppressions meant to handle the inapplicable ones sat
+the build, so they accumulated. The suppressions meant to handle the inapplicable ones sat
 under an `.editorconfig` section that matched no file, a seed tool had stopped compiling
 without anyone noticing, and a dependency carried a high-severity advisory.
 
@@ -22,17 +22,17 @@ without anyone noticing, and a dependency carried a high-severity advisory.
   general but wrong at one site is suppressed there, with a scoped `#pragma` and its reason.
 - **`.editorconfig` is the .NET SDK's own template** (`dotnet new editorconfig`), kept as
   generated, with project choices in one overrides section at the end.
-- **CI runs all of it** on every push and pull request, together with the SPA's typecheck,
-  lint (zero warnings), format check, tests and `pnpm audit`, and a smoke test of the
-  container image.
+- **CI runs all of it** on every push to `master` and every pull request, together with
+  the SPA's typecheck, lint (zero warnings), format check, tests and `pnpm audit`, and a
+  smoke test of the container image.
 
 ## Alternatives considered
 
-- **dotnet/runtime's style rules**, the convention many open-source .NET projects copy.
-  Rejected: they call for `_camelCase` fields, `s_` statics and explicit types, which the
-  code does not use, so adopting them meant either a large rename or rules the code
-  contradicts.
-- **Leaving warnings as warnings.** That is how 159 of them built up.
+- **The template's own style preferences** where the code differs: explicit types instead
+  of `var`, and `_camelCase` private fields. Overridden rather than adopted, so the rules
+  describe the code as it is written (`99817b0`, and the reasons in `.editorconfig`'s
+  overrides section).
+- **Leaving warnings as warnings.** That is how they built up.
 
 ## Consequences
 

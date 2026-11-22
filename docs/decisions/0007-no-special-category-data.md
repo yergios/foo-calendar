@@ -28,9 +28,9 @@ whose contents nobody can predict.
 
 ## Alternatives considered
 
-- **Keep `Sick`, with configurable visibility.** Rejected: hiding the type from colleagues
-  still stores health data, and the app would then need Article 9 handling throughout.
-  Without the type, it is designed not to hold that data at all.
+- **Keep `Sick`, with configurable visibility.** Rejected in favour of removing the type
+  outright, so that the app stores no special-category data by design. Hiding the type
+  from colleagues would not have achieved that.
 
 ## Consequences
 
