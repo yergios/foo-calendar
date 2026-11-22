@@ -13,11 +13,14 @@ The API serves that configuration two ways. Whatever the app needs *before* anyo
 | `Team:OrgName` | Your team's name, in the header. Empty falls back to the product's name. |
 | `Team:SupportUrl` | "Contact support" links, including inside the help doc. Any scheme. |
 | `Team:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
+| `Team:SecurityContact` | Served as `Contact` in `/.well-known/security.txt`. Optional: falls back to `Team:SupportUrl`. |
+| `Team:HomeTimeZone` | Required. IANA timezone id, e.g. `Europe/Zurich`. Every time-based absence's times are wall-clock time in this one zone, for every viewer, and are labeled with it. |
 | `Auth:Authority` | OIDC issuer. Used by the API to validate tokens and by the SPA to log in. |
 | `Auth:ClientId` | The SPA's OIDC client id. Frontend-only, but required at startup. |
 | `Auth:Audience` | Which API the access token is issued for. |
 | `Auth:Scope` | Scopes the SPA requests. |
 | `Auth:RedirectUri` | Where the IdP returns after login. Relative by default, so any hostname works. |
+| `Auth:PostLogoutRedirectUri` | Where the IdP returns after sign-out. `/` by default, resolved like `Auth:RedirectUri`. Register it with your provider as an allowed post-logout redirect URI, or it will refuse to send the browser back. |
 | `Auth:Permissions` | Claim values granting each permission, on both sides. Any one of them grants it. |
 | `Auth:ClaimTypes:*` | Which claims carry identity and permissions, on both sides. |
 

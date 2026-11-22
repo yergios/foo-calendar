@@ -1,6 +1,6 @@
 # 0001. Remove approvals and close the review gaps
 
-- Status: Ready to build
+- Status: Done (2026-11-23)
 - Date: 2026-11-22
 - Decided: [ADR 0014](../decisions/0014-remove-absence-approvals.md) (remove approvals); on
   2026-11-22 also: add sign-out, cap read ranges at 366 days, pin the SDK feature band

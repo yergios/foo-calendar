@@ -2,7 +2,7 @@
 
 ### Getting started
 
-The first time you sign in, click **Set up profile** in the header (or the button on the home page) to pick a display name, a color, and optionally where you're based. Pick the country first: the **Region** field below it stays disabled until you do, and for the many countries whose public holidays are all nationwide it stays disabled after. Both fields are searchable, so type "astur" rather than scrolling. Picking a country and region is what tells the calendar to start tracking that region's public holidays — you don't need to ask anyone to add it first.
+The first time you sign in, click **Set up profile** in the header (or the button on the home page) to pick a display name and optionally where you're based. Pick the country first: the **Region** field below it stays disabled until you do, and for the many countries whose public holidays are all nationwide it stays disabled after. Both fields are searchable, so type "astur" rather than scrolling. Picking a country and region is what tells the calendar to start tracking that region's public holidays — you don't need to ask anyone to add it first.
 
 ### The calendar
 
@@ -18,6 +18,7 @@ Use the **Sort by** and **Region** controls above the grid to reorder or filter 
 
 - Click **+ Add absence**, or click any empty day in your own row to start a new absence prefilled with that date.
 - Click one of your own absence blocks to edit its dates, type, or note — or to delete it, right from that same screen.
+- An absence is on the calendar the moment you save it. There's nothing to approve: this calendar is for coordinating, and leave entitlement is your HR system's job.
 - You can only add, edit, or delete absences for yourself. Everyone else's absences are visible but read-only.
 - Your **note is yours**. The team sees that you're off and whether it's vacation, an appointment, or other, but nobody else ever sees what you wrote — not on the calendar, not on the admin page, and not in the audit log. There is deliberately no "sick" type: why you're away is nobody's business, so if you're ill, use **Other**, and please keep health details out of the note.
 
@@ -29,9 +30,13 @@ Click **+ Add bank holiday** to add a new one, or click the bank-holiday day dir
 
 ### Your profile
 
-From the **Profile** page you can update your display name, color, and region, see your own vacation/other day totals for any year, or delete your profile entirely.
+From the **Profile** page you can update your display name and region, see your own vacation/other day totals for any year, or delete your profile entirely.
 
 One thing worth knowing before you delete: if you're the last person in your region, that region's public holidays are removed from the calendar along with your profile, including any that were added by hand. The team's home region is never removed this way.
+
+### Signing out
+
+**Sign out** in the header ends your session, including with your identity provider where it supports that, and removes everything the app kept in this browser: the cached calendar that makes the next visit instant, and your sort, filter, and row-order choices. Those are quick to set again, and on a shared computer they'd otherwise say who used it last.
 
 ### Admin
 
@@ -42,7 +47,6 @@ Beyond that, an **Admin** link appears in the header if you've been granted anyt
 - **Manage people** — create, edit, and delete anyone's profile, and import a team from a CSV.
 - **Read reports** — everyone's vacation/other totals for a year, side by side.
 - **Sync bank holidays** — re-run the automatic sync for a given year, or for a single region that failed.
-- **Approve absences** — when your team has this turned on, approve or reject requests waiting for review. Each one waiting on you also shows up under "Waiting on you" in the notification bell, and badges the "Absence approvals" link, until it's resolved.
 - **Read the audit log** — who changed or deleted what, kept after the thing itself is gone.
 
 Ask whoever administers your identity provider if you need one of these.

@@ -31,8 +31,9 @@ identity provider, your hosting.
 
 ### Absences (`Absence`)
 
-Dates, a type, an optional note, an optional start/end time, and who created, updated, and
-reviewed it.
+Dates, a type, an optional note, an optional start/end time, and who created and last
+updated it. There is no approval state: an absence is in effect the moment its owner adds
+it ([0014](decisions/0014-remove-absence-approvals.md)).
 
 **There is deliberately no "sick" type.** An absence's type is visible to everyone on the
 team, and "this person is ill" is health data — a special category under GDPR Article 9,
@@ -45,8 +46,10 @@ The one place that guarantee can leak is the free-text **note**. It is the only 
 whose contents nobody can predict, and a person can type anything into it. Two things
 follow:
 
-- Notes never leave the app. Nothing transmits them anywhere, and the audit log never
-  records them.
+- Notes are shown to their author only. The API leaves them out of every response to
+  anyone else, admins included, rather than leaving the browser to hide them. Nothing
+  transmits them anywhere, and the audit log, application logs and traces never record
+  them.
 - Tell your team not to put health details, diagnoses, or anything similar in a note. That
   is the one instruction this app's design depends on and cannot enforce.
 
@@ -68,15 +71,27 @@ defensible rather than merely convenient:
 
 Absence notes are never written to the audit log.
 
-### Notifications (`Notification`)
+### In the browser
 
-One per reviewed absence request: the person, the type, the dates, and the reviewer's note
-on a rejection. Deleted after `Retention:NotificationDays` (default 90).
+The SPA keeps copies in each member's browser so a repeat visit paints before any request
+completes ([0011](decisions/0011-client-side-stale-while-revalidate.md)). In `localStorage`,
+under the `foo-calendar:` key prefix:
 
-Whoever holds `AbsencesApprove` also sees pending requests waiting on them in the same
-bell. That is not a stored record of its own — nothing new is written for it — it is a live
-read over `Absence` rows already covered above, shown only to people who could already see
-the same thing on the approvals page.
+- the people list and the year's absences and bank holidays, as the API served them to
+  that member (so with their own notes only);
+- their own profile;
+- interface preferences: how they sort, filter and order the team.
+
+In `sessionStorage`, under the same prefix, the page to return to after signing in. The
+OIDC library (`oidc-client-ts`) keeps the sign-in session, tokens included, in
+`sessionStorage`, and the state of a sign-in in progress in `localStorage`, both under its
+own `oidc.` keys.
+
+**Signing out** removes all of it: the app deletes every key under its prefix in both
+storages, the library removes its session, and when the identity provider advertises an
+end-session endpoint the browser is sent there to end the provider's session too. On a
+shared computer that is what keeps the next person from seeing the last one's calendar
+copy, or their preferences.
 
 ---
 
@@ -85,7 +100,8 @@ the same thing on the approvals page.
 | Destination | What goes | Notes |
 |---|---|---|
 | **Nager.Date** (`https://date.nager.at`) | **No personal data.** Country and region codes only, to fetch public holidays. | Switch it off with `Holidays:Source=None`, or use `File` for an air-gapped network. |
-| **Your identity provider** | Standard OIDC sign-in traffic | Not applicable when running without one. |
+| **Your identity provider** | Standard OIDC sign-in and sign-out traffic | Not applicable when running without one. |
+| **Your OTLP collector**, if you configure one | Traces, metrics and logs: request paths, timings, status codes, log messages. Never an absence note. | Off until `Telemetry:OtlpEndpoint` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [deployment](deployment.md). The collector is your processor. |
 
 Nothing else leaves. There is no telemetry to the project's author, no analytics, and no
 outbound call this list doesn't name.
@@ -100,10 +116,9 @@ sweeps daily and deletes what has aged out.
 | Setting | Default | Rationale |
 |---|---|---|
 | `AuditEntryDays` | `365` | Long enough to answer "who changed that" a season or two later; short enough that the log doesn't become permanent. |
-| `NotificationDays` | `90` | These are read once and never referred to again. |
 | `AbsenceDays` | `0` (off) | Looking back over previous years is what a leave calendar is *for*. Deleting absence history by default would be deleting the product. Set e.g. `1095` for three years if you have decided you don't need more. |
 
-`0` means "keep indefinitely" for any of them.
+`0` means "keep indefinitely" for either of them.
 
 **There is no "GDPR number" here.** Article 5(1)(e) says personal data must be kept no
 longer than is necessary for the purpose it was collected for, and the purpose is yours to
@@ -120,7 +135,7 @@ guarantee.
 - **Rectification (Art. 16).** Everyone can edit their own profile; admins can edit
   anyone's.
 - **Erasure (Art. 17).** Deleting a person from the admin people page **cascades to their
-  absences and notifications** — this is declared explicitly in `AppDbContext`, not left to
+  absences** — this is declared explicitly in `AppDbContext`, not left to
   a framework default. Their audit entries survive, per the section above. If you have
   concluded that erasure must reach the audit log too, delete those rows directly; nothing
   in the app depends on them.

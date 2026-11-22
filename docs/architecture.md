@@ -17,7 +17,7 @@ flowchart LR
     subgraph app["Foo Calendar process (one container)"]
         direction TB
         pipeline["ASP.NET Core pipeline<br/>static files, auth, API endpoints, SPA shell"]
-        services["Services<br/>absences, people, holidays, audit, notifications"]
+        services["Services<br/>absences, people, holidays, audit"]
         jobs["Background services<br/>holiday sync (weekly), retention sweep (daily)"]
         pipeline --> services
         jobs --> services
@@ -42,29 +42,30 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
 
 ## Startup
 
-`Program.cs` reads top to bottom in the order things happen, with one catch: options are
-registered with their validation near the top, but most of that validation runs later,
-after migrations.
+`Program.cs` reads top to bottom in the order things happen.
 
 1. **Options are bound and their validation rules attached** (`ValidateOnStart`). Two
    retired setting shapes (`Auth:AdminPermission(s)`, a scalar
-   `Auth:ClaimTypes:Permissions`) are rejected on the spot.
+   `Auth:ClaimTypes:Permissions`) and the settings of the removed approval workflow
+   (`AbsenceApprovals:Enabled=true`, `Auth:Permissions:AbsencesApprove`) are rejected on
+   the spot.
 2. **Services are registered.** The holiday source is chosen here from `Holidays:Source`
    (Nager, File, or None), and the sync job is only registered when there is a source.
 3. **The dev bypass announces itself**: with `Auth:Provider=None` a warning is logged.
-4. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
-5. **The pipeline is assembled and the SPA shell prepared once**, when a frontend build is
+4. **Every option is validated**, by running the checks `ValidateOnStart` registered
+   rather than waiting for the host to run them when it starts.
+5. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
+6. **The pipeline is assembled and the SPA shell prepared once**, when a frontend build is
    present: `index.html` is read, its `<base href>` rewritten for a sub-path deployment,
    and the bootstrap config inlined as `window.__bootstrap`
-   ([0004](decisions/0004-runtime-configuration.md)). Reading the team and auth options
-   for that payload is the first point their validation runs.
-6. **The host starts**: it validates the remaining options, then starts the background
-   services. The holiday sync runs immediately and then every `Holidays:SyncInterval`; the
-   retention sweep runs immediately and then every `Retention:SweepInterval` (daily).
+   ([0004](decisions/0004-runtime-configuration.md)).
+7. **The host starts** the background services. The holiday sync runs immediately and
+   then every `Holidays:SyncInterval`; the retention sweep runs immediately and then every
+   `Retention:SweepInterval` (daily).
 
 So a missing identity provider setting, a permission with no claim values, or
 `Auth:Provider=None` outside Development stops the process with a message saying what to
-set before it serves a request, but after migrations have run.
+set, before it has touched the database or served a request.
 
 ## A request through the pipeline
 
@@ -77,7 +78,7 @@ flowchart TB
     fwd --> base["Path base<br/>(only if ReverseProxy:PathBase)"]
     base --> gzip["Response compression"]
     gzip --> errors["Exception handler, status code pages"]
-    errors --> static{"Static file?"}
+    errors --> static{"Static file?<br/>(only with a frontend build)"}
     static -- "yes: /assets/* immutable,<br/>everything else default" --> done([response])
     static -- no --> routing["Routing"]
     routing --> authn["Authentication<br/>JWT bearer, or the dev bypass in Development"]
@@ -123,46 +124,35 @@ src/Api/
 The domain services take each other through interfaces, which is what lets the unit tests
 swap a collaborator for a recording fake while running real queries against SQLite.
 
-## Absence lifecycle
+## Absences and overlaps
 
-The approval workflow is off by default, in which case every absence is created
-`Approved`. `AbsenceService` enforces these transitions; the ones marked "approvals on"
-need `AbsenceApprovals:Enabled`. Approving and rejecting do not, so a request left pending
-when the workflow is turned off can still be resolved.
+An absence has no lifecycle beyond existing: it is in effect from the moment its owner
+creates it until they delete it, and only its owner can change it
+([0014](decisions/0014-remove-absence-approvals.md)). What `AbsenceService` does enforce
+is which absences may coexist for one person:
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending: create (approvals on)
-    [*] --> Approved: create (approvals off)
-    Pending --> Pending: owner edits
-    Pending --> Approved: approve (not by the owner)
-    Pending --> Rejected: reject, optional note (not by the owner)
-    Approved --> Pending: owner edits (approvals on)
-    Approved --> Approved: owner edits (approvals off)
-    Rejected --> [*]: owner deletes
-    Pending --> [*]: owner deletes
-    Approved --> [*]: owner deletes
-```
+| A new or edited absence | Overlaps an existing whole-day absence | Overlaps an existing time-based one |
+| --- | --- | --- |
+| Whole-day | Conflict (409) | Conflict (409) |
+| Time-based (one day, start and end time) | Conflict (409) | Allowed, times unchecked |
 
-- **Rejected is a dead end.** It cannot be edited back to life; the way forward is a new
-  request. It also stops reserving its dates.
-- **Reviews are race-safe.** Approve and reject are a conditional `UPDATE ... WHERE
-  Status = Pending`, so of two reviewers acting at once, one wins and the other is told the
-  request is no longer pending. The audit entry and the notification commit in the same
-  transaction as the status change.
-- **Overlaps are checked inside a serializable transaction**, against the same person's
-  other absences. A whole-day absence blocks any other on its days; any number of
-  time-based absences may share a day.
+- **Overlap means sharing a day.** Ranges are inclusive, so an absence starting on the day
+  another ends overlaps it. Other people's absences never conflict.
+- **The check and the write are atomic.** Both run inside a serializable transaction,
+  which on SQLite takes the write lock up front, so two concurrent requests cannot both
+  pass the check and land overlapping absences.
+- **An edit is checked against everything but itself.**
 
 ## Frontend
 
 ```
 src/Web/src/
 ├── main.ts         reads the inlined bootstrap config, starts OIDC, mounts the app
-├── auth/           oidc-client-ts setup, the dev bypass, the token and permission store
+├── auth/           oidc-client-ts setup, sign-in and sign-out, the dev bypass, the token
+│                   and permission store
 ├── router/         routes; the guard signs in, and checks permissions only where a route asks
 ├── api/            one module per API area; apiFetch attaches the bearer token
-├── stores/         Pinia stores for config, people, the signed-in person, notifications
+├── stores/         Pinia stores for config, people, the signed-in person
 ├── composables/    small shared behaviours (floating panels, stale-response guards)
 ├── layouts/        the signed-in shell and the admin shell with its sidebar
 ├── types/          DTO and config types shared across the app

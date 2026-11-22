@@ -13,4 +13,4 @@ verified. It is written before the code and is what a build session works from.
 
 | # | Change | Status |
 | --- | --- | --- |
-| [0001](0001-remove-approvals-and-close-review-gaps.md) | Remove approvals and close the review gaps | Ready to build |
+| [0001](0001-remove-approvals-and-close-review-gaps.md) | Remove approvals and close the review gaps | Done |

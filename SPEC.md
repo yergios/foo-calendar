@@ -315,6 +315,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   test puts the ID in brackets in its name, e.g. `it("[UI-2] clamps to the year", ...)`. A
   test may reference several. `[ci]`
 
+`scripts/check-spec-trace.mjs` is the CI step. A `[test]` requirement whose test does not
+exist yet is listed, with what is missing, in `tests/spec-coverage-gaps.txt`; the step also
+fails when a listed requirement gains a reference, so that list only shrinks.
+
 ---
 
 ## Changing this specification
@@ -326,6 +330,5 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
    what `master` does once pending change specs are done.
 3. A decision with alternatives worth remembering also gets a decision record.
 
-Pending change specs:
-
-- [0001: Remove approvals and close the review gaps](docs/specs/0001-remove-approvals-and-close-review-gaps.md)
+Pending change specs: none. [0001](docs/specs/0001-remove-approvals-and-close-review-gaps.md),
+the last, is done.

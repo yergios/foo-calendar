@@ -1,6 +1,8 @@
 # Administration
 
-Day-to-day running of a deployment. In the web app, `/admin` has a section each for people (including bulk import), the bank-holiday sync, absence approvals, and the audit log, each shown only to someone holding its permission, see [Access control](access-control.md). Notifications live in the header's bell, and the API reference at its own route.
+Day-to-day running of a deployment. In the web app, `/admin` has a section each for people (including bulk import), the bank-holiday sync, and the audit log, each shown only to someone holding its permission, see [Access control](access-control.md). The API reference lives at its own route.
+
+There is nothing to approve: an absence is on the calendar the moment its owner adds it ([0014](decisions/0014-remove-absence-approvals.md)).
 
 ## Importing people in bulk
 
@@ -42,29 +44,6 @@ Valid rows are imported even when others fail, and the response says exactly wha
 }
 ```
 
-## Absence approvals
-
-Off by default: an absence is approved the instant it's created, same as always. Turn it on and every new absence waits for a review instead:
-
-```bash
-AbsenceApprovals__Enabled=true
-Auth__Permissions__AbsencesApprove__0=leave-admin
-```
-
-- A pending absence still shows on the calendar, color-rendered like any other, with a `?` marking it unreviewed. A rejected one disappears from the calendar entirely; the only way back onto it is a new request.
-- Whoever holds `AbsencesApprove` sees a "Absence approvals" section on `/admin`, listing every pending request — including its note, the one place someone other than its author is shown it, since deciding whether to approve needs the reason. Approving needs nothing further; rejecting takes an optional note explaining why.
-- Editing a still-pending request just edits it. Editing one that was already approved sends it through review again, since what was approved was those specific dates, type, and note. A rejected request can't be edited at all — file a new one.
-- The requester is told the outcome from the [in-app notification bell](#getting-notified), always, the instant they next open the app.
-
-## Getting notified
-
-Everyone finds out what they need to from the bell icon in the header — no email or push setup required, and nothing to configure.
-
-- Whoever a pending request belongs to sees what happened to it: their own recent approvals and rejections, with the reviewer's note when there is one.
-- Whoever holds `AbsencesApprove` also sees every request currently waiting on them, under "Waiting on you," for as long as it stays unresolved — not a one-time alert, so it can't go stale or get missed by opening the bell at the wrong moment. Clicking one goes straight to `/admin/approvals`. The same count badges the "Absence approvals" link in the admin sidebar.
-
-Either kind counts toward the bell's badge. Opening it marks approvals/rejections read; a pending item only leaves the list once it's actually resolved, from here or the approvals page itself. `GET /api/notifications` and `POST /api/notifications/read` are what it calls.
-
 ## Who changed what
 
 Rows carry `CreatedBy`/`UpdatedBy` for as long as they exist. The audit log covers the rest, and deletions in particular, where there is no row left to ask:
@@ -90,9 +69,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-It records profile creates, updates, and deletes; bulk imports; created, updated, deleted, approved, and rejected absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
+It records profile creates, updates, and deletes; bulk imports; created, updated, and deleted absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
 
-An absence's note is never recorded, and neither is a reviewer's reason for rejecting one — neither the log nor the admin page will show you either. The same applies to the actions themselves: an entry says an Other absence from the 2nd to the 6th was rejected, not why.
+An absence's note is never recorded — neither the log nor the admin page will show it to you. An entry says an Other absence from the 2nd to the 6th was created, not why. Entries written before approvals were removed may still say an absence was approved or rejected; they stay until retention removes them.
 
 > Entries are deleted after `Retention:AuditEntryDays` (a year by default). That bound is also what keeps a deleted person's name from surviving in the log indefinitely — see [docs/data-protection.md](data-protection.md). Set it to `0` to keep them forever.
 
@@ -109,6 +88,6 @@ It is **on in Development** and off everywhere else, because both routes are ano
 
 The document names a `Bearer` security scheme, so Scalar's auth panel takes an access token and sends it with every call you make from the page. Get one from your identity provider the way the SPA does, or from the browser devtools of a signed-in session.
 
-Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config, Notifications — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
+Endpoints are grouped by tag — Absences, People, Bank holidays, Regions, Admin, Config — which is what the sidebar is built from. A new endpoint inherits its group's tag from the `MapGroup` call, so there is nothing to remember per route.
 
 > Under a sub-path (`ReverseProxy:PathBase`), Scalar resolves the document URL against the page's own path, so `/calendar/scalar` reads `/calendar/openapi/v1.json` without either being configured.

@@ -25,7 +25,7 @@ Running and operating it:
 | [Deployment](docs/deployment.md) | Configuration, the container image, reverse proxies, scaling, observability |
 | [Regions and holidays](docs/regions-and-holidays.md) | How tracked regions follow the team, and the holiday sources |
 | [Access control](docs/access-control.md) | Permissions, granting them through your identity provider, adding new ones |
-| [Administration](docs/administration.md) | Bulk import, absence approvals, notifications, the audit log, the API reference |
+| [Administration](docs/administration.md) | Bulk import, the audit log, the API reference |
 | [Data protection](docs/data-protection.md) | Every piece of personal data stored, where data leaves, what stays your responsibility |
 
 ## Changelog
@@ -84,7 +84,7 @@ The frontend is compiled by Vite and placed in `src/Api/wwwroot`. The .NET app s
 
 **Prerequisites**
 
-- .NET 10 SDK
+- .NET 10 SDK, feature band 10.0.1xx (`global.json` pins it; any patch of that band works)
 - Node.js 20.19+ (or 22.12+)
 - pnpm (`npm install -g pnpm`)
 

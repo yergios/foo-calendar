@@ -1,7 +1,7 @@
 # Threat model
 
 What this app protects, from whom, where the boundaries are, and which risks are accepted
-rather than mitigated. Written against the code as of 2026-11-22; each mitigation names
+rather than mitigated. Written against the code as of 2026-11-23; each mitigation names
 where it lives so it can be checked rather than trusted.
 
 ## Scope and assumptions
@@ -18,7 +18,7 @@ where it lives so it can be checked rather than trusted.
 
 | Asset | Why it matters |
 | --- | --- |
-| Absence notes | The one free-text personal field; may contain things people only meant for an approver |
+| Absence notes | The one free-text personal field; may contain things its author meant for nobody else |
 | The team's absences and regions | Personal data: who is away, when, and roughly where they live |
 | The audit log's integrity | The answer to "who changed this" after the fact |
 | Access tokens in the browser | Whoever holds one acts as that person until it expires |
@@ -81,15 +81,14 @@ named permission on top ([0006](decisions/0006-fail-closed-per-permission-author
 | Threat | Mitigation |
 | --- | --- |
 | Editing or deleting someone else's absence | The service compares the absence's owner to the caller and answers 403 (`AbsenceService`) |
-| Approving your own request | Reviews reject the request's owner as reviewer |
-| Two reviewers overwriting each other | A conditional `UPDATE ... WHERE Status = Pending`; the loser gets a conflict |
+| Two concurrent requests landing overlapping absences | The overlap check and the write share a serializable transaction (`AbsenceService`) |
 | Rewriting the audit log | No endpoint updates or deletes entries; only the retention sweep removes aged ones |
 | A LIKE wildcard in a search widening it | Search terms are escaped (`SqlLikePattern`) |
 
 ### Repudiation
 
 Every create, update and delete someone makes through the API (people, absences, manual
-bank holidays), every import, review and hand-triggered sync is written to the audit log
+bank holidays), every import and every hand-triggered sync is written to the audit log
 with the actor's username, and rows carry `CreatedBy`/`UpdatedBy`. Entries survive the
 people they name, bounded by `Retention:AuditEntryDays`.
 
@@ -102,17 +101,18 @@ holiday sync, and the retention sweep. Those reach the application log, if at al
 
 | Threat | Mitigation |
 | --- | --- |
-| Notes read by colleagues | Projected away in the database query for anyone but the author; approvers see them only on pending requests; never in the audit log ([0007](decisions/0007-no-special-category-data.md)) |
+| Notes read by colleagues | Projected away in the database query for anyone but the author, admins included; never in the audit log ([0007](decisions/0007-no-special-category-data.md)) |
+| The next user of a shared browser reading the cached calendar | Sign-out removes every key under the app's storage prefix in `localStorage` and `sessionStorage` (`clearAppStorage` in `lib/browserCache.ts`), removes the OIDC session through the library, and ends the provider's session where it has an end-session endpoint (`signOut` in `auth/index.ts`) |
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |
-| Data leaving the system | Only country codes to the holiday source, sign-in traffic to the IdP, and traces, metrics and logs to an OTLP collector if the deployer configures one; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
+| Data leaving the system | Only country codes to the holiday source, sign-in and sign-out traffic to the IdP, and traces, metrics and logs to an OTLP collector if the deployer configures one; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
 
 ### Denial of service
 
 | Threat | Mitigation |
 | --- | --- |
-| An unbounded list response | The audit log and the admin people list are paged, at most 200 rows a page; the pending queue is capped at 200. The calendar's own reads (`GET /api/people`, `GET /api/absences` over the requested date range) are not capped |
+| An unbounded list response | The audit log and the admin people list are paged, at most 200 rows a page. `GET /api/absences` and `GET /api/bank-holidays/catalog` refuse a range over 366 days (`ReadRange`). `GET /api/people` returns the whole team, which is bounded by the team's size |
 | A pathological regex input | The one hand-checked pattern is source-generated with a match timeout |
 | A huge request body (the CSV import reads it whole) | Kestrel's default 30 MB body limit applies; the endpoint needs `PeopleManage` |
 | A holiday source that is down | Failures are per country, reported and retried; a profile save never fails on it |
@@ -151,11 +151,13 @@ record when it is.
    started with `Development` would run without authentication, announced in the log.
 8. **One instance** ([0003](decisions/0003-sqlite-single-instance.md)): availability is the
    container's and the host's.
-9. **The browser keeps a copy of the calendar.** A year of the team's absences (with the
-   viewer's own notes), the holidays, the people list and the viewer's profile are cached in
-   `localStorage` ([0011](decisions/0011-client-side-stale-while-revalidate.md)) and stay
-   there after the session ends. The app has no sign-out that clears them. On a shared
-   computer, the next user of the browser profile can read them.
+9. **The browser keeps a copy of the calendar until sign-out.** A year of the team's
+   absences (with the viewer's own notes), the holidays, the people list and the viewer's
+   profile are cached in `localStorage`
+   ([0011](decisions/0011-client-side-stale-while-revalidate.md)). Signing out removes
+   them; closing the tab does not. On a shared computer, a member who leaves without
+   signing out leaves them for the next user of the browser profile. Sign-out also ends the
+   provider's session only when the provider advertises an end-session endpoint.
 10. **The bootstrap payload is public.** It names the claim values that grant each
     permission, such as group ids or role names, to anyone who can reach the app (see the
     table above). `SpaShell` and `ConfigEndpoints` serve it anonymously because the SPA needs

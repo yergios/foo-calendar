@@ -2,7 +2,7 @@
 
 Who can do what, how permissions are granted through your identity provider, and how to add new ones.
 
-Signing in is enough to do everything a member of the team does. Five permissions gate the rest, each configured on its own and each enforced by a policy of the same name:
+Signing in is enough to do everything a member of the team does. Four permissions gate the rest, each configured on its own and each enforced by a policy of the same name:
 
 | Who | Can do |
 | --------------------------- | ------------------------------------------------------------------------------------------ |
@@ -11,11 +11,10 @@ Signing in is enough to do everything a member of the team does. Five permission
 | `ReportsRead` | View team-wide absence totals |
 | `HolidaysSync` | Trigger a bank-holiday sync by hand |
 | `AuditRead` | Read the [audit log](administration.md#who-changed-what) and `/healthchecks/detail` |
-| `AbsencesApprove` | Approve or reject pending absence requests, see [Absence approvals](administration.md#absence-approvals) |
 
 Keeping the calendar's public holidays right is everyone's job, deliberately: a member can add, edit, and delete manual holidays without asking anyone. `HolidaysSync` is separate because it calls out to the holiday source and writes in bulk, not because a holiday is precious.
 
-`AbsencesApprove` is the one exception to "every permission must be configured": it only does anything once `AbsenceApprovals:Enabled` turns the review workflow on, so a deployment that never asked for it is free to leave it unconfigured, see [Absence approvals](administration.md#absence-approvals).
+There is no approval permission: absences need no approval ([0014](decisions/0014-remove-absence-approvals.md)). The app refuses to start while `Auth:Permissions:AbsencesApprove` is still configured, so a deployment upgrading from a version that had it removes the setting rather than keeping a grant that does nothing.
 
 `/admin` is a page of sections, each behind its own permission, so it shows whatever the signed-in user is allowed to see of it. Someone holding none of them never sees the nav item at all.
 
@@ -33,7 +32,7 @@ Keeping the calendar's public holidays right is everyone's job, deliberately: a 
 }
 ```
 
-- Every permission except `AbsencesApprove` must name at least one value or the app refuses to start; a name that isn't one of the five is rejected as a typo rather than silently granting nothing.
+- Every permission must name at least one value or the app refuses to start; a name that isn't one of the four is rejected as a typo rather than silently granting nothing.
 - Holding **any one** of a permission's values is enough, so a group id and a friendlier role name can coexist while you migrate between them.
 - Nothing stops the same value appearing under all of them. That is how you configure one undivided admin role, and it is what the shipped `appsettings.json` does.
 - `ClaimTypes:Permissions` names the claims to look in, searched in order. Entra ID, for instance, puts app roles in `roles` and group memberships in `groups`; listing both lets either grant a permission.
@@ -47,4 +46,4 @@ The API's policies and the SPA's gating read the same map — served to the brow
 
 **Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
 
-**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable. Put it in `Permissions.Optional` instead if it gates a feature that is itself off by default (`AbsencesApprove` is the example): it still gets a policy and still has to be one of the recognized names, it just isn't required to be configured.
+**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable.
