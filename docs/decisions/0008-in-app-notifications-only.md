@@ -1,6 +1,6 @@
 # 8. Notifications stay inside the app: no email, no webhooks
 
-- Status: Accepted
+- Status: Accepted, amended by [0014](0014-remove-absence-approvals.md): the in-app notifications and "Waiting on you" are removed with approvals
 - Date: 2026-09-03
 - Source: commit `63c2976`
 

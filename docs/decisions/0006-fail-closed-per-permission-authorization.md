@@ -1,6 +1,6 @@
 # 6. Authorization is closed by default and granted per permission
 
-- Status: Accepted
+- Status: Accepted, amended by [0014](0014-remove-absence-approvals.md): `AbsencesApprove` and optional permissions are removed
 - Date: 2026-08-15
 - Source: commits `a2f0bc8` (several claims and values), `ce05498` (per-permission
   policies), `feab1aa` (`AbsencesApprove`), `Program.cs` (Auth section),

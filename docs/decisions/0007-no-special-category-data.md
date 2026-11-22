@@ -1,6 +1,6 @@
 # 7. Store no special-category data, and keep notes inside the app
 
-- Status: Accepted
+- Status: Accepted, amended by [0014](0014-remove-absence-approvals.md): notes become author-only, with no approver exception
 - Date: 2026-09-02
 - Source: commit `2f0400c`, [data protection](../data-protection.md)
 
