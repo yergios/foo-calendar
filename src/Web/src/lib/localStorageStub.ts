@@ -1,8 +1,8 @@
-/** Test-only: Node has no localStorage, and a Map-backed stand-in is all the browser
- * cache helpers need. Installed onto globalThis so the module under test picks it up;
- * call it in a beforeEach so each test starts from an empty store. Never import this from
- * production code. */
-export function stubLocalStorage() {
+/** Test-only: Node has no Web Storage, and a Map-backed stand-in is all the browser cache
+ * helpers need. Installed onto globalThis so the module under test picks it up; call it in
+ * a beforeEach so each test starts from an empty store. Never import this from production
+ * code. */
+export function stubStorage(name: "localStorage" | "sessionStorage") {
   const store = new Map<string, string>();
   const stub = {
     getItem: (key: string) => store.get(key) ?? null,
@@ -13,5 +13,9 @@ export function stubLocalStorage() {
       return store.size;
     },
   };
-  Object.defineProperty(globalThis, "localStorage", { value: stub, configurable: true });
+  Object.defineProperty(globalThis, name, { value: stub, configurable: true });
+}
+
+export function stubLocalStorage() {
+  stubStorage("localStorage");
 }

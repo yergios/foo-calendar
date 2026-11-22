@@ -33,6 +33,9 @@ export interface BootstrapAuthConfig {
   audience: string;
   scope: string;
   redirectUri: string;
+  /** Where the IdP sends the browser after signing out. Relative by default, resolved like
+   * redirectUri. */
+  postLogoutRedirectUri: string;
   /** Which claim values grant each permission, keyed by permission name. Holding any one
    * of a permission's values is enough. Mirrors the API's Auth:Permissions, which is what
    * actually enforces it: this only decides what the interface offers. */

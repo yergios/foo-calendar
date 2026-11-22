@@ -41,6 +41,7 @@ public sealed record BootstrapAuthConfig(
     string Audience,
     string Scope,
     string RedirectUri,
+    string PostLogoutRedirectUri,
     // Which claim values grant each permission, so the SPA can hide what the API would
     // refuse anyway. The API enforces the same map independently: this is for the
     // interface, not for the gate.
@@ -97,6 +98,7 @@ public static class ConfigEndpoints
             auth.Audience,
             auth.Scope,
             auth.RedirectUri,
+            auth.PostLogoutRedirectUri,
             auth.Permissions,
             auth.ClaimTypes.Permissions,
             auth.Provider == AuthOptions.ProviderNone

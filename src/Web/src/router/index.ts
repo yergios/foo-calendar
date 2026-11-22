@@ -11,6 +11,7 @@ import {
 } from "@/auth";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { basePath } from "@/lib/appUrl";
+import { STORAGE_PREFIX } from "@/lib/browserCache";
 import { ADMIN_SECTIONS } from "@/router/adminSections";
 import type { Permission } from "@/types/permission";
 import ErrorView from "@/views/ErrorView.vue";
@@ -18,6 +19,11 @@ import ForbiddenView from "@/views/ForbiddenView.vue";
 import HomeView from "@/views/HomeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import UnauthorizedView from "@/views/UnauthorizedView.vue";
+
+// Where to go back to once the identity provider returns the browser. Session storage: it
+// only has to survive that one round trip. Under the app's prefix like everything else it
+// stores, so sign-out removes it.
+const AUTH_REDIRECT_KEY = `${STORAGE_PREFIX}auth_redirect`;
 
 const router = createRouter({
   // Routes below are written as if the app owned the root; the history base is what maps
@@ -72,7 +78,7 @@ const router = createRouter({
           console.error("ERROR => Failed to handle OIDC redirect callback:", error);
           return "/500";
         }
-        return sessionStorage.getItem("auth_redirect") ?? "/";
+        return sessionStorage.getItem(AUTH_REDIRECT_KEY) ?? "/";
       },
     },
     // Public on purpose: documentation, the privacy notice, and the terms of use have to
@@ -131,7 +137,7 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
       return true;
     } else {
       const targetUrl = to.fullPath;
-      sessionStorage.setItem("auth_redirect", targetUrl);
+      sessionStorage.setItem(AUTH_REDIRECT_KEY, targetUrl);
       await signinRedirect({ targetUrl });
       return false; // cancel navigation (redirect handled externally)
     }

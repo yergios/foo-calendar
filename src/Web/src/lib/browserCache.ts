@@ -1,9 +1,25 @@
-const PREFIX = "foo-calendar:";
+/**
+ * Every key the app writes to localStorage or sessionStorage starts with this, interface
+ * preferences included, so sign-out can remove all of it (see clearAppStorage) without
+ * touching anything another app on the same origin stored. The OIDC library's own entries
+ * are not under it: they are removed through the library.
+ */
+export const STORAGE_PREFIX = "foo-calendar:";
+
+// Collect first: removing while indexing shifts the storage's key order underneath.
+function removeKeys(storage: Storage, doomed: (key: string) => boolean): void {
+  const keys: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key !== null && doomed(key)) keys.push(key);
+  }
+  for (const key of keys) storage.removeItem(key);
+}
 
 /** Reads and JSON-parses a cached value, or null if missing/unparseable/unavailable. */
 export function readCache<T>(key: string): T | null {
   try {
-    const raw = localStorage.getItem(PREFIX + key);
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
@@ -13,7 +29,7 @@ export function readCache<T>(key: string): T | null {
 /** JSON-stringifies and stores a value. Best effort: silently no-ops if unavailable. */
 export function writeCache<T>(key: string, value: T): void {
   try {
-    localStorage.setItem(PREFIX + key, JSON.stringify(value));
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
   } catch {
     // Best effort only. A private-browsing session or a full storage quota shouldn't break the app.
   }
@@ -22,7 +38,7 @@ export function writeCache<T>(key: string, value: T): void {
 /** Removes a cached value. Best effort: silently no-ops if unavailable. */
 export function clearCache(key: string): void {
   try {
-    localStorage.removeItem(PREFIX + key);
+    localStorage.removeItem(STORAGE_PREFIX + key);
   } catch {
     // Best effort only.
   }
@@ -40,15 +56,27 @@ export function clearCache(key: string): void {
  */
 export function clearCacheGroup(prefix: string, except?: string): void {
   try {
-    const full = PREFIX + prefix;
-    const kept = except ? PREFIX + except : null;
-    // Collect first: removing while indexing shifts localStorage's key order underneath.
-    const doomed: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(full) && key !== kept) doomed.push(key);
-    }
-    for (const key of doomed) localStorage.removeItem(key);
+    const full = STORAGE_PREFIX + prefix;
+    const kept = except ? STORAGE_PREFIX + except : null;
+    removeKeys(localStorage, (key) => key.startsWith(full) && key !== kept);
+  } catch {
+    // Best effort only.
+  }
+}
+
+/**
+ * Removes everything the app stored under {@link STORAGE_PREFIX}, in localStorage and
+ * sessionStorage alike, and nothing else. What sign-out calls. Each storage is best effort
+ * on its own, so one being unavailable doesn't leave the other behind.
+ */
+export function clearAppStorage(): void {
+  try {
+    removeKeys(localStorage, (key) => key.startsWith(STORAGE_PREFIX));
+  } catch {
+    // Best effort only.
+  }
+  try {
+    removeKeys(sessionStorage, (key) => key.startsWith(STORAGE_PREFIX));
   } catch {
     // Best effort only.
   }

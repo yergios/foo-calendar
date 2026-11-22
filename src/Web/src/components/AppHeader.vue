@@ -5,8 +5,8 @@
         {{ orgName }}
       </RouterLink>
 
-      <div v-if="personStore.person" class="flex items-center gap-3">
-        <nav class="flex items-center gap-1">
+      <div class="flex items-center gap-3">
+        <nav v-if="personStore.person" class="flex items-center gap-1">
           <RouterLink
             v-for="item in navItems"
             :key="item.to"
@@ -21,16 +21,25 @@
             {{ item.label }}
           </RouterLink>
         </nav>
-      </div>
 
-      <button
-        v-else
-        type="button"
-        class="border border-accent text-accent rounded-8 px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors shrink-0"
-        @click="personStore.ensurePerson()"
-      >
-        Set up profile
-      </button>
+        <button
+          v-else
+          type="button"
+          class="border border-accent text-accent rounded-8 px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors shrink-0"
+          @click="personStore.ensurePerson()"
+        >
+          Set up profile
+        </button>
+
+        <!-- Outside the profile check: someone who never set one up can still sign out. -->
+        <button
+          type="button"
+          class="font-display text-sm px-3 py-1.5 rounded-pill text-secondary hover:text-ink hover:bg-surface/60 transition-colors shrink-0"
+          @click="onSignOut"
+        >
+          Sign out
+        </button>
+      </div>
     </div>
   </header>
 </template>
@@ -39,7 +48,7 @@
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 
-import { useAuthStore } from "@/auth";
+import { signOut, useAuthStore } from "@/auth";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import { PRODUCT_NAME } from "@/lib/productInfo";
 import { usePersonStore } from "@/stores/person";
@@ -66,6 +75,12 @@ const navItems = computed(() => {
 // the rest, not just for the bare /admin path nobody actually lands on.
 function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`);
+}
+
+function onSignOut() {
+  signOut().catch((error: unknown) => {
+    console.error("ERROR => Failed to sign out:", error);
+  });
 }
 
 onMounted(() => {

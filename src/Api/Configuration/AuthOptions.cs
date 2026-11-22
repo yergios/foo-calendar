@@ -39,6 +39,11 @@ public sealed class AuthOptions
     /// origin. An absolute URL is passed through untouched.</summary>
     public string RedirectUri { get; init; } = "/callback";
 
+    /// <summary>Where the IdP sends the browser after signing out, resolved like
+    /// <see cref="RedirectUri"/>. Most providers only honor one registered with them.
+    /// </summary>
+    public string PostLogoutRedirectUri { get; init; } = "/";
+
     public ClaimTypeOptions ClaimTypes { get; init; } = new();
     public DevUserOptions DevUser { get; init; } = new();
 

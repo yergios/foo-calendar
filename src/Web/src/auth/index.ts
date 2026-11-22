@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 
 import { appUrl } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
+import { clearAppStorage } from "@/lib/browserCache";
 import type { BootstrapAuthConfig } from "@/types/config";
 import type { Permission } from "@/types/permission";
 
@@ -64,6 +65,7 @@ export function initAuth(auth: BootstrapAuthConfig): void {
     // from - hostname and sub-path both - so one build works for any deployment. An
     // absolute URL is passed through untouched.
     redirect_uri: appUrl(auth.redirectUri),
+    post_logout_redirect_uri: appUrl(auth.postLogoutRedirectUri),
     scope: auth.scope,
     response_type: "code",
     automaticSilentRenew: false,
@@ -100,6 +102,48 @@ export function useAuth() {
 export async function signinRedirect(appState?: { targetUrl?: string }): Promise<void> {
   if (isDevMode || !userManager) return;
   await userManager.signinRedirect(appState ? { state: appState } : undefined);
+}
+
+/**
+ * Ends the session here and at the identity provider, and removes everything the app
+ * stored in the browser. Interface preferences go too: on a shared computer they would say
+ * who used it last, and they are cheap to set again.
+ */
+export async function signOut(): Promise<void> {
+  clearAppStorage();
+  useAuthStore().reset();
+
+  if (isDevMode || !userManager) {
+    // The dev identity has no session anywhere to end; starting over from empty storage is
+    // all signing out can mean here.
+    window.location.reload();
+    return;
+  }
+
+  // Read before removeUser drops it: the provider takes the id token as the hint of whose
+  // session to end, and some refuse to end one without it.
+  const user = await userManager.getUser();
+  await userManager.removeUser();
+  await userManager.clearStaleState();
+
+  if (await hasEndSessionEndpoint(userManager)) {
+    await userManager.signoutRedirect({ id_token_hint: user?.id_token });
+    return;
+  }
+
+  // A provider without an end-session endpoint keeps its own session, so the most this
+  // can do is drop the app's and go back through sign-in, which that session may answer.
+  window.location.assign(userManager.settings.post_logout_redirect_uri ?? appUrl("/"));
+}
+
+// An unreachable discovery document counts as no endpoint: signing out must still work
+// when the provider is down, and the local half of it is all that is possible then.
+async function hasEndSessionEndpoint(manager: UserManager): Promise<boolean> {
+  try {
+    return Boolean(await manager.metadataService.getEndSessionEndpoint());
+  } catch {
+    return false;
+  }
 }
 
 /** Called from the /callback route after the IdP redirects back with an auth code. */
