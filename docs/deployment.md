@@ -34,7 +34,7 @@ ConnectionStrings__FooCalendarDb="Data Source=/var/lib/foo-calendar/app.db" \
 dotnet run --project src/Api
 ```
 
-The same applies to the rest of the `Team` section below, and to `Telemetry`.
+The same applies to the rest of the `Team` section (`Team:HomeRegion` is covered in [Regions and holidays](regions-and-holidays.md)), and to `Telemetry`, see [Observability](#observability).
 
 To change the look rather than the wording, edit the design tokens at the top of `src/Web/src/styles/theme.css` — that one file drives the whole UI, and it documents the contrast rules to keep if you re-skin. Unlike the settings above, a theme change is compiled into the bundle, so it does mean a rebuild. That split is the rule, not an accident: anything Tailwind has to bake into the CSS is build-time, and everything a deployer might reasonably change without a Node toolchain is runtime.
 

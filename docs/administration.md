@@ -1,6 +1,6 @@
 # Administration
 
-Day-to-day running of a deployment. In the web app, `/admin` gathers these into sections, each shown only to someone holding its permission, see [Access control](access-control.md).
+Day-to-day running of a deployment. In the web app, `/admin` has a section each for people (including bulk import), the bank-holiday sync, absence approvals, and the audit log, each shown only to someone holding its permission, see [Access control](access-control.md). Notifications live in the header's bell, and the API reference at its own route.
 
 ## Importing people in bulk
 
@@ -90,7 +90,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-It records profile creates, updates, and deletes; bulk imports; deleted, approved, and rejected absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
+It records profile creates, updates, and deletes; bulk imports; created, updated, deleted, approved, and rejected absences; every hand edit to a manual bank holiday; and hand-triggered syncs. It is append-only — nothing in the app updates or deletes an entry, and a person's entries deliberately outlive their profile. The weekly sync writes nothing: it would bury the actions people actually took, and its rows already say `<source>-sync`.
 
 An absence's note is never recorded, and neither is a reviewer's reason for rejecting one — neither the log nor the admin page will show you either. The same applies to the actions themselves: an entry says an Other absence from the 2nd to the 6th was rejected, not why.
 
