@@ -139,6 +139,7 @@ jobs:
       # the health endpoint and the SPA shell. Development is the only environment that
       # starts without an identity provider; Holidays:Source=None keeps the run offline.
       - name: Smoke test
+        id: smoke
         run: |
           docker run --detach --name app --publish 8080:8080 \
             --env ASPNETCORE_ENVIRONMENT=Development \
@@ -208,6 +209,40 @@ jobs:
         with:
           name: e2e-failures
           path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+
+      # The calendar at 1000 synthetic people: under 5,000 DOM nodes after every
+      # interaction (PERF-1), and each interaction's longest main-thread block within three
+      # times tools/perf/baseline.json (PERF-2). Runs whether or not the flows above
+      # passed, as long as the container is up: the two answer different questions. A
+      # timing failure can be CI noise, which a rerun tells apart; the DOM budget never is.
+      - name: Performance budget
+        id: perf
+        if: ${{ !cancelled() && steps.smoke.outcome == 'success' }}
+        env:
+          APP_URL: http://localhost:8080/
+          RESULT_OUT: ${{ runner.temp }}/perf/results.json
+          TRACE_OUT: ${{ runner.temp }}/perf/trace.json
+        run: |
+          mkdir --parents "$RUNNER_TEMP/perf"
+          node tools/perf/harness.mjs 1000 --budget
+
+      # Either way, so a passing run's numbers are there to compare with. The trace, which
+      # loads in DevTools' Performance panel, only when the budget failed: it is large.
+      - name: Upload performance results
+        if: ${{ !cancelled() && steps.perf.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-results
+          path: ${{ runner.temp }}/perf/results.json
+          if-no-files-found: ignore
+
+      - name: Upload performance trace
+        if: ${{ !cancelled() && steps.perf.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-trace
+          path: ${{ runner.temp }}/perf/trace.json
           if-no-files-found: ignore
 
       - name: Container logs

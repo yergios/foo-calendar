@@ -4,7 +4,8 @@
 protocol, performs the calendar's interactions (typing a search, clearing it, each sort
 mode, hovering across columns and rows, wheel scrolling, toggling a region filter,
 switching year) and reports what the renderer's main thread did for each one. No
-dependencies beyond Node 22+.
+dependencies beyond Node 22+: it runs on the DevTools driver in `tools/browser`, which the
+[end-to-end tests](../e2e/README.md) share.
 
 ## Setup
 
@@ -38,10 +39,45 @@ Each run prints one line per interaction:
 - `wall`: the window's duration, most of it deliberate waiting between steps.
 
 The full trace is written to `/tmp/foo-calendar-trace-<people>.json` (`TRACE_OUT` to
-change it) and loads in DevTools' Performance panel.
+change it) and loads in DevTools' Performance panel. The numbers, and each interaction's DOM
+size once it is done, go to `/tmp/foo-calendar-perf-<people>.json` (`RESULT_OUT`).
 
 Numbers are main-thread only (headless software rasterization, so raster and GPU time
 are excluded), which is exactly what blocks input.
+
+## Budget
+
+```
+node tools/perf/harness.mjs 1000 --budget
+```
+
+fails, after printing the usual report, when at 1000 people
+
+- the DOM holds more than 5,000 nodes after any interaction
+  ([PERF-1](../../SPEC.md#perf-performance)), or
+- an interaction's longest block is more than three times its baseline
+  ([PERF-2](../../SPEC.md#perf-performance)).
+
+CI runs it against the container on every push, with the `chrome-headless-shell` version
+pinned in `.github/workflows/ci.yml`, and keeps the results file as an artifact either way.
+The baselines it reads are in [`baseline.json`](baseline.json): the "after, 1000 people"
+column of the table below. Each interaction is held to the baseline whose key its name
+starts with (every keystroke to `search-type`, every sort mode to `sort`, every hover sweep
+to `hover`); the year switch has no baseline yet and is held to the DOM budget only.
+
+The DOM budget is deterministic. A timing failure can be CI noise, since CI machines are
+slower and busier than the one below; a rerun tells noise from a regression. The threefold
+slack is there to absorb that while still catching work that grows with the team.
+
+### Refreshing the baseline
+
+Only on purpose, in a commit of its own that says why, never to make a red run green:
+
+1. Build and serve the commit to measure as in Setup, on a quiet machine.
+2. Run `node tools/perf/harness.mjs 1000` a few times and take each interaction's typical
+   `longest`, not its best.
+3. Update both the table below (with the machine, browser and date) and `baseline.json`,
+   which must stay the table's "after, 1000 people" column.
 
 ## Baseline (Ryzen 7 5800X, chrome-headless-shell 152, 2026-09-02)
 
@@ -57,6 +93,8 @@ Longest main-thread block in ms, before and after the windowed grid rewrite.
 | hover, one column crossing  |         28 |         170 |       1.3 |        1.7 |
 | scroll, one wheel tick      |         44 |         459 |        12 |         13 |
 | DOM nodes                   |     47,616 |     455,611 |     3,366 |      3,304 |
+
+`baseline.json` holds the "after 1000" column; it is what the budget above reads.
 
 The "before" grid rendered one `<td>` per person per day, so style, layout, paint and
 hit testing all scaled with the team. The grid now renders only the rows in view and only

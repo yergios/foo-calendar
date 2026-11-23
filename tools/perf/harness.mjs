@@ -2,17 +2,23 @@
 // the renderer main thread, and reports what each calendar interaction costs. See
 // README.md for setup and how to read the numbers.
 //
-//   node tools/perf/harness.mjs [people]   people = 100 (real data) | 500 | 1000 (synthetic)
+//   node tools/perf/harness.mjs [people] [--budget]
+//
+//   people = 100 (real data) | 500 | 1000 (synthetic)
+//   --budget: fail unless the run is within PERF-1 and PERF-2 against baseline.json
 //
 // Interactions are bracketed with console.timeStamp('start:<name>') / ('end:<name>')
 // markers in the page; the report is what the main thread did between them.
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { launch, settle } from "../browser/driver.mjs";
 
-const PEOPLE = Number(process.argv[2] ?? 100);
+const args = process.argv.slice(2);
+const PEOPLE = Number(args.find((a) => !a.startsWith("--")) ?? 100);
+const BUDGET = args.includes("--budget");
 const APP_URL = process.env.APP_URL ?? "http://localhost:5055/";
 
 const browser = await launch();
@@ -200,12 +206,18 @@ await send("Tracing.start", {
   transferMode: "ReportEvents",
 });
 
+// DOM size after each interaction, read once its window has closed so the count is not
+// part of what was measured.
+const domNodes = new Map();
+const countNodes = () => evaluate(`document.getElementsByTagName('*').length`);
+
 async function measure(name, action, settleFrames = 6) {
   await mark(`start:${name}`);
   await action();
   await frames(settleFrames);
   await settle(30);
   await mark(`end:${name}`);
+  domNodes.set(name, await countNodes());
 }
 
 // ---- scenarios ----
@@ -229,6 +241,7 @@ async function measure(name, action, settleFrames = 6) {
     `({nodes: document.getElementsByTagName('*').length, cells: document.querySelectorAll('[role=gridcell]').length, rows: document.querySelectorAll('.calendar-row').length})`,
   );
   console.log("DOM:", JSON.stringify(domStats));
+  domNodes.set("cold-load", domStats.nodes);
 
   // Search: type "liam" one char at a time, then clear with Escape.
   await evaluate(`document.getElementById('personSearch').focus()`);
@@ -457,6 +470,7 @@ const main = traceChunks.filter(
     e.dur !== undefined,
 );
 const out = [];
+const results = [];
 out.push(
   `\n${"interaction".padEnd(30)} ${"busy".padStart(8)} ${"longest".padStart(8)} ${"blocks>16".padStart(8)} ${"script".padStart(8)} ${"style".padStart(8)} ${"layout".padStart(8)} ${"prepaint".padStart(8)} ${"paint".padStart(8)} ${"wall".padStart(7)}  (ms, renderer main thread; busy=union of all events, blocks>16=contiguous busy runs over a frame)`,
 );
@@ -481,6 +495,7 @@ for (const [name, w] of windows) {
   const longest = Math.max(0, ...merged.map(([s0, e0]) => e0 - s0)) / 1000;
   const over16 = merged.filter(([s0, e0]) => e0 - s0 > 16000).length;
   const wall = (w.end - w.start) / 1000;
+  results.push({ name, busy, longest, blocksOver16: over16, wall, domNodes: domNodes.get(name) });
   out.push(
     `${name.padEnd(30)} ${busy.toFixed(1).padStart(8)} ${longest.toFixed(1).padStart(8)} ${String(over16).padStart(8)} ${(sum("FunctionCall") + sum("EvaluateScript")).toFixed(1).padStart(8)} ${sum("UpdateLayoutTree").toFixed(1).padStart(8)} ${sum("Layout").toFixed(1).padStart(8)} ${sum("PrePaint").toFixed(1).padStart(8)} ${sum("Paint").toFixed(1).padStart(8)} ${wall.toFixed(0).padStart(7)}`,
   );
@@ -493,4 +508,56 @@ const traceFile =
 writeFileSync(traceFile, JSON.stringify({ traceEvents: traceChunks }));
 console.log(`trace written to ${traceFile}`);
 browser.close();
+
+// ---- budget (PERF-1, PERF-2) ----
+// baseline.json holds the "after, 1000 people" column of README.md. Each interaction is
+// held to the baseline whose key its name starts with, the longest such key: every
+// search keystroke to "search-type", every sort mode to "sort", and so on. An interaction
+// with no baseline (the year switch) is held to the DOM budget only.
+const baseline = JSON.parse(
+  readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "baseline.json"), "utf8"),
+);
+// The budgets themselves are SPEC.md's, not measurements.
+const MAX_DOM_NODES = 5000; // PERF-1
+const SLACK = 3; // PERF-2
+const budgetOf = (name) =>
+  Object.keys(baseline.longestBlockMs)
+    .filter((key) => name.startsWith(key))
+    .sort((a, b) => b.length - a.length)[0];
+
+const failures = [];
+for (const r of results) {
+  if (r.domNodes > MAX_DOM_NODES)
+    failures.push(`${r.name}: ${r.domNodes} DOM nodes, over the budget of ${MAX_DOM_NODES}`);
+  const key = budgetOf(r.name);
+  if (key === undefined) continue;
+  r.budgetMs = baseline.longestBlockMs[key] * SLACK;
+  if (r.longest > r.budgetMs)
+    failures.push(
+      `${r.name}: longest block ${r.longest.toFixed(1)} ms, over ${SLACK} x its baseline of ${baseline.longestBlockMs[key]} ms`,
+    );
+}
+
+// Machine-readable, for CI to keep whatever the outcome.
+const resultFile =
+  process.env.RESULT_OUT ?? path.join(tmpdir(), `foo-calendar-perf-${PEOPLE}.json`);
+writeFileSync(
+  resultFile,
+  JSON.stringify({ people: PEOPLE, interactions: results, failures }, null, 2),
+);
+console.log(`results written to ${resultFile}`);
+
+if (BUDGET) {
+  if (PEOPLE !== baseline.people)
+    failures.push(`the budget is for ${baseline.people} people, not ${PEOPLE}`);
+  // A run that measured nothing has not passed anything.
+  if (results.length === 0) failures.push("no interaction was measured");
+  if (failures.length > 0) {
+    console.log(`\nbudget FAILED:\n${failures.map((f) => `  ${f}`).join("\n")}`);
+    process.exit(1);
+  }
+  console.log(
+    `\nbudget OK: every interaction under ${MAX_DOM_NODES} DOM nodes and within ${SLACK} x its baseline`,
+  );
+}
 process.exit(0);
