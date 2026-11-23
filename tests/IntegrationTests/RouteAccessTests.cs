@@ -27,8 +27,9 @@ public sealed partial class RouteAccessTests
     /// (AUTH-3's list), <see cref="Member"/>, or the permission the route requires.</summary>
     private static readonly Dictionary<string, string> Access = new(StringComparer.Ordinal)
     {
-        // The SPA shell, served for any path that is not a file.
-        ["* {*path:nonfile}"] = Anonymous,
+        // The SPA shell, served for any page that is not a file.
+        ["GET {*path:nonfile}"] = Anonymous,
+        ["HEAD {*path:nonfile}"] = Anonymous,
         ["GET /api/config/bootstrap"] = Anonymous,
         ["* /healthchecks"] = Anonymous,
         ["GET /.well-known/security.txt"] = Anonymous,
@@ -57,6 +58,9 @@ public sealed partial class RouteAccessTests
         ["DELETE /api/bank-holidays/{id:int}"] = Member,
         ["GET /api/regions/countries"] = Member,
         ["GET /api/regions/{countryCode}"] = Member,
+        // An API path no other route takes, kept from falling through to the shell.
+        ["GET /api/{**path}"] = Member,
+        ["HEAD /api/{**path}"] = Member,
 
         ["POST /api/admin/people"] = Permissions.PeopleManage,
         ["POST /api/admin/people/import"] = Permissions.PeopleManage,
@@ -120,18 +124,15 @@ public sealed partial class RouteAccessTests
             $"No sample value for route parameter '{parameter}': add one to {nameof(SampleValue)}."),
     };
 
-    [GeneratedRegex(@"\{\*?(?<name>\w+)[^}]*\}")]
+    [GeneratedRegex(@"\{\*{0,2}(?<name>\w+)[^}]*\}")]
     private static partial Regex RouteParameter();
 
     private static async Task<HttpStatusCode> SendAsync(HttpClient client, Route route)
     {
+        // No body: routing passes a request naming no content type to a route that reads
+        // JSON, whose authorization answers first. One naming another type would get
+        // routing's 415 instead, which says nothing about who may call the route.
         using var request = new HttpRequestMessage(route.Method, route.Url);
-
-        // A route that reads a JSON body only matches a request that says it carries one.
-        // Any other request falls through to the SPA fallback, which would answer for it.
-        if (route.Method == HttpMethod.Post || route.Method == HttpMethod.Put)
-            request.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
-
         using var response = await client.SendAsync(request);
         return response.StatusCode;
     }

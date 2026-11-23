@@ -61,7 +61,9 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
    ([0004](decisions/0004-runtime-configuration.md)). A shell with no `</head>`, or with
    no `<base href>` while `ReverseProxy:PathBase` is set, stops the process here.
 6. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
-7. **The pipeline is assembled**, and the prepared shell mapped as the fallback route.
+7. **The pipeline is assembled**, and the prepared shell mapped as the fallback route for
+   GET and HEAD. An API path no route takes is kept from it: a 404 problem, or a 401 to
+   someone not signed in.
 8. **The host starts** the background services. The holiday sync runs immediately and
    then every `Holidays:SyncInterval`; the retention sweep runs immediately and then every
    `Retention:SweepInterval` (daily).

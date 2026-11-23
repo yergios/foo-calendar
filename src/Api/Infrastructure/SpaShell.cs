@@ -75,6 +75,12 @@ public static partial class SpaShell
     {
         if (shell is null) return;
 
+        // GET and HEAD only, the requests a browser navigates with. Routing answers 405 or
+        // 415 only when no route at all is left for a request's method or content type, and
+        // a fallback taking every method always was: a POST to an API route with the wrong
+        // content type came back as a 200 page.
+        HttpMethodMetadata navigation = new([HttpMethods.Get, HttpMethods.Head]);
+
         app.MapFallback((HttpContext http) =>
         {
             // The shell names the hashed asset files, so a cached copy outlives the assets
@@ -82,11 +88,18 @@ public static partial class SpaShell
             http.Response.Headers.CacheControl = "no-store";
             return Results.Content(shell, "text/html; charset=utf-8");
         })
+        .WithMetadata(navigation)
         // Opting out of the fallback authorization policy: this is the page that has to
         // load *before* anyone can sign in. It is the same public index.html the static
         // file middleware already serves, and it carries no user data: every field in the
         // inlined payload is something the browser is handed anyway to talk to the IdP.
         .AllowAnonymous();
+
+        // An API path no route takes is a failed API call, not a page. More specific than the
+        // shell's pattern, so it takes every such GET first, and members only, like the
+        // rest of the API: whoever is not signed in gets the same 401 a real route gives.
+        app.MapFallback("/api/{**path}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound))
+            .WithMetadata(navigation);
     }
 
     private static string InlineBootstrapConfig(
