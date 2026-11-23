@@ -149,4 +149,38 @@ public sealed class OperatorRouteTests
 
         statuses.ShouldAllBe(status => status == expected);
     }
+
+    // Nullable enabled, a parameter declared non-nullable is documented as required, though
+    // the route may well run without it: people's region filter was, until it was declared
+    // nullable. These are the ones a route really answers 400 without.
+    [Fact]
+    [Trait("Spec", "CFG-9")]
+    public async Task TheApiDocument_MarksRequiredExactlyTheQueryParametersARouteNeeds()
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+
+        using var document = JsonDocument.Parse(await client.GetStringAsync(Url(OpenApiDocument)));
+
+        var required = document.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject()
+                .Where(op => op.Value.ValueKind == JsonValueKind.Object
+                    && op.Value.TryGetProperty("parameters", out _))
+                .SelectMany(op => op.Value.GetProperty("parameters").EnumerateArray()
+                    .Where(p => p.GetProperty("in").GetString() == "query"
+                        && p.TryGetProperty("required", out var r) && r.GetBoolean())
+                    .Select(p => $"{op.Name.ToUpperInvariant()} {path.Name} {p.GetProperty("name").GetString()}")))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        required.ShouldBe(
+        [
+            "GET /api/absences from",
+            "GET /api/absences to",
+            "GET /api/admin/people/stats year",
+            "GET /api/bank-holidays/catalog from",
+            "GET /api/bank-holidays/catalog to",
+            "POST /api/admin/bank-holidays/sync year",
+        ]);
+    }
 }

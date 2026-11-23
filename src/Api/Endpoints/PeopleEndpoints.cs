@@ -63,7 +63,7 @@ public static class PeopleEndpoints
         int? page,
         int? pageSize,
         string? search,
-        string[] regions,
+        string[]? regions,
         string? sortBy,
         string? sortDir,
         int? year,
