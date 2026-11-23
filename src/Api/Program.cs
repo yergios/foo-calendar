@@ -228,7 +228,7 @@ if (config.GetSection($"{AuthOptions.SectionName}:Permissions:AbsencesApprove").
 
 var isDevelopment = builder.Environment.IsDevelopment();
 
-services.AddOptions<AuthOptions>()
+var authOptions = services.AddOptions<AuthOptions>()
     .Bind(config.GetSection(AuthOptions.SectionName))
     .PostConfigure(o => o.RemoveBlankEntries())
     .Validate(o => o.Provider is AuthOptions.ProviderOidc or AuthOptions.ProviderNone,
@@ -243,12 +243,6 @@ services.AddOptions<AuthOptions>()
     // failing at startup beats a frontend that only breaks once someone tries to sign in.
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.ClientId),
         "Auth:ClientId must be configured.")
-    // Fail closed: a permission nobody can hold rejects every request against it with no
-    // indication why, and an accidental "grant everyone" is worse still. Requiring all of
-    // them also means adding a permission is a deliberate deployment decision rather than
-    // something that silently starts out unreachable after an upgrade.
-    .Validate(o => Permissions.All.All(p => o.ValuesFor(p).Count > 0),
-        $"Auth:Permissions must list at least one claim value for each of: {string.Join(", ", Permissions.All)}.")
     // A typo would otherwise sit there granting nothing, which reads exactly like a
     // provider that isn't sending the claim.
     .Validate(o => o.Permissions.Keys.All(name => Permissions.All.Contains(name, StringComparer.OrdinalIgnoreCase)),
@@ -256,6 +250,18 @@ services.AddOptions<AuthOptions>()
     .Validate(o => o.ClaimTypes.Permissions.Count > 0,
         "Auth:ClaimTypes:Permissions must list at least one claim name.")
     .ValidateOnStart();
+
+// Fail closed: a permission nobody can hold rejects every request against it with no
+// indication why, and an accidental "grant everyone" is worse still. Requiring all of them
+// also means adding a permission is a deliberate deployment decision rather than something
+// that silently starts out unreachable after an upgrade. One rule per permission, so the
+// message names the ones actually missing.
+foreach (var permission in Permissions.All)
+{
+    authOptions.Validate(o => o.ValuesFor(permission).Count > 0,
+        $"Auth:Permissions:{permission} must list at least one claim value, e.g. " +
+        $"Auth__Permissions__{permission}__0=APP_FOO_CALENDAR_ADMIN.");
+}
 
 // Read once more, unbound, because which authentication scheme to register has to be
 // decided before the container exists. Anything invalid in here is rejected by the

@@ -1,3 +1,4 @@
+using Api.Configuration;
 using Api.Data;
 
 using IntegrationTests.TestSupport;
@@ -211,17 +212,32 @@ public sealed class StartupTests
     }
 
     // A blank entry is what shortening a list through environment variables leaves behind,
-    // so this is a permission with no claim value at all.
+    // so this is a permission with no claim value at all, among others that have one.
+    [Theory]
+    [Trait("Spec", "AUTH-5")]
+    [InlineData(Permissions.PeopleManage)]
+    [InlineData(Permissions.ReportsRead)]
+    [InlineData(Permissions.HolidaysSync)]
+    [InlineData(Permissions.AuditRead)]
+    public void PermissionWithNoClaimValue_StopsStartupNamingIt(string missing)
+    {
+        using var app = new TestApp(($"Auth:Permissions:{missing}:0", ""));
+
+        var message = StartupFailure(app).Message;
+
+        message.ShouldContain($"Auth:Permissions:{missing} must list");
+        foreach (var configured in Permissions.All.Where(p => p != missing))
+            message.ShouldNotContain($"Auth:Permissions:{configured}");
+    }
+
+    // The defaults in appsettings.json give each permission a value.
     [Fact]
     [Trait("Spec", "AUTH-5")]
-    public void PermissionWithNoClaimValue_StopsStartupNamingWhatToConfigure()
+    public void EveryPermissionWithAClaimValue_Starts()
     {
-        using var app = new TestApp(("Auth:Permissions:AuditRead:0", ""));
+        using var app = new TestApp(("Auth:Permissions:AuditRead:0", "AUDITOR"));
 
-        var failure = StartupFailure(app);
-
-        failure.Message.ShouldContain("Auth:Permissions");
-        failure.Message.ShouldContain("AuditRead");
+        Should.NotThrow(() => app.Services);
     }
 
     [Fact]
