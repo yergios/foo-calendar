@@ -4,7 +4,7 @@ namespace Api.Dtos;
 
 public sealed record BankHolidayDto(
     int Id,
-    string? Region,
+    string Region,
     DateOnly Date,
     string? Name,
     HolidaySource Source,

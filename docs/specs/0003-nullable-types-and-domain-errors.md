@@ -61,9 +61,15 @@ suspect: say why in the commit.
   is the check.
 - Annotate what may be null as nullable, and what may not as non-nullable or `required`:
   entities, DTOs, options, services, and the SPA-facing records.
-- Use the database as the source of truth for entities: a nullable column stays nullable in
-  C#. After the change, `dotnet ef migrations has-pending-model-changes` must report no
-  changes, so the schema is untouched.
+- Entities (amended 2026-11-23, see below): the schema stays as it is. A property the domain
+  requires is non-nullable, `required` where it is set at creation, and mapped
+  `.IsRequired(false)` where its column is nullable; a genuinely optional one is nullable.
+  Required: `Person.Username`, every `CreatedBy`, `BankHoliday.Region`, `AuditEntry.Actor`
+  and `AuditEntry.Action`. Optional: `Person.FirstName`, `LastName`, `HomeCity` and
+  `DisplayName` (the API and SPA fall back to the username), every `UpdatedBy`,
+  `Absence.Note`, `AuditEntry.Target` and `Details`, `BankHoliday.Name`. After the change,
+  `dotnet ef migrations has-pending-model-changes` must report no changes, so the schema is
+  untouched.
 - Generated migrations keep the `#nullable disable` EF writes into them. Anywhere else,
   `!` and `#nullable disable` need a comment saying why the value cannot be null there.
 - Remove the `CA1062` suppression's nullable remark from `.editorconfig` if the reasoning
@@ -75,6 +81,18 @@ suspect: say why in the commit.
   to a member sending no body (ERR-1). Then tighten `RouteAccessTests`'
   `AMemberWithNoPermissions_...` check from "not 401/403" to "not 401/403 and below 500",
   as the permission-route checks already are.
+
+### Amendment, 2026-11-23
+
+§C first said both "what may not be null as non-nullable or `required`" and "a nullable
+column stays nullable in C#". Those disagree for every string column, all of which allow
+NULL, and the build followed the second: every entity string was `string?`, weaker than the
+domain. That hid a defect: `POST /api/admin/people` without a username created a person
+with none (201), and the next such request was a 409. EF Core maps a non-nullable property
+to a nullable column with `.IsRequired(false)`, which leaves the model, and so the schema,
+unchanged, so the entity bullet above now says which properties are required. The review
+fixes that made the types match it also made `CreatePersonRequest.Username` required (400
+when missing or blank).
 
 ## Order of work
 

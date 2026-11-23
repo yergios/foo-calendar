@@ -41,8 +41,7 @@ public sealed class BankHolidayService(
         CancellationToken ct = default)
     {
         // Expand each region to itself + its country code, so "ES-MD" also pulls in nationwide "ES" rows.
-        // Typed as nullable only to be compared with the nullable column in SQL.
-        List<string?> expanded = [.. regions.SelectMany(RegionCode.SelfAndCountry).Distinct()];
+        List<string> expanded = [.. regions.SelectMany(RegionCode.SelfAndCountry).Distinct()];
 
         // Recurring rows are rare, so they're the only ones fetched unfiltered by date (there's
         // no SQL-side way to test "does this month/day fall in range" without pulling it in the
@@ -104,7 +103,7 @@ public sealed class BankHolidayService(
         // row to the client.
         var existing = await db.BankHolidays
             .Where(b => b.Region == countryCode
-                || (b.Region != null && b.Region.StartsWith(countryCode + RegionCode.Separator)))
+                || b.Region.StartsWith(countryCode + RegionCode.Separator))
             .ToListAsync(ct);
 
         // The overwhelming majority of rows are exact-date, non-recurring, so they get an O(1)
@@ -123,7 +122,7 @@ public sealed class BankHolidayService(
 
         // Tracks (region, date) pairs already handled during this call, whether pre-existing
         // or just queued, so a second Nager entry landing on the same day gets skipped.
-        var seen = new HashSet<(string? Region, DateOnly Date)>(existing.Select(b => (b.Region, b.Date)));
+        var seen = new HashSet<(string Region, DateOnly Date)>(existing.Select(b => (b.Region, b.Date)));
 
         foreach (var h in holidays)
         {

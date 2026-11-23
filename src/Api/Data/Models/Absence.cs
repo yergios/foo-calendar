@@ -32,6 +32,6 @@ public sealed class Absence
     // The username of whoever performed the action. Currently always the absence's own
     // owner, since there's no admin-on-behalf-of flow for absences, but stored as its own
     // field rather than derived from Person so that doesn't have to stay true forever.
-    public required string? CreatedBy { get; set; }
+    public required string CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
 }

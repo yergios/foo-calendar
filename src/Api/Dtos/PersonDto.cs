@@ -4,7 +4,7 @@ namespace Api.Dtos;
 
 public sealed record PersonDto(
     int Id,
-    string? Username,
+    string Username,
     string? DisplayName,
     string? HomeCity)
 {

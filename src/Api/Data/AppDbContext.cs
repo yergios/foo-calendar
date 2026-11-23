@@ -53,6 +53,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             .Property(b => b.CreatedAt)
             .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+        // The app always sets these, so they are non-nullable in C#, but their columns have
+        // allowed NULL since they were created. Left that way on purpose (docs/specs/0003):
+        // tightening a column is a schema change of its own, SQLite does it by rebuilding
+        // the table, and a deployment may hold rows from before the app enforced the rule.
+        modelBuilder.Entity<Person>().Property(p => p.Username).IsRequired(false);
+        modelBuilder.Entity<Person>().Property(p => p.CreatedBy).IsRequired(false);
+        modelBuilder.Entity<Absence>().Property(a => a.CreatedBy).IsRequired(false);
+        modelBuilder.Entity<BankHoliday>().Property(b => b.Region).IsRequired(false);
+        modelBuilder.Entity<BankHoliday>().Property(b => b.CreatedBy).IsRequired(false);
+        modelBuilder.Entity<AuditEntry>().Property(e => e.Actor).IsRequired(false);
+        modelBuilder.Entity<AuditEntry>().Property(e => e.Action).IsRequired(false);
+
         base.OnModelCreating(modelBuilder);
     }
 }

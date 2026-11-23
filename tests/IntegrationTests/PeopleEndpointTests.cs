@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 
 using Api.Configuration;
 using Api.Dtos;
@@ -87,6 +88,31 @@ public sealed class PeopleEndpointTests
         using var deleted = await client.DeleteAsync(Url($"/api/admin/people/{person.Id}"));
 
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        app.Query(db => db.People.Any()).ShouldBeFalse();
+    }
+
+    // A person with no username can never sign in as themselves, and used to be created
+    // anyway: 201 the first time, then 409 for every later one, since they all shared it.
+    [Theory]
+    [Trait("Spec", "PPL-5")]
+    [Trait("Spec", "PPL-3")]
+    [InlineData("""{"displayName":"X"}""")]
+    [InlineData("""{"username":null,"displayName":"X"}""")]
+    [InlineData("""{"username":"","displayName":"X"}""")]
+    [InlineData("""{"username":"   ","displayName":"X"}""")]
+    public async Task APeopleManager_CreatingSomeoneWithNoUsername_IsABadRequest(string body)
+    {
+        using var app = new TestApp { Permissions = [Permissions.PeopleManage] };
+        using var client = app.CreateClient();
+
+        foreach (var attempt in new[] { 1, 2 })
+        {
+            using var content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var response = await client.PostAsync(Url("/api/admin/people"), content);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, $"attempt {attempt}");
+        }
+
         app.Query(db => db.People.Any()).ShouldBeFalse();
     }
 

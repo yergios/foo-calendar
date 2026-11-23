@@ -7,7 +7,7 @@ namespace Api.Dtos;
 // minimal API's validation, and the CSV import, via Validator.TryValidateObject, which
 // only reads property attributes. Aiming them here keeps one set of rules for both.
 public sealed record CreatePersonRequest(
-    [property: MaxLength(100)] string? Username,
+    [property: Required, MaxLength(100)] string Username,
     [property: MaxLength(100)] string? FirstName,
     [property: MaxLength(100)] string? LastName,
     [property: MaxLength(100)] string? DisplayName,

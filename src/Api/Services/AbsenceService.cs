@@ -109,7 +109,7 @@ public sealed class AbsenceService(
     // filtered per person: a per-person scan over every holiday in play would cost
     // O(people x holidays) for what a lookup answers in two key hits each.
     private static HashSet<DateOnly> DatesApplyingTo(
-        string region, ILookup<string?, BankHolidayDto> holidaysByRegion) =>
+        string region, ILookup<string, BankHolidayDto> holidaysByRegion) =>
         RegionCode.SelfAndCountry(region)
             .SelectMany(r => holidaysByRegion[r])
             .Select(h => h.Date)

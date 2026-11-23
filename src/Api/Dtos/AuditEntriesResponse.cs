@@ -5,8 +5,8 @@ namespace Api.Dtos;
 public sealed record AuditEntryDto(
     int Id,
     DateTime OccurredAt,
-    string? Actor,
-    string? Action,
+    string Actor,
+    string Action,
     string? Target,
     string? Details)
 {

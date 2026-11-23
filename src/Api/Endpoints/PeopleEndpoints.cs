@@ -114,8 +114,7 @@ public static class PeopleEndpoints
         CancellationToken ct)
     {
         var person = await currentPerson.GetAsync(ct);
-        // Not null: the accessor found this person by their username.
-        var updated = await people.UpdateAsync(person.Id, request, person.Username!, ct);
+        var updated = await people.UpdateAsync(person.Id, request, person.Username, ct);
         return Results.Ok(updated);
     }
 

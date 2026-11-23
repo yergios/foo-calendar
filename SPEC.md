@@ -107,7 +107,7 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **PPL-4** A member must be able to update their own display name and home region, and to
   delete their own profile. `[test]`
 - **PPL-5** A holder of `PeopleManage` must be able to create, update and delete any profile.
-  `[test]`
+  A profile created this way must name a username; a missing or blank one is a 400. `[test]`
 - **PPL-6** Deleting a person must delete their absences with them, and must record one audit
   entry stating how many absences went. `[test]`
 - **PPL-7** Every member must be able to list all people. The paged list must support search

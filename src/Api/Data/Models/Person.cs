@@ -3,7 +3,7 @@
 public sealed class Person
 {
     public int Id { get; set; }
-    public required string? Username { get; set; }
+    public required string Username { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public required string? DisplayName { get; set; }
@@ -13,7 +13,7 @@ public sealed class Person
 
     // The username of whoever performed the action. Usually the person themselves, but an
     // admin can create or edit another person's record, so this can't just be Username.
-    public required string? CreatedBy { get; set; }
+    public required string CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
 
     public ICollection<Absence> Absences { get; } = [];

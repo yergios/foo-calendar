@@ -114,6 +114,20 @@ public sealed class PersonImportTests : SqliteTestBase
         issue.Username.ShouldBe("broken");
     }
 
+    // Blank and whitespace alike: the single create answers 400 to both, so a row carrying
+    // either is a failure here rather than a person nobody can sign in as.
+    [Fact]
+    [Trait("Spec", "PPL-11")]
+    public async Task ImportAsync_ReportsARowWithNoUsernameAsFailed()
+    {
+        var result = await CreateService().ImportAsync(
+            "username,displayName\n,Nobody\n   ,Blank\njdoe,Jane", Actor);
+
+        result.Created.ShouldBe(["jdoe"]);
+        result.Failed.Select(f => (f.Row, f.Username)).ShouldBe([(2, ""), (3, "")]);
+        Db.People.Select(p => p.Username).ToList().ShouldBe(["jdoe"]);
+    }
+
     [Fact]
     [Trait("Spec", "PPL-11")]
     [Trait("Spec", "PPL-3")]

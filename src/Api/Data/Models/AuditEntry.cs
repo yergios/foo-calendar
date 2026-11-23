@@ -38,10 +38,10 @@ public sealed class AuditEntry
 
     /// <summary>Username of whoever did it, or "system" for the scheduled jobs that have no
     /// signed-in user behind them.</summary>
-    public required string? Actor { get; set; }
+    public required string Actor { get; set; }
 
     /// <summary>One of <see cref="AuditActions"/>.</summary>
-    public required string? Action { get; set; }
+    public required string Action { get; set; }
 
     /// <summary>What it happened to, as it read at the time: a display name, a holiday's
     /// name and region. Denormalized on purpose, since the point is to still make sense

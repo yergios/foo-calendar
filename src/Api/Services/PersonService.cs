@@ -17,7 +17,7 @@ public sealed class PersonService(
     IAbsenceService absenceService) : IPersonService
 {
     // What a person was, for a log entry that still reads sensibly once they are gone.
-    private static string? Describe(Person person) =>
+    private static string Describe(Person person) =>
         person.HomeCity is null ? person.Username : $"{person.Username}, {person.HomeCity}";
 
     public async Task<PersonDto> CreateAsync(
