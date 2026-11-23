@@ -220,6 +220,31 @@ public sealed class StartupTests
         failure.Message.ShouldContain("removed");
     }
 
+    // The shape before it became a list, which binding would otherwise ignore, leaving every
+    // permission gated on no claim at all.
+    [Fact]
+    [Trait("Spec", "CFG-1")]
+    public void PermissionClaimTypeAsASingleName_StopsStartupNamingTheListForm()
+    {
+        using var app = new TestApp(("Auth:ClaimTypes:Permissions", "roles"));
+
+        StartupFailure(app).Message.ShouldContain("Auth:ClaimTypes:Permissions is now a list");
+    }
+
+    // Set by index, as an environment variable would set it. Some configuration sources
+    // give the list's parent key an empty value next to the entries, which is not the old
+    // shape.
+    [Fact]
+    [Trait("Spec", "CFG-1")]
+    public void PermissionClaimTypesAsAList_Start()
+    {
+        using var app = new TestApp(
+            ("Auth:ClaimTypes:Permissions:0", "roles"),
+            ("Auth:ClaimTypes:Permissions:1", "groups"));
+
+        Should.NotThrow(() => app.Services);
+    }
+
     // A blank entry is what shortening a list through environment variables leaves behind,
     // so this is a permission with no claim value at all, among others that have one.
     [Theory]

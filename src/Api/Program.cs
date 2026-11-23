@@ -206,7 +206,10 @@ if (config[$"{AuthOptions.SectionName}:AdminPermission"] is not null
         $"same value under every permission ({string.Join(", ", Permissions.All)}) reproduces " +
         "the single admin role it replaced.");
 
-if (config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"] is not null)
+// Blank passes: the old form was a claim name, so an empty one configured nothing, and some
+// configuration sources give a list's parent key an empty value next to its indexed entries
+// (host settings flattened from Auth:ClaimTypes:Permissions:0, for one).
+if (!string.IsNullOrEmpty(config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"]))
     throw new InvalidOperationException(
         "Auth:ClaimTypes:Permissions is now a list, e.g. [\"roles\"] or " +
         "Auth__ClaimTypes__Permissions__0=roles.");
