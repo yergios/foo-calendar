@@ -10,9 +10,6 @@
 # tests/IntegrationTests (TestApp) is the place for.
 
 ABS-6    needs a concurrency test racing two overlapping creates for one person and asserting exactly one succeeds
-HOL-2    needs tests of BankHolidaySyncBackgroundService (startup run, interval, this year and next) and of the hand-triggered sync answering 409 with Holidays:Source=None
-HOL-11   needs endpoint tests of the hand-triggered sync: all regions, one region, an untracked region (400), and its audit entry, which is also the one AUD-1 clause no test covers yet
-PRIV-3   needs a RetentionBackgroundService test with a failing sweep, asserting it logs and runs again on the next tick
 CFG-5    needs tests of the served shell: base href rewrite, inlined config, no-store and immutable headers (the startup failure without a base href is tested under CFG-1)
 CFG-6    needs a test inlining a configuration value containing </script> and asserting it comes out escaped
 CFG-7    needs route tests of /.well-known/security.txt: contact, fallback to Team:SupportUrl, Expires, and 404 with neither set
