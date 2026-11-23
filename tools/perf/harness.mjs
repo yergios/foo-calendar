@@ -554,6 +554,9 @@ if (BUDGET) {
   if (results.length === 0) failures.push("no interaction was measured");
   if (failures.length > 0) {
     console.log(`\nbudget FAILED:\n${failures.map((f) => `  ${f}`).join("\n")}`);
+    // Annotations on the run's summary page, when run by GitHub Actions.
+    if (process.env.GITHUB_ACTIONS)
+      for (const f of failures) console.log(`::error title=Performance budget::${f}`);
     process.exit(1);
   }
   console.log(

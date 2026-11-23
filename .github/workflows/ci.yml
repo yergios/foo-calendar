@@ -200,7 +200,16 @@ jobs:
           APP_URL: http://localhost:8080/
           APP_URL_NO_PERMISSIONS: http://localhost:8081/
           E2E_OUT: ${{ runner.temp }}/e2e
-        run: node --test tools/e2e/flows.test.mjs
+        # The failing tests and their errors become annotations on the run, so what broke
+        # reads on its summary page without opening the log.
+        run: |
+          mkdir --parents "$E2E_OUT"
+          set -o pipefail
+          node --test tools/e2e/flows.test.mjs 2>&1 | tee "$E2E_OUT/output.txt" || {
+            grep -E '^\s*(✖|Error|AssertionError)' "$E2E_OUT/output.txt" | head -n 20 |
+              while IFS= read -r line; do echo "::error title=End-to-end::$line"; done
+            exit 1
+          }
 
       # A screenshot, the console and the violations of each flow that failed.
       - name: Upload end-to-end failures
