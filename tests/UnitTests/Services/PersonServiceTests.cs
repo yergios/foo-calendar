@@ -42,23 +42,23 @@ public sealed class PersonServiceTests : SqliteTestBase
     {
         await sut.CreateAsync(CreateRequest("jdoe"), "jdoe");
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.CreateAsync(CreateRequest("jdoe"), "jdoe"));
     }
 
     [Fact]
     [Trait("Spec", "PPL-4")]
-    public async Task UpdateAsync_WhenPersonDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task UpdateAsync_WhenPersonDoesNotExist_ThrowsNotFoundException()
     {
-        await Should.ThrowAsync<KeyNotFoundException>(
+        await Should.ThrowAsync<NotFoundException>(
             () => sut.UpdateAsync(999, new UpdatePersonRequest("Ghost", null), "admin"));
     }
 
     [Fact]
     [Trait("Spec", "PPL-4")]
-    public async Task DeleteAsync_WhenPersonDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task DeleteAsync_WhenPersonDoesNotExist_ThrowsNotFoundException()
     {
-        await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteAsync(999));
+        await Should.ThrowAsync<NotFoundException>(() => sut.DeleteAsync(999));
     }
 
     [Fact]

@@ -17,7 +17,7 @@ public sealed class CurrentPersonAccessor(
 
     public async Task<Person> GetAsync(CancellationToken ct = default) =>
         await FindAsync(ct)
-            ?? throw new KeyNotFoundException("No person exists for this account yet.");
+            ?? throw new NotFoundException("No person exists for this account yet.");
 
     public async Task<Person> FindAsync(CancellationToken ct = default)
     {

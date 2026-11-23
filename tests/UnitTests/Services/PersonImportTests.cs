@@ -166,7 +166,7 @@ public sealed class PersonImportTests : SqliteTestBase
     [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_WhenThereIsNoUsernameColumn_Throws()
     {
-        await Should.ThrowAsync<ArgumentException>(
+        await Should.ThrowAsync<InvalidInputException>(
             () => CreateService().ImportAsync("name,email\nJane,jane@example.test", Actor));
     }
 
@@ -174,7 +174,7 @@ public sealed class PersonImportTests : SqliteTestBase
     [Trait("Spec", "PPL-10")]
     public async Task ImportAsync_WhenTheFileIsEmpty_Throws()
     {
-        await Should.ThrowAsync<ArgumentException>(() => CreateService().ImportAsync("", Actor));
+        await Should.ThrowAsync<InvalidInputException>(() => CreateService().ImportAsync("", Actor));
     }
 
     [Fact]

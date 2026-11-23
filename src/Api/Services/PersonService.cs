@@ -24,7 +24,7 @@ public sealed class PersonService(
         CreatePersonRequest request, string actorUsername, CancellationToken ct = default)
     {
         if (await db.People.AnyAsync(p => p.Username == request.Username, ct))
-            throw new InvalidOperationException("A person already exists for this account.");
+            throw new ConflictException("A person already exists for this account.");
 
         var person = new Person
         {
@@ -172,7 +172,7 @@ public sealed class PersonService(
     public async Task DeleteAsync(int personId, CancellationToken ct = default)
     {
         var person = await db.People.FindAsync([personId], ct)
-            ?? throw new KeyNotFoundException($"Person {personId} not found.");
+            ?? throw new NotFoundException($"Person {personId} not found.");
 
         var vacated = person.HomeCity;
 
@@ -201,7 +201,7 @@ public sealed class PersonService(
         CancellationToken ct = default)
     {
         var person = await db.People.FindAsync([personId], ct)
-            ?? throw new KeyNotFoundException($"Person {personId} not found.");
+            ?? throw new NotFoundException($"Person {personId} not found.");
 
         var vacated = person.HomeCity;
 
@@ -250,7 +250,7 @@ public sealed class PersonService(
     {
         var rows = Csv.Parse(csv);
         if (rows.Count == 0)
-            throw new ArgumentException("The file is empty.");
+            throw new InvalidInputException("The file is empty.");
 
         var columns = rows[0]
             .Select((header, index) => (Name: NormalizeColumn(header), Index: index))
@@ -259,7 +259,7 @@ public sealed class PersonService(
             .ToDictionary(g => g.Key, g => g.First().Index, StringComparer.Ordinal);
 
         if (!columns.ContainsKey(UsernameColumn))
-            throw new ArgumentException(
+            throw new InvalidInputException(
                 $"The first line must be a header row including a 'username' column. Found: {string.Join(", ", rows[0])}");
 
         // Everything is decided in memory against these, then written once at the end.
