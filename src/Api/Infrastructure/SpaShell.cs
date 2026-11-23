@@ -5,7 +5,10 @@ using System.Text.RegularExpressions;
 using Api.Configuration;
 using Api.Endpoints;
 
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.FileProviders.Physical;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Api.Infrastructure;
 
@@ -153,4 +156,43 @@ public static partial class SpaShell
 
     [GeneratedRegex("<base\\s+href=\"[^\"]*\"", RegexOptions.IgnoreCase)]
     private static partial Regex BaseHrefPattern();
+}
+
+/// <summary>
+/// The web root as the static file middleware sees it: every file but index.html.
+///
+/// Served off disk, index.html is the shell before <see cref="SpaShell.Prepare"/> has
+/// touched it: no Content-Security-Policy, no rewritten &lt;base href&gt;, no bootstrap
+/// config, and cacheable. The SPA boots from it all the same, so any script injected into
+/// the page would run unchecked. Hidden here, a request for it falls through to the
+/// fallback like any other path, which answers with the prepared shell and its policy.
+///
+/// Matched by the file a path resolves to rather than by the path itself, so every
+/// spelling that reaches the same file is covered: "/index.html", "//index.html", and
+/// whatever a case-insensitive file system also maps onto it.
+/// </summary>
+public sealed class WebRootWithoutShell(string webRoot) : IFileProvider, IDisposable
+{
+    private readonly PhysicalFileProvider files = new(webRoot);
+    private readonly string shellPath = Path.GetFullPath(Path.Combine(webRoot, "index.html"));
+
+    public IFileInfo GetFileInfo(string subpath)
+    {
+        var file = files.GetFileInfo(subpath);
+
+        // Ignoring case costs nothing on a case-sensitive file system, where no other file
+        // in the build differs from index.html by case alone.
+        return file.PhysicalPath is { } path
+            && string.Equals(Path.GetFullPath(path), shellPath, StringComparison.OrdinalIgnoreCase)
+                ? new NotFoundFileInfo(subpath)
+                : file;
+    }
+
+    // The static file middleware never lists directories; this is here to satisfy the
+    // interface, and lists what the disk has.
+    public IDirectoryContents GetDirectoryContents(string subpath) => files.GetDirectoryContents(subpath);
+
+    public IChangeToken Watch(string filter) => files.Watch(filter);
+
+    public void Dispose() => files.Dispose();
 }

@@ -88,6 +88,49 @@ public sealed partial class SecurityHeaderTests
         policy.Values.ShouldNotContain(value => value.Contains("unsafe", StringComparison.Ordinal));
     }
 
+    // The file the shell is prepared from is in the web root, but never served from it:
+    // straight off disk it would carry no policy, and the SPA would boot from it all the
+    // same. It is answered like any other path that looks like a missing file: a 404.
+    [Theory]
+    [Trait("Spec", "SEC-1")]
+    [InlineData("", "/index.html")]
+    [InlineData("", "/INDEX.HTML")]
+    [InlineData("/cal", "/cal/index.html")]
+    [InlineData("/cal", "/index.html")]
+    public async Task TheShellsSourceFile_IsNotServed(string pathBase, string path)
+    {
+        using var app = Served(("ReverseProxy:PathBase", pathBase));
+        using var client = app.CreateClient();
+
+        using var response = await client.GetAsync(Url(path));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await response.Content.ReadAsStringAsync()).ShouldNotContain("<html");
+    }
+
+    // Other spellings that reach the same file. Routing hands some of them to the shell's
+    // fallback, which is fine: what must never happen is the file without its policy.
+    [Theory]
+    [Trait("Spec", "SEC-1")]
+    [InlineData("//index.html")]
+    [InlineData("/assets/..%2Findex.html")]
+    [InlineData("/%69ndex.html")]
+    public async Task TheShellsSourceFile_UnderAnyOtherSpelling_IsMissingOrThePreparedShell(string path)
+    {
+        using var app = Served();
+        using var client = app.CreateClient();
+
+        using var response = await client.GetAsync(Url(path));
+        using var root = await client.GetAsync(Url("/"));
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return;
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        InlineScripts(await response.Content.ReadAsStringAsync())
+            .ShouldHaveSingleItem().ShouldStartWith("window.__bootstrap=");
+        response.Headers.GetValues("Content-Security-Policy")
+            .ShouldBe(root.Headers.GetValues("Content-Security-Policy"));
+    }
+
     // The origin only: the library reaches the discovery document, the token endpoint and
     // the silent sign-in frame under it, not only under the authority's path.
     [Fact]

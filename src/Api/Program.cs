@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 
 using OpenTelemetry;
@@ -524,6 +523,9 @@ app.UseStatusCodePages();
 // the one copy of index.html that has had its <base href> rewritten. Serving it off disk
 // here as a default document would hand out the un-rewritten file instead.
 //
+// Nor is "/index.html" served from disk, under any spelling: WebRootWithoutShell hides it,
+// so it falls through to the same fallback and is answered with its policy.
+//
 // Skipped when there is no frontend build, which is normal when the API runs on its own
 // behind the Vite dev server (see SpaShell) and in the API's own tests: the file provider
 // refuses a directory that doesn't exist.
@@ -532,7 +534,7 @@ if (Directory.Exists(webRoot))
 {
     app.UseStaticFiles(new StaticFileOptions
     {
-        FileProvider = new PhysicalFileProvider(webRoot),
+        FileProvider = new WebRootWithoutShell(webRoot),
         OnPrepareResponse = ctx =>
         {
             // Vite writes every bundled file under assets/ with a content hash in its name,
@@ -627,6 +629,10 @@ if (apiDocsEnabled)
     // per response allows Scalar's inline configuration script, and everything that would
     // reach Scalar's own servers from the browser is off, so the policy keeps connections
     // and fonts on the app's origin.
+    //
+    // Scalar maps GET only, so a HEAD for its page falls through to the SPA fallback and is
+    // answered as the shell, with the shell's policy. Left that way on purpose: no browser
+    // renders a HEAD response, and the stricter of the two policies is the one it carries.
     app.MapScalarApiReference(apiDocs.RoutePrefix, options => options
         .WithTitle($"{ProductInfo.Name} API")
         .WithNonce()
