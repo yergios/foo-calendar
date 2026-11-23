@@ -22,7 +22,9 @@ async function bootstrap() {
 
   const app = createApp(App);
   const pinia = createPinia();
-  app.use(router).use(pinia);
+  // Pinia first: installing the router starts the first navigation, and a redirect that
+  // reads a store (the bare /admin route's) would otherwise run before there is one.
+  app.use(pinia).use(router);
   app.mount("#app");
 }
 
