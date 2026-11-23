@@ -10,6 +10,7 @@ using Api.Dtos;
 using IntegrationTests.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 using Shouldly;
@@ -190,5 +191,46 @@ public sealed class BearerTokenTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var stored = app.Query(db => db.People.AsNoTracking().Single(p => p.Username == "jdoe"));
         (stored.FirstName, stored.LastName).ShouldBe(("Jane", "Doe"));
+    }
+
+    // A token the provider signed, but without the claim Auth:ClaimTypes:UserName names
+    // ("sub" by default): the deployment names the wrong claim. Nothing the caller sends can
+    // fix that, so it is a 500 like any other bug, and the log says what to change. It used
+    // to be a 409, or a person with no username.
+    [Theory]
+    [Trait("Spec", "AUTH-9")]
+    [InlineData("POST", "/api/people")]
+    [InlineData("GET", "/api/people/me")]
+    [InlineData("GET", "/api/absences?from=2026-01-01&to=2026-12-31")]
+    public async Task ATokenWithoutTheUserNameClaim_IsA500_LoggingTheClaimAndTheSetting(string method, string path)
+    {
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", identityProvider.Mint([new Claim("preferred_username", "jdoe")]));
+        using var request = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative))
+        {
+            Content = method == "POST" ? JsonContent.Create(new UpdatePersonRequest("Jane", null)) : null,
+        };
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        (await response.Content.ReadAsStringAsync()).ShouldNotContain("Auth:ClaimTypes:UserName");
+        app.Query(db => db.People.Any()).ShouldBeFalse();
+        app.Logs.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Error
+            && entry.Exception != null
+            && entry.Exception.Message.Contains("'sub' claim", StringComparison.Ordinal)
+            && entry.Exception.Message.Contains("Auth:ClaimTypes:UserName", StringComparison.Ordinal));
+    }
+
+    // The same token on a route that doesn't need to know who is asking still gets in.
+    [Fact]
+    [Trait("Spec", "AUTH-9")]
+    public async Task ATokenWithoutTheUserNameClaim_StillReadsWhatNeedsNoMember()
+    {
+        using var response = await GetPeopleAsync(identityProvider.Mint([new Claim("preferred_username", "jdoe")]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 }

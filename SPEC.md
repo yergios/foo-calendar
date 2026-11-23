@@ -78,6 +78,11 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   that show it (the calendar, profile and admin pages). Signing out must end the OIDC session
   with the identity provider and remove everything the app stored in the browser (see
   [UI-9](#ui-calendar-and-browser)). `[test]`
+- **AUTH-9** A signed-in request whose token lacks the claim `Auth:ClaimTypes:UserName`
+  names must be answered 500 on every route that needs to know who the member is (their
+  profile, their absences, anything that records who acted), and the logged error must name
+  that claim type and the setting. It is the deployment's misconfiguration, not the
+  caller's ([ERR-2](#err-errors)). Routes that need no member answer as usual. `[test]`
 
 ## SEC: Response headers
 
