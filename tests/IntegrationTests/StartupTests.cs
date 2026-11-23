@@ -3,8 +3,10 @@ using Api.Data;
 
 using IntegrationTests.TestSupport;
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -192,6 +194,24 @@ public sealed class StartupTests
         using var app = WithAuthority("Production", "http://idp.example.test/");
 
         StartupFailure(app).Message.ShouldContain("Auth:Authority must be an absolute https URL");
+    }
+
+    // Startup validation refuses http outside Development, and this is the second lock
+    // behind it: the bearer handler itself refuses to fetch keys over http. Development
+    // turns it off so the http authority it accepts can be reached.
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [InlineData("Production", "https://idp.example.test/", true)]
+    [InlineData("Development", "http://localhost:8080/realms/team", false)]
+    public void TheBearerHandler_RequiresHttpsMetadata_OutsideDevelopment(
+        string environment, string authority, bool required)
+    {
+        using var app = WithAuthority(environment, authority);
+
+        var options = app.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
+
+        options.RequireHttpsMetadata.ShouldBe(required);
     }
 
     [Theory]
