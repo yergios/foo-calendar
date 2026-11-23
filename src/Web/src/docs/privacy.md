@@ -44,7 +44,7 @@ Profile and absence data is kept for as long as you're part of the team, unless 
 
 ### Your rights
 
-Where you are decides whether you have the right to access, correct, or delete your data, or to ask what's held about you. Contact [%SUPPORT_URL%](%SUPPORT_URL%) to exercise any of these.
+Depending on where you are, you may have the right to access, correct, or delete your data, or to ask what's held about you. Contact [%SUPPORT_URL%](%SUPPORT_URL%) to exercise any of these.
 
 ---
 
