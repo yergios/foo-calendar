@@ -10,11 +10,6 @@
 # tests/IntegrationTests (TestApp) is the place for.
 
 ABS-6    needs a concurrency test racing two overlapping creates for one person and asserting exactly one succeeds
-CFG-5    needs tests of the served shell: base href rewrite, inlined config, no-store and immutable headers (the startup failure without a base href is tested under CFG-1)
-CFG-6    needs a test inlining a configuration value containing </script> and asserting it comes out escaped
-CFG-7    needs route tests of /.well-known/security.txt: contact, fallback to Team:SupportUrl, Expires, and 404 with neither set
-CFG-8    needs route tests of /healthchecks returning only the status and of /healthchecks/detail requiring AuditRead
-CFG-9    needs route tests of the OpenAPI document and API reference with ApiDocs:Enabled on and off
 UI-5     needs the "Who's off today" rules moved out of WhosOffTodayModal.vue into a module Vitest can test
 SEC-1    specified 2026-11-23, built by docs/specs/0004: a test of the shell's Content-Security-Policy, including the bootstrap script hash
 SEC-2    specified 2026-11-23, built by docs/specs/0004: a test of nosniff and Referrer-Policy on the shell, an API route and a static file

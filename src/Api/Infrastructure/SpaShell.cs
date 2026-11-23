@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -91,12 +92,16 @@ public static partial class SpaShell
     private static string InlineBootstrapConfig(
         string html, TeamOptions team, AuthOptions auth, JsonSerializerOptions options, string indexPath)
     {
-        // Whatever else these options carry, their encoder is the default one, which escapes
-        // '<', '>' and '&' to their \u003c-style forms. That is the only reason it is safe to
-        // drop this JSON inside a <script> element at all, and it is why nothing here may be
-        // "tidied" into UnsafeRelaxedJsonEscaping: a config value containing a closing script
-        // tag would then end the element early and turn the rest of the payload into markup.
-        var json = JsonSerializer.Serialize(ConfigEndpoints.Build(team, auth), options);
+        // The API's options, but never their encoder: ASP.NET Core sets that to
+        // UnsafeRelaxedJsonEscaping, which is fine for a response body and unsafe here. The
+        // default encoder escapes '<', '>' and '&' to their \u003C-style forms, which is the
+        // only reason it is safe to drop this JSON inside a <script> element at all: with
+        // the relaxed one, a config value containing a closing script tag ends the element
+        // early and turns the rest of the payload into markup.
+#pragma warning disable CA1869 // Runs once, at startup, so there is nothing to cache the options for.
+        var escaping = new JsonSerializerOptions(options) { Encoder = JavaScriptEncoder.Default };
+#pragma warning restore CA1869
+        var json = JsonSerializer.Serialize(ConfigEndpoints.Build(team, auth), escaping);
         var tag = $"<script>window.__bootstrap={json}</script>";
 
         var head = html.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);

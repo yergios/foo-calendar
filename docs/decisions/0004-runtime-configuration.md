@@ -35,9 +35,11 @@ deployments. `GET /api/config/bootstrap` serves the same payload for the Vite de
 ## Consequences
 
 - One image serves any deployment, at the root or under a sub-path, with any IdP.
-- The inlined payload is serialized with the API's own JSON options, whose default encoder
-  escapes `<`, `>` and `&`. That escaping is what makes inlining safe; `SpaShell.cs` says
-  so, so nobody "tidies" it into relaxed escaping.
+- The inlined payload is serialized with the API's own JSON options but the default
+  encoder, which escapes `<`, `>` and `&`. That escaping is what makes inlining safe;
+  `SpaShell.cs` says so, so nobody "tidies" it into relaxed escaping. (The API's options
+  carry ASP.NET Core's relaxed encoder, which the shell used by mistake until the CFG-6
+  test found it on 2026-11-23.)
 - The shell is served `no-store`, since a stale copy would point at a retired IdP.
 - Settings are validated at startup (`ValidateOnStart`), so a misconfiguration stops the
   process with a message instead of breaking a page later.
