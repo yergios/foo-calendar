@@ -117,7 +117,7 @@ public sealed class AbsenceServicePropertyTests : SqliteTestBase
             Store(person, c.Existing);
 
             if (Conflicts(c.Requested, c.Existing))
-                await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(person, RequestFor(c.Requested)));
+                await Should.ThrowAsync<ConflictException>(() => sut.CreateAsync(person, RequestFor(c.Requested)));
             else
                 await Should.NotThrowAsync(() => sut.CreateAsync(person, RequestFor(c.Requested)));
         });
@@ -145,7 +145,7 @@ public sealed class AbsenceServicePropertyTests : SqliteTestBase
             var others = c.Existing.Where((_, i) => i != c.Updated);
 
             if (Conflicts(c.Requested, others))
-                await Should.ThrowAsync<InvalidOperationException>(() => sut.UpdateAsync(person, ids[c.Updated], RequestFor(c.Requested)));
+                await Should.ThrowAsync<ConflictException>(() => sut.UpdateAsync(person, ids[c.Updated], RequestFor(c.Requested)));
             else
                 await Should.NotThrowAsync(() => sut.UpdateAsync(person, ids[c.Updated], RequestFor(c.Requested)));
         });

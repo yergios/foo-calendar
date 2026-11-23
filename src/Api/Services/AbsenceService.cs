@@ -143,7 +143,7 @@ public sealed class AbsenceService(
                 .AnyAsync(ct);
 
             if (overlaps)
-                throw new InvalidOperationException("This absence overlaps one you already have.");
+                throw new ConflictException("This absence overlaps one you already have.");
 
             db.Absences.Add(absence);
             await db.SaveChangesAsync(ct);
@@ -161,10 +161,10 @@ public sealed class AbsenceService(
         Person person, int absenceId, CreateAbsenceRequest request, CancellationToken ct = default)
     {
         var absence = await db.Absences.FindAsync([absenceId], ct)
-            ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
+            ?? throw new NotFoundException($"Absence {absenceId} not found.");
 
         if (absence.PersonId != person.Id)
-            throw new UnauthorizedAccessException("Cannot edit another person's absence.");
+            throw new NotOwnerException("Cannot edit another person's absence.");
 
         // Serializable, same reasoning as CreateAsync: guards the overlap check against a
         // concurrent create/update landing an overlapping absence before this one commits.
@@ -178,7 +178,7 @@ public sealed class AbsenceService(
                 .AnyAsync(ct);
 
             if (overlaps)
-                throw new InvalidOperationException("This absence overlaps one you already have.");
+                throw new ConflictException("This absence overlaps one you already have.");
 
             absence.StartDate = request.StartDate;
             absence.EndDate = request.EndDate;
@@ -201,10 +201,10 @@ public sealed class AbsenceService(
     public async Task DeleteAsync(Person person, int absenceId, CancellationToken ct = default)
     {
         var absence = await db.Absences.FindAsync([absenceId], ct)
-            ?? throw new KeyNotFoundException($"Absence {absenceId} not found.");
+            ?? throw new NotFoundException($"Absence {absenceId} not found.");
 
         if (absence.PersonId != person.Id)
-            throw new UnauthorizedAccessException("Cannot delete another person's absence.");
+            throw new NotOwnerException("Cannot delete another person's absence.");
 
         db.Absences.Remove(absence);
         await db.SaveChangesAsync(ct);

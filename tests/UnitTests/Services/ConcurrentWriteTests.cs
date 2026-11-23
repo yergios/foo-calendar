@@ -68,6 +68,11 @@ public sealed class ConcurrentWriteTests : IDisposable
                 await write(db);
                 return true;
             }
+            catch (ConflictException)
+            {
+                return false;
+            }
+            // BankHolidayService's collision still throws this until it moves over.
             catch (InvalidOperationException)
             {
                 return false;

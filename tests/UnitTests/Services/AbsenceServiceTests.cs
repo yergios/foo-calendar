@@ -64,7 +64,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.CreateAsync(person, Request("2026-03-05", "2026-03-10")));
     }
 
@@ -77,7 +77,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.CreateAsync(person, Request("2026-03-06", "2026-03-10")));
     }
 
@@ -122,23 +122,23 @@ public sealed class AbsenceServiceTests : SqliteTestBase
 
     [Fact]
     [Trait("Spec", "ABS-4")]
-    public async Task UpdateAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
+    public async Task UpdateAsync_WhenNotOwner_ThrowsNotOwnerException()
     {
         var owner = CreatePerson("alice");
         var intruder = CreatePerson("bob");
         var created = await sut.CreateAsync(owner, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<UnauthorizedAccessException>(
+        await Should.ThrowAsync<NotOwnerException>(
             () => sut.UpdateAsync(intruder, created.Id, Request("2026-04-01", "2026-04-05")));
     }
 
     [Fact]
     [Trait("Spec", "ABS-4")]
-    public async Task UpdateAsync_WhenAbsenceDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task UpdateAsync_WhenAbsenceDoesNotExist_ThrowsNotFoundException()
     {
         var person = CreatePerson();
 
-        await Should.ThrowAsync<KeyNotFoundException>(
+        await Should.ThrowAsync<NotFoundException>(
             () => sut.UpdateAsync(person, 999, Request("2026-04-01", "2026-04-05")));
     }
 
@@ -150,29 +150,29 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.CreateAsync(person, Request("2026-01-05", "2026-01-10"));
         var second = await sut.CreateAsync(person, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.UpdateAsync(person, second.Id, Request("2026-01-08", "2026-01-12")));
     }
 
     [Fact]
     [Trait("Spec", "ABS-4")]
-    public async Task DeleteAsync_WhenNotOwner_ThrowsUnauthorizedAccessException()
+    public async Task DeleteAsync_WhenNotOwner_ThrowsNotOwnerException()
     {
         var owner = CreatePerson("alice");
         var intruder = CreatePerson("bob");
         var created = await sut.CreateAsync(owner, Request("2026-03-02", "2026-03-06"));
 
-        await Should.ThrowAsync<UnauthorizedAccessException>(
+        await Should.ThrowAsync<NotOwnerException>(
             () => sut.DeleteAsync(intruder, created.Id));
     }
 
     [Fact]
     [Trait("Spec", "ABS-4")]
-    public async Task DeleteAsync_WhenAbsenceDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task DeleteAsync_WhenAbsenceDoesNotExist_ThrowsNotFoundException()
     {
         var person = CreatePerson();
 
-        await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteAsync(person, 999));
+        await Should.ThrowAsync<NotFoundException>(() => sut.DeleteAsync(person, 999));
     }
 
     [Fact]
@@ -508,7 +508,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-08-20", "2026-08-20"));
 
-        await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
+        await Should.ThrowAsync<ConflictException>(() => sut.CreateAsync(
             person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00")));
     }
 
@@ -520,7 +520,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.CreateAsync(
             person, Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.CreateAsync(person, Request("2026-08-20", "2026-08-20")));
     }
 
@@ -547,7 +547,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var toEdit = await sut.CreateAsync(
             person, Request("2026-08-25", "2026-08-25", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00"));
 
-        await Should.ThrowAsync<InvalidOperationException>(() => sut.UpdateAsync(
+        await Should.ThrowAsync<ConflictException>(() => sut.UpdateAsync(
             person, toEdit.Id,
             Request("2026-08-20", "2026-08-20", AbsenceType.Appointment, startTime: "09:00", endTime: "10:00")));
     }
@@ -590,7 +590,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var person = CreatePerson();
         await sut.CreateAsync(person, Request("2026-08-20", "2026-08-20"));
 
-        await Should.ThrowAsync<InvalidOperationException>(() => sut.CreateAsync(
+        await Should.ThrowAsync<ConflictException>(() => sut.CreateAsync(
             person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00")));
     }
 
@@ -602,7 +602,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         await sut.CreateAsync(
             person, Request("2026-08-20", "2026-08-20", AbsenceType.Other, startTime: "09:00", endTime: "10:00"));
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.CreateAsync(person, Request("2026-08-20", "2026-08-20", AbsenceType.Other)));
     }
 
