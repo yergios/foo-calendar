@@ -260,7 +260,7 @@ async function measure(name, action, settleFrames = 6) {
 
   // Sort modes via the popover.
   async function sortTo(label) {
-    await evaluate(`document.querySelector('button[title="Sort"]').click()`);
+    await evaluate(`document.querySelector('button[data-tooltip="Sort"]').click()`);
     await frames(2);
     await evaluate(
       `[...document.querySelectorAll('button')].find(b => b.textContent.trim().endsWith(${JSON.stringify(label)})).click()`,
@@ -381,13 +381,13 @@ async function measure(name, action, settleFrames = 6) {
   // Region filter: pick the first checkbox (shows skeleton, then applies), then unpick.
   async function toggleFirstRegion() {
     await evaluate(
-      `document.querySelector('button[title="Region and year"]').click()`,
+      `document.querySelector('button[data-tooltip="Filter"]').click()`,
     );
     await frames(2);
     await evaluate(`document.querySelector('input[type=checkbox]').click()`);
     await frames(2);
     await evaluate(
-      `document.querySelector('button[title="Region and year"]').click()`,
+      `document.querySelector('button[data-tooltip="Filter"]').click()`,
     );
   }
   await measure("region-filter-on", toggleFirstRegion, 10);
@@ -396,7 +396,7 @@ async function measure(name, action, settleFrames = 6) {
   // Full grid rebuild: previous year (every row's cells rebuild, cache miss), then back.
   async function setYear(delta) {
     await evaluate(
-      `document.querySelector('button[title="Region and year"]').click()`,
+      `document.querySelector('button[data-tooltip="Filter"]').click()`,
     );
     await frames(2);
     await evaluate(
@@ -404,7 +404,7 @@ async function measure(name, action, settleFrames = 6) {
     );
     await frames(2);
     await evaluate(
-      `document.querySelector('button[title="Region and year"]').click()`,
+      `document.querySelector('button[data-tooltip="Filter"]').click()`,
     );
   }
   try {
