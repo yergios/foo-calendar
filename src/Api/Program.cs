@@ -279,6 +279,16 @@ var authOptions = services.AddOptions<AuthOptions>()
             ? "Auth:Authority must be an absolute https or http URL, e.g. \"http://localhost:8080/realms/team\"."
             : "Auth:Authority must be an absolute https URL, e.g. \"https://login.example.com/realms/team\". " +
               "http is accepted only in Development.")
+    // Each goes into the shell's Content-Security-Policy as a source, where a path would
+    // narrow it and anything else would break the header. Same scheme rule as the
+    // authority's, for the same local provider in Development.
+    .Validate(o => o.ExtraOrigins.All(origin => SecurityHeaders.IsOrigin(origin, allowHttp: isDevelopment)),
+        isDevelopment
+            ? "Auth:ExtraOrigins must list absolute https or http origins: scheme, host and " +
+              "optional port, with no path, query or fragment, e.g. \"http://localhost:8081\"."
+            : "Auth:ExtraOrigins must list absolute https origins: scheme, host and optional " +
+              "port, with no path, query or fragment, e.g. " +
+              "\"https://your-domain.auth.eu-west-1.amazoncognito.com\". http is accepted only in Development.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Audience),
         "Auth:Audience must be configured.")
     // The API never uses ClientId itself, but the SPA can't start a login without it, and

@@ -131,11 +131,12 @@ public sealed partial class SecurityHeaderTests
             .ShouldBe(root.Headers.GetValues("Content-Security-Policy"));
     }
 
-    // The origin only: the library reaches the discovery document, the token endpoint and
-    // the silent sign-in frame under it, not only under the authority's path.
+    // The origin only: the library reaches the discovery document and the token endpoint
+    // under it, not only under the authority's path. Never framed: renewal goes through
+    // refresh tokens, not a hidden frame (docs/decisions/0017).
     [Fact]
     [Trait("Spec", "SEC-1")]
-    public async Task TheShellsPolicy_AllowsTheIdentityProvidersOrigin_ForConnectionsFramesAndForms()
+    public async Task TheShellsPolicy_AllowsTheIdentityProvidersOrigin_ForConnectionsAndForms_ButNotFrames()
     {
         using var identityProvider = new TestIdentityProvider();
         using var app = new TestApp
@@ -150,8 +151,64 @@ public sealed partial class SecurityHeaderTests
         // The authority is https://idp.example.test/, path and all.
         var policy = Directives(response);
         policy["connect-src"].ShouldBe("'self' https://idp.example.test");
-        policy["frame-src"].ShouldBe("'self' https://idp.example.test");
+        policy["frame-src"].ShouldBe("'self'");
         policy["form-action"].ShouldBe("'self' https://idp.example.test");
+        policy["frame-ancestors"].ShouldBe("'none'");
+    }
+
+    private static TestApp WithProvider(string authority, params string[] extraOrigins) =>
+        new(
+        [
+            ("Auth:Provider", "Oidc"),
+            ("Auth:Authority", authority),
+            ("Auth:Audience", "foo-calendar"),
+            ("Auth:ClientId", "foo-calendar-spa"),
+            .. extraOrigins.Select((origin, i) => ($"Auth:ExtraOrigins:{i}", origin)),
+        ])
+        {
+            Shell = Shell,
+            Environment = "Production",
+        };
+
+    // A provider that serves its token endpoint from a second host, as AWS Cognito does:
+    // the deployment names that host, and the page may fetch from it, and only fetch.
+    [Fact]
+    [Trait("Spec", "SEC-1")]
+    public async Task TheShellsPolicy_AllowsTheExtraOrigins_ForConnectionsOnly()
+    {
+        using var app = WithProvider(
+            "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_Example",
+            "https://example.auth.eu-west-1.amazoncognito.com/",
+            "https://tokens.example.test:8443",
+            "https://cognito-idp.eu-west-1.amazonaws.com");
+        using var client = app.CreateClient();
+
+        using var response = await client.GetAsync(Url("/"));
+
+        var policy = Directives(response);
+        // In the order configured, without the authority's own origin twice.
+        policy["connect-src"].ShouldBe(
+            "'self' https://cognito-idp.eu-west-1.amazonaws.com " +
+            "https://example.auth.eu-west-1.amazoncognito.com https://tokens.example.test:8443");
+        policy["frame-src"].ShouldBe("'self'");
+        policy["form-action"].ShouldBe("'self' https://cognito-idp.eu-west-1.amazonaws.com");
+    }
+
+    // A header carries ASCII only, so a host outside it goes in as punycode. Written as is,
+    // every response with the policy would fail to be sent.
+    [Fact]
+    [Trait("Spec", "SEC-1")]
+    public async Task TheShellsPolicy_NamesInternationalHostsInTheirAsciiForm()
+    {
+        using var app = WithProvider("https://bücher.example/realms/team", "https://tökens.example");
+        using var client = app.CreateClient();
+
+        using var response = await client.GetAsync(Url("/"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var policy = Directives(response);
+        policy["connect-src"].ShouldBe("'self' https://xn--bcher-kva.example https://xn--tkens-jua.example");
+        policy["form-action"].ShouldBe("'self' https://xn--bcher-kva.example");
     }
 
     [Theory]
@@ -195,7 +252,7 @@ public sealed partial class SecurityHeaderTests
     }
 
     // A page of its own, whose inline configuration script is allowed by a nonce issued for
-    // that one response, and whose relaxation for styles stays on it.
+    // that one response, and whose one relaxation, for styles, stays on it.
     [Fact]
     [Trait("Spec", "SEC-4")]
     public async Task TheApiReference_HasAPolicyOfItsOwn_WithAFreshNonceForItsScripts()
@@ -211,7 +268,8 @@ public sealed partial class SecurityHeaderTests
         var policy = Directives(first);
         var nonce = NoncePattern().Match(policy["script-src"]).Groups[1].Value;
         nonce.ShouldNotBeEmpty();
-        policy["script-src"].ShouldBe($"'self' 'nonce-{nonce}' 'unsafe-eval'");
+        // No 'unsafe-eval': the page shares the app's origin and storage.
+        policy["script-src"].ShouldBe($"'self' 'nonce-{nonce}'");
         policy["connect-src"].ShouldBe("'self'");
         policy["object-src"].ShouldBe("'none'");
         policy["frame-ancestors"].ShouldBe("'none'");

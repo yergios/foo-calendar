@@ -194,9 +194,12 @@ Two designs carry most of the frontend's performance:
 baseline, and CI holds every build to it (see [Checks](#checks)).
 
 The shell runs under a strict Content-Security-Policy: scripts only from the app's origin
-plus the inlined bootstrap script by its hash, styles only from the app's origin, and
-connections and frames only to the app and the identity provider
-([0015](decisions/0015-strict-content-security-policy.md)). Vue's style bindings set
+plus the inlined bootstrap script by its hash, styles only from the app's origin,
+connections only to the app, the identity provider and any extra provider origins the
+deployment names, and no frames to the provider
+([0015](decisions/0015-strict-content-security-policy.md),
+[0017](decisions/0017-csp-and-budget-adjustments.md)). `index.html` itself is never served
+from disk, only as the prepared shell. Vue's style bindings set
 properties through the CSSOM, which the policy does not restrict, so nothing in the SPA
 needs inline styles; a dependency that starts injecting style or script elements fails the
 end-to-end suite.

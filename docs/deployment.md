@@ -16,9 +16,10 @@ The API serves that configuration two ways. Whatever the app needs *before* anyo
 | `Team:SecurityContact` | Served as `Contact` in `/.well-known/security.txt`. Optional: falls back to `Team:SupportUrl`. |
 | `Team:HomeTimeZone` | Required. IANA timezone id, e.g. `Europe/Zurich`. Every time-based absence's times are wall-clock time in this one zone, for every viewer, and are labeled with it. |
 | `Auth:Authority` | OIDC issuer. Used by the API to validate tokens and by the SPA to log in. An absolute `https` URL; `http` is accepted only in Development. |
+| `Auth:ExtraOrigins` | Optional list. Origins besides `Auth:Authority`'s that the SPA fetches from to sign in, for a provider whose token endpoint is on another host. See [Content-Security-Policy and the identity provider](#content-security-policy-and-the-identity-provider). |
 | `Auth:ClientId` | The SPA's OIDC client id. Frontend-only, but required at startup. |
 | `Auth:Audience` | Which API the access token is issued for. |
-| `Auth:Scope` | Scopes the SPA requests. |
+| `Auth:Scope` | Scopes the SPA requests. Keep `offline_access` (the default includes it) where your provider needs it to issue refresh tokens, which is how a session is renewed. |
 | `Auth:RedirectUri` | Where the IdP returns after login. Relative by default, so any hostname works. |
 | `Auth:PostLogoutRedirectUri` | Where the IdP returns after sign-out. `/` by default, resolved like `Auth:RedirectUri`. Register it with your provider as an allowed post-logout redirect URI, or it will refuse to send the browser back. |
 | `Auth:Permissions` | Claim values granting each permission, on both sides. Any one of them grants it. |
@@ -118,9 +119,20 @@ Leaving both empty accepts forwarded headers from any peer, which is the normal 
 
 ### Content-Security-Policy and the identity provider
 
-The page may connect to, frame and submit forms to its own origin and to **the origin of `Auth:Authority`** only. Everything the sign-in library reaches must be on that origin: the discovery document, the token endpoint (fetched), and the authorization endpoint (framed, for silent renewal). Most providers serve all of them from the issuer's own host (Keycloak, Entra ID, Okta, Auth0, Authentik). A provider whose discovery document points the token endpoint at another host is refused by the browser, and signing in fails with a `connect-src` violation in the console; there is no setting to add origins.
+The page may connect to its own origin, to **the origin of `Auth:Authority`**, and to any origin listed in **`Auth:ExtraOrigins`**; it may submit forms only to its own origin and `Auth:Authority`'s ([0017](decisions/0017-csp-and-budget-adjustments.md)). What the sign-in library fetches must be on one of those: the discovery document and the token endpoint, which also serves refresh. Signing in and out are navigations to the provider, which the policy does not restrict. Most providers serve everything from the issuer's own host (Keycloak, Entra ID, Okta, Auth0 including custom domains, Authentik), and need nothing more.
 
-The API reference, when `ApiDocs:Enabled`, is served with a policy of its own, looser where Scalar needs it (inline styles, and `eval` for its bundled validator) and on that page only.
+A provider whose discovery document puts the token endpoint on another host needs that host's origin in `Auth:ExtraOrigins`; without it the browser refuses the request, and signing in fails with a `connect-src` violation in the console. **AWS Cognito** is the common case: the issuer is the user pool, and the token endpoint is on the pool's hosted domain:
+
+```bash
+Auth__Authority=https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_AbCdEfGhI
+Auth__ExtraOrigins__0=https://your-domain.auth.eu-west-1.amazoncognito.com
+```
+
+Each entry is an origin only: `https`, a host and an optional port, with no path, query or fragment (`http` is accepted only in Development, as for `Auth:Authority`). Anything else stops the app at startup with a message naming the setting. The origins are deliberately not read from the discovery document, so the policy never depends on the network or on what a remote document says. A host outside ASCII is written into the policy in its punycode form.
+
+**Sessions are renewed with refresh tokens, never in a hidden frame.** The page is served with `frame-ancestors 'none'`, so a renewal frame could never load back into it, and the policy allows no frames to the provider. When an access token expires, the app asks the token endpoint for a new one with the refresh token the provider issued at sign-in. Configure the provider and the SPA's client to issue refresh tokens to a browser client (often called refresh token rotation, or the `offline_access` scope, which `Auth:Scope` requests by default). Without one, a member is sent back through sign-in when their access token expires, and returns to the page they were on.
+
+The API reference, when `ApiDocs:Enabled`, is served with a policy of its own, looser where Scalar needs it (inline styles) and on that page only. It allows no `eval`: Scalar's bundle checks for it on every load, is refused, and works without it.
 
 ### Scaling
 

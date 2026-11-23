@@ -17,6 +17,14 @@ public sealed class AuthOptions
     public string Authority { get; init; } = "";
     public string Audience { get; init; } = "";
 
+    /// <summary>Origins besides <see cref="Authority"/>'s that the SPA must reach to sign
+    /// in, for a provider that serves its token endpoint from another host (AWS Cognito's
+    /// hosted domain, for one). Each is an absolute origin: scheme, host and optional port.
+    /// Added to the shell's connect-src and nothing else; read from configuration rather
+    /// than from the discovery document, so the policy never depends on the network or on
+    /// what a remote document says (docs/decisions/0017).</summary>
+    public List<string> ExtraOrigins { get; init; } = [];
+
     /// <summary>Which claim values grant each permission in <see cref="Api.Configuration.Permissions.All"/>,
     /// keyed by permission name. Holding any one of a permission's values is enough, which
     /// is what lets a deployment accept, say, both an app role and a group id without the
@@ -75,6 +83,7 @@ public sealed class AuthOptions
             values.RemoveAll(string.IsNullOrWhiteSpace);
 
         ClaimTypes.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
+        ExtraOrigins.RemoveAll(string.IsNullOrWhiteSpace);
         DevUser.Permissions.RemoveAll(string.IsNullOrWhiteSpace);
     }
 }

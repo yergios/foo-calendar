@@ -110,7 +110,7 @@ sync and the sweep also emit spans and metrics of their own, carrying codes and 
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |
-| Injected script reading tokens or the cached calendar | The shell's Content-Security-Policy runs scripts only from the app's origin plus the one inline bootstrap script, by its SHA-256 computed at startup from the string that is inlined; connections and frames go only to the app and the identity provider's origin, and images only to the app, so injected code that did run would find requests to anywhere else refused (navigating the page away is something no policy stops). No `unsafe-inline` or `unsafe-eval` anywhere in it ([SEC-1](../SPEC.md#sec-response-headers), [0015](decisions/0015-strict-content-security-policy.md)). The end-to-end suite fails on any violation ([SEC-3](../SPEC.md#sec-response-headers)) |
+| Injected script reading tokens or the cached calendar | The shell's Content-Security-Policy runs scripts only from the app's origin plus the one inline bootstrap script, by its SHA-256 computed at startup from the string that is inlined; connections go only to the app, the identity provider's origin and the extra provider origins the deployment names in `Auth:ExtraOrigins`, frames never to the provider, and images only to the app, so injected code that did run would find requests to anywhere else refused (navigating the page away is something no policy stops). No `unsafe-inline` or `unsafe-eval` anywhere in it, and `index.html` is never served without it ([SEC-1](../SPEC.md#sec-response-headers), [0015](decisions/0015-strict-content-security-policy.md), [0017](decisions/0017-csp-and-budget-adjustments.md)). The end-to-end suite fails on any violation ([SEC-3](../SPEC.md#sec-response-headers)) |
 | The app framed by another site (clickjacking), or a response sniffed into another type | `frame-ancestors 'none'` on the shell, and `X-Content-Type-Options: nosniff` on every response ([SEC-2](../SPEC.md#sec-response-headers)) |
 | Paths and queries leaking to other sites in the `Referer` header | `Referrer-Policy: no-referrer` on every response ([SEC-2](../SPEC.md#sec-response-headers)) |
 | Data leaving the system | Only country codes to the holiday source, sign-in and sign-out traffic to the IdP, and traces, metrics and logs to an OTLP collector if the deployer configures one; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
@@ -146,11 +146,12 @@ record when it is.
    `Referrer-Policy: no-referrer`. What remains:
    - a reverse proxy that strips or replaces the policy removes the protection
      ([deployment](deployment.md#behind-a-reverse-proxy) says not to);
-   - the API reference, when `ApiDocs:Enabled`, is a page on the same origin under a looser
-     policy of its own: inline styles, and `eval` for its bundled validator. It allows only
-     its own nonce-tagged scripts and connects only to the app, but script running there
-     could read the same `localStorage` as the app. It is off by default outside
-     Development;
+   - the API reference, when `ApiDocs:Enabled`, is a page on the same origin under a policy
+     of its own, looser than the shell's in one way: inline styles. It allows only its own
+     nonce-tagged scripts, no `eval`, and connects only to the app, but script running there
+     could read the same `localStorage` as the app, and, opened in the same tab as a
+     signed-in session, the tokens in that tab's `sessionStorage` too. It is off by default
+     outside Development;
    - styles are not relaxed on the shell; HSTS is the TLS terminator's to send.
 3. **Tokens live in `sessionStorage`** (the `oidc-client-ts` default), so script injected
    into the page could read them. The Content-Security-Policy above is what keeps script

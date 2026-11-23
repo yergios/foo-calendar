@@ -79,14 +79,18 @@ public static partial class SpaShell
         var script = BootstrapScript(team, auth, json);
 
         // The validation that ran before this has made sure Authority is an absolute URL
-        // whenever there is a provider. The dev identity has none to talk to.
+        // whenever there is a provider, and every extra origin an origin. The dev identity
+        // has no provider to talk to, so neither applies to it.
         var identityProvider = auth.Provider == AuthOptions.ProviderNone
             ? null
-            : new Uri(auth.Authority).GetLeftPart(UriPartial.Authority);
+            : SecurityHeaders.OriginOf(new Uri(auth.Authority));
+        IReadOnlyList<string> extraOrigins = identityProvider is null
+            ? []
+            : [.. auth.ExtraOrigins.Select(o => SecurityHeaders.OriginOf(new Uri(o)))];
 
         return new(
             InlineScript(html, script, indexPath),
-            SecurityHeaders.ShellPolicy(script, identityProvider));
+            SecurityHeaders.ShellPolicy(script, identityProvider, extraOrigins));
     }
 
     /// <summary>Serves <paramref name="shell"/> from <see cref="Prepare"/>, or nothing when

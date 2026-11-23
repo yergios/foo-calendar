@@ -6,6 +6,10 @@
   [ADR 0016](../decisions/0016-own-devtools-driver-for-browser-checks.md) (end-to-end and
   performance checks on the repo's own DevTools driver, with a DOM budget and loose timing
   budget)
+- Amended after review by [ADR 0017](../decisions/0017-csp-and-budget-adjustments.md):
+  extra provider origins in `connect-src`, no provider in `frame-src` (renewal by refresh
+  token, never in a frame), no `'unsafe-eval'` on the API reference, and a 16 ms floor on
+  the timing budget. Where this spec says otherwise below, SPEC.md and ADR 0017 hold.
 - Requirements added or changed: SEC-1 to SEC-4, OBS-1 to OBS-3, PERF-1, PERF-2; UI-4 and
   UI-10 move from `[review]` to `[test]`; TRC-2 also reads end-to-end tests (see
   [SPEC.md](../../SPEC.md))

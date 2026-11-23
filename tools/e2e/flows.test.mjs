@@ -304,18 +304,23 @@ test(
   }),
 );
 
+// Its policy refuses eval, which Scalar's bundle probes for on every load and then does
+// without: that one violation is expected, and any other fails the flow.
 test(
   "[SEC-4] the API reference loads under its own policy",
-  flow(async () => {
-    await page.navigate(new URL("scalar/", APP_URL).href);
-    // Rendered from the OpenAPI document, which it fetched itself.
-    await page.waitFor(`document.body.innerText.includes("/api/config/bootstrap")`, {
-      what: "the API reference listing the routes",
-      timeout: 20_000,
-    });
-    // Anything it would fetch late, such as icons, has had its chance to be refused.
-    await settle(500);
-  }),
+  flow(
+    async () => {
+      await page.navigate(new URL("scalar/", APP_URL).href);
+      // Rendered from the OpenAPI document, which it fetched itself.
+      await page.waitFor(`document.body.innerText.includes("/api/config/bootstrap")`, {
+        what: "the API reference listing the routes",
+        timeout: 20_000,
+      });
+      // Anything it would fetch late, such as icons, has had its chance to be refused.
+      await settle(500);
+    },
+    { expected: [scalarEvalProbe] },
+  ),
 );
 
 test(

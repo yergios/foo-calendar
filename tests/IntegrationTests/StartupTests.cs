@@ -196,6 +196,52 @@ public sealed class StartupTests
         StartupFailure(app).Message.ShouldContain("Auth:Authority must be an absolute https URL");
     }
 
+    // An extra provider origin becomes a source in the shell's policy, so anything more or
+    // less than an origin is refused before the database is touched.
+    [Theory]
+    [Trait("Spec", "CFG-1")]
+    [Trait("Spec", "SEC-1")]
+    [InlineData("Production", "http://tokens.example.test")]
+    [InlineData("Production", "https://tokens.example.test/oauth2/token")]
+    [InlineData("Production", "https://tokens.example.test/.")]
+    [InlineData("Production", "https://tokens.example.test?x=1")]
+    [InlineData("Production", "https://tokens.example.test#top")]
+    [InlineData("Production", "https://user@tokens.example.test")]
+    [InlineData("Production", "tokens.example.test")]
+    [InlineData("Production", "/oauth2/token")]
+    [InlineData("Development", "ftp://tokens.example.test")]
+    [InlineData("Development", "http://localhost:9001/token")]
+    public void AnExtraOriginThatIsNotAnHttpsOrigin_StopsStartupNamingIt_WithTheDatabaseUntouched(
+        string environment, string origin)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Auth:Provider", "Oidc"), ("Auth:ExtraOrigins:0", origin)])
+        {
+            Environment = environment,
+        };
+        File.WriteAllBytes(app.DatabasePath, []);
+
+        StartupFailure(app).Message.ShouldContain("Auth:ExtraOrigins must list absolute");
+
+        app.TableNames().ShouldBeEmpty();
+    }
+
+    [Theory]
+    [Trait("Spec", "CFG-1")]
+    [Trait("Spec", "SEC-1")]
+    [InlineData("Production", "https://example.auth.eu-west-1.amazoncognito.com")]
+    [InlineData("Production", "https://tokens.example.test:8443/")]
+    [InlineData("Production", "https://[2001:db8::1]:8443")]
+    [InlineData("Development", "http://localhost:9001")]
+    public void AnExtraOriginThatIsAnOrigin_Starts(string environment, string origin)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Auth:Provider", "Oidc"), ("Auth:ExtraOrigins:0", origin)])
+        {
+            Environment = environment,
+        };
+
+        Should.NotThrow(() => app.Services);
+    }
+
     // Startup validation refuses http outside Development, and this is the second lock
     // behind it: the bearer handler itself refuses to fetch keys over http. Development
     // turns it off so the http authority it accepts can be reached.

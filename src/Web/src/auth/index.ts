@@ -1,8 +1,13 @@
-import { type User as OidcUser, UserManager, WebStorageStateStore } from "oidc-client-ts";
+import {
+  ErrorResponse,
+  type User as OidcUser,
+  UserManager,
+  WebStorageStateStore,
+} from "oidc-client-ts";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import { appUrl } from "@/lib/appUrl";
+import { appUrl, basePath } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
 import { STORAGE_PREFIX, clearAppStorage, stopCacheWrites } from "@/lib/browserCache";
 import type { BootstrapAuthConfig } from "@/types/config";
@@ -17,6 +22,11 @@ const DEV_PROVIDER = "None";
 // sign-in in progress go with everything else when sign-out clears the app's storage, and
 // that clearing never has to touch "oidc." keys another app on this origin may own.
 const OIDC_PREFIX = `${STORAGE_PREFIX}oidc.`;
+
+/** Where to go back to once the identity provider returns the browser. Session storage: it
+ * only has to survive that one round trip. Under the app's prefix like everything else it
+ * stores, so sign-out removes it. */
+export const AUTH_REDIRECT_KEY = `${STORAGE_PREFIX}auth_redirect`;
 
 let userManager: UserManager | null = null;
 let isDevMode = false;
@@ -129,8 +139,11 @@ export function useAuth() {
   return { isAuthenticated, isLoading: isAuthLoading, user: currentProfile };
 }
 
+/** Leaves for the identity provider's sign-in, to come back to `targetUrl`, a path within
+ * the app such as "/admin/people". */
 export async function signinRedirect(appState?: { targetUrl?: string }): Promise<void> {
   if (isDevMode || !userManager || signingOut) return;
+  if (appState?.targetUrl) sessionStorage.setItem(AUTH_REDIRECT_KEY, appState.targetUrl);
   await userManager.signinRedirect(appState ? { state: appState } : undefined);
 }
 
@@ -142,8 +155,8 @@ export async function signinRedirect(appState?: { targetUrl?: string }): Promise
 export async function signOut(): Promise<void> {
   // From here until the page is left, nothing may write to storage or fetch a token. A
   // revalidation already in flight would otherwise put back the calendar this clears, and
-  // a request finding no user once it is removed would sign in again silently, storing a
-  // new session wherever the provider's own one is still alive.
+  // a request finding no user once it is removed would start signing in again, which the
+  // provider's own session, wherever it is still alive, would answer with a new one.
   signingOut = true;
   stopCacheWrites();
   useAuthStore().reset();
@@ -166,7 +179,7 @@ export async function signOut(): Promise<void> {
   const endSession = await hasEndSessionEndpoint(userManager);
 
   // Again, last thing before leaving: anything that was already past the checks above when
-  // sign-out started, such as a silent renew under way, may have written since.
+  // sign-out started, such as a token renewal under way, may have written since.
   clearAppStorage();
 
   if (endSession) {
@@ -302,8 +315,8 @@ export const useAuthStore = defineStore("auth", () => {
 let inFlightToken: Promise<string> | null = null;
 
 export async function resolveAccessToken(): Promise<string> {
-  // Never settles: the page is about to be left, a token now could only come from a silent
-  // sign-in that sign-out is undoing, and an error would only flash up on the way out.
+  // Never settles: the page is about to be left, a token now could only come from a renewal
+  // or sign-in that sign-out is undoing, and an error would only flash up on the way out.
   if (signingOut) return new Promise<string>(() => {});
 
   const authStore = useAuthStore();
@@ -316,7 +329,7 @@ export async function resolveAccessToken(): Promise<string> {
   inFlightToken ??= (async () => {
     let user = oidcUser.value;
     if (!user || user.expired) {
-      user = await userManager!.signinSilent();
+      user = await renew(user);
       oidcUser.value = user;
     }
 
@@ -330,4 +343,29 @@ export async function resolveAccessToken(): Promise<string> {
   });
 
   return inFlightToken;
+}
+
+/**
+ * A fresh session for one that has expired, by refresh token only (docs/decisions/0017).
+ * The library's other way, a hidden frame on the provider, cannot work under the app's
+ * Content-Security-Policy: it would only time out, ten seconds later. With no refresh token,
+ * or one the provider refuses, the session is over and the member signs in again, coming
+ * back to the page they were on. That leaves the page, so it never settles.
+ *
+ * A refresh that fails for any other reason, such as the network, is thrown to the caller
+ * as before: the provider did not say the session is over.
+ */
+async function renew(user: OidcUser | null): Promise<OidcUser> {
+  if (user?.refresh_token) {
+    try {
+      const renewed = await userManager!.signinSilent();
+      if (renewed) return renewed;
+    } catch (error: unknown) {
+      if (!(error instanceof ErrorResponse)) throw error;
+    }
+  }
+
+  const here = `/${window.location.pathname.slice(basePath.length)}${window.location.search}${window.location.hash}`;
+  await signinRedirect({ targetUrl: here });
+  return new Promise<OidcUser>(() => {});
 }

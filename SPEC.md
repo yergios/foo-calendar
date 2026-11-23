@@ -88,16 +88,24 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 
 - **SEC-1** The SPA shell must be served with a Content-Security-Policy that allows scripts
   only from the app's own origin plus the inlined bootstrap script by its SHA-256 hash,
-  computed at startup; connections and frames only to the app's own origin and
-  `Auth:Authority`'s origin; no plugins; `base-uri` and `form-action` limited to the app and
-  the identity provider; and `frame-ancestors 'none'`. Any relaxation, such as inline
-  styles, must carry its reason next to it in the code. `[test]`
+  computed at startup; connections only to the app's own origin, `Auth:Authority`'s origin
+  and the origins listed in `Auth:ExtraOrigins`; frames to the app's own origin only, never
+  to the identity provider; no plugins; `base-uri` limited to the app and `form-action` to
+  the app and `Auth:Authority`'s origin; and `frame-ancestors 'none'`
+  ([0017](docs/decisions/0017-csp-and-budget-adjustments.md)). Each `Auth:ExtraOrigins`
+  entry must be an absolute `https` origin (scheme, host, optional port; no path, query or
+  fragment; `http` only in Development, as for `Auth:Authority`), checked at startup like
+  every setting ([CFG-1](#cfg-configuration-and-startup)). Hosts appear in the policy in
+  their ASCII (punycode) form. The shell is served only with this policy: `index.html` is
+  never served as a file. Any relaxation, such as inline styles, must carry its reason next
+  to it in the code. `[test]`
 - **SEC-2** Every response must carry `X-Content-Type-Options: nosniff` and a
   `Referrer-Policy` that sends no path or query to other origins. `[test]`
 - **SEC-3** The SPA must run under that policy without a single violation in the end-to-end
   flows. `[test]`
 - **SEC-4** The API reference, when enabled, must work under a policy of its own, stated in
-  the code. `[test]`
+  the code, which allows no `eval`. Its end-to-end check tolerates exactly one violation,
+  the `eval` probe in Scalar's bundle, matched by directive, blocked URI and file. `[test]`
 
 ## PPL: People
 
