@@ -31,6 +31,7 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
 var services = builder.Services;
+var isDevelopment = builder.Environment.IsDevelopment();
 
 // ---- Options --------------------------------------------------------------
 
@@ -183,7 +184,20 @@ if (apiDocsEnabled)
 // ---- Validation & Error handling ------------------------------------------
 
 services.AddValidation();
-services.AddProblemDetails();
+
+// A server error is a bug, not an answer, and its exception's message, type and stack
+// describe the code rather than the request: outside Development the response says only
+// that it happened, and the exception goes to the log. The default writer already leaves
+// them out; this keeps it so whatever else is configured or upgraded. Domain errors are
+// below 500 and keep their message (DomainExceptionHandler).
+services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
+{
+    if (isDevelopment || ctx.ProblemDetails.Status < StatusCodes.Status500InternalServerError)
+        return;
+
+    ctx.ProblemDetails.Detail = null;
+    ctx.ProblemDetails.Extensions.Remove("exception");
+});
 services.AddExceptionHandler<DomainExceptionHandler>();
 
 // In Development, minimal APIs throw on a request they cannot bind, such as one missing its
@@ -240,8 +254,6 @@ if (config.GetSection($"{AuthOptions.SectionName}:Permissions:AbsencesApprove").
     throw new InvalidOperationException(
         "Auth:Permissions:AbsencesApprove is set, but absence approvals were removed along " +
         "with that permission. Remove the setting.");
-
-var isDevelopment = builder.Environment.IsDevelopment();
 
 var authOptions = services.AddOptions<AuthOptions>()
     .Bind(config.GetSection(AuthOptions.SectionName))

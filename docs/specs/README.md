@@ -15,5 +15,5 @@ verified. It is written before the code and is what a build session works from.
 | --- | --- | --- |
 | [0001](0001-remove-approvals-and-close-review-gaps.md) | Remove approvals and close the review gaps | Done |
 | [0002](0002-test-every-route-and-the-hard-cases.md) | Test every route and the hard cases | Done |
-| [0003](0003-nullable-types-and-domain-errors.md) | Nullable types and domain errors | Ready to build |
-| [0004](0004-headers-telemetry-performance-e2e.md) | Headers, telemetry, performance and end-to-end checks | Ready, after 0003 |
+| [0003](0003-nullable-types-and-domain-errors.md) | Nullable types and domain errors | Done |
+| [0004](0004-headers-telemetry-performance-e2e.md) | Headers, telemetry, performance and end-to-end checks | Ready to build |

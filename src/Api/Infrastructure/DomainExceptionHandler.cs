@@ -14,29 +14,17 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        // The framework types are mapped only until every domain rule throws a
-        // DomainException (docs/specs/0003); then they fall through like anything else.
-        var (status, title) = exception switch
-        {
-            DomainException domain => (domain.StatusCode, domain.Title),
-            KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
-            UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "Forbidden"),
-            InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict"),
-            ArgumentException => (StatusCodes.Status400BadRequest, "Invalid request"),
-            _ => (0, "")
-        };
+        if (exception is not DomainException domain) return false;
 
-        if (status == 0) return false;
-
-        httpContext.Response.StatusCode = status;
+        httpContext.Response.StatusCode = domain.StatusCode;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
             ProblemDetails = new ProblemDetails
             {
-                Status = status,
-                Title = title,
-                Detail = exception.Message,
+                Status = domain.StatusCode,
+                Title = domain.Title,
+                Detail = domain.Message,
             }
         });
     }

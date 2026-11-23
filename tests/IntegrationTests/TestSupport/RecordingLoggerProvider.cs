@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 
 namespace IntegrationTests.TestSupport;
 
-/// <summary>Keeps every message the app logs, so a test can assert that startup said
-/// something without scraping console output.</summary>
+/// <summary>Keeps every message the app logs, and the exception logged with it, so a test
+/// can assert that the app said something without scraping console output.</summary>
 public sealed class RecordingLoggerProvider : ILoggerProvider
 {
-    public sealed record Entry(LogLevel Level, string Message);
+    public sealed record Entry(LogLevel Level, string Message, Exception? Exception);
 
     private readonly ConcurrentQueue<Entry> entries = new();
 
@@ -34,6 +34,6 @@ public sealed class RecordingLoggerProvider : ILoggerProvider
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter) =>
-            entries.Enqueue(new Entry(logLevel, formatter(state, exception)));
+            entries.Enqueue(new Entry(logLevel, formatter(state, exception), exception));
     }
 }

@@ -106,9 +106,11 @@ Why the order matters:
 - **Authorization is closed by default.** An endpoint that says nothing requires a signed-in
   user; permissions are policies named after them
   ([0006](decisions/0006-fail-closed-per-permission-authorization.md)).
-- **Domain errors become problem details.** Services throw `KeyNotFoundException` (404),
-  `UnauthorizedAccessException` (403), `InvalidOperationException` (409) and
-  `ArgumentException` (400); `DomainExceptionHandler` maps them, and anything else is a 500.
+- **Domain errors become problem details.** Services throw a `DomainException`:
+  `InvalidInputException` (400), `NotOwnerException` (403), `NotFoundException` (404) or
+  `ConflictException` (409). `DomainExceptionHandler` answers it with its status and the
+  rule's message. Anything else is a 500 that carries no exception detail outside
+  Development, and is logged.
 
 ## Backend layout
 

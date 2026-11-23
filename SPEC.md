@@ -380,5 +380,4 @@ fails when a listed requirement gains a reference, so that list only shrinks.
 
 Pending change specs, to be built in this order:
 
-- [0003: Nullable types and domain errors](docs/specs/0003-nullable-types-and-domain-errors.md)
 - [0004: Headers, telemetry, performance and end-to-end checks](docs/specs/0004-headers-telemetry-performance-e2e.md)

@@ -1,6 +1,6 @@
 # 0003. Nullable types and domain errors
 
-- Status: Ready to build
+- Status: Done
 - Date: 2026-11-23
 - Requirements added or changed: ERR-1, ERR-2, CFG-2 (`Auth:Authority` must be https),
   BLD-6 (see [SPEC.md](../../SPEC.md))

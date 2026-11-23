@@ -1,8 +1,10 @@
 using Api.Data;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +71,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>Changes to the app's services, applied after Program.cs registered its own:
     /// a stand-in for something outside the process, or a hosted service taken out.</summary>
     public Action<IServiceCollection>? ServiceOverrides { get; init; }
+
+    /// <summary>Routes only the test maps, beside the app's own and behind the same
+    /// middleware, for behaviour no real route can be made to show, such as an exception
+    /// nothing in the app throws.</summary>
+    public Action<IEndpointRouteBuilder>? Endpoints { get; init; }
 
     /// <summary>Writes straight to the app's database, for what no route lets the test
     /// identity do itself, such as adding other people. Starts the app if it hasn't.
@@ -154,12 +161,28 @@ public sealed class TestApp : WebApplicationFactory<Program>
         if (ServiceOverrides is not null)
             builder.ConfigureTestServices(ServiceOverrides);
 
+        if (Endpoints is not null)
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IStartupFilter>(new ExtraEndpoints(Endpoints)));
+
         if (Permissions is not null)
         {
             builder.UseSetting("Auth:DevUser:GrantAllPermissions", "false");
             foreach (var (permission, index) in Permissions.Select((p, i) => (p, i)))
                 builder.UseSetting($"Auth:DevUser:Permissions:{index}", permission);
         }
+    }
+
+    // After the app's own pipeline is built: UseEndpoints there adds to the route table
+    // Program.cs's UseRouting matches against, so these are matched like the app's own and
+    // run inside its exception handler and authorization.
+    private sealed class ExtraEndpoints(Action<IEndpointRouteBuilder> map) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            next(app);
+            app.UseEndpoints(map);
+        };
     }
 
     protected override void Dispose(bool disposing)
