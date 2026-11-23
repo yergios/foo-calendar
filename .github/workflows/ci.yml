@@ -171,7 +171,12 @@ jobs:
           curl --fail --silent --show-error http://localhost:8081/healthchecks | grep -q '"Healthy"'
 
       # The browser checks (docs/decisions/0016) run on tools/browser, which needs nothing
-      # but Node and a chrome-headless-shell.
+      # but Node and a chrome-headless-shell. Ubuntu 24.04 keeps unprivileged processes
+      # from creating the user namespaces Chromium's sandbox is built on; allowing them
+      # keeps the browser sandboxed rather than running it with --no-sandbox.
+      - name: Allow the browser sandbox
+        run: sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -205,8 +210,8 @@ jobs:
         run: |
           mkdir --parents "$E2E_OUT"
           set -o pipefail
-          node --test tools/e2e/flows.test.mjs 2>&1 | tee "$E2E_OUT/output.txt" || {
-            grep -E '^\s*(✖|Error|AssertionError)' "$E2E_OUT/output.txt" | head -n 20 |
+          node --test --test-reporter=spec tools/e2e/flows.test.mjs 2>&1 | tee "$E2E_OUT/output.txt" || {
+            grep -E '^\s*(✖|\w*Error)' "$E2E_OUT/output.txt" | head -n 20 |
               while IFS= read -r line; do echo "::error title=End-to-end::$line"; done
             exit 1
           }
@@ -234,7 +239,13 @@ jobs:
           TRACE_OUT: ${{ runner.temp }}/perf/trace.json
         run: |
           mkdir --parents "$RUNNER_TEMP/perf"
-          node tools/perf/harness.mjs 1000 --budget
+          set -o pipefail
+          # A budget breach annotates itself; anything that stops the run is annotated here.
+          node tools/perf/harness.mjs 1000 --budget 2>&1 | tee "$RUNNER_TEMP/perf/output.txt" || {
+            grep -E '^\s*\w*Error' "$RUNNER_TEMP/perf/output.txt" | head -n 10 |
+              while IFS= read -r line; do echo "::error title=Performance budget::$line"; done
+            exit 1
+          }
 
       # Either way, so a passing run's numbers are there to compare with. The trace, which
       # loads in DevTools' Performance panel, only when the budget failed: it is large.

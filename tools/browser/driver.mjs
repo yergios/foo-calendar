@@ -232,7 +232,11 @@ export async function launch({
     ],
     { stdio: ["ignore", "ignore", "pipe"] },
   );
-  browser.stderr.on("data", () => {});
+  // Kept only to say why, if the browser never comes up.
+  let stderr = "";
+  browser.stderr.on("data", (chunk) => {
+    stderr = (stderr + chunk).slice(-2000);
+  });
 
   let closed = false;
   const close = () => {
@@ -257,7 +261,7 @@ export async function launch({
   }
   if (!version) {
     close();
-    throw new Error(`browser did not start: ${executable}`);
+    throw new Error(`browser did not start: ${executable}\n${stderr}`);
   }
 
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
