@@ -42,7 +42,7 @@ public static class RegionEndpoints
         // Checked rather than trusted: this ends up interpolated into the upstream URL a
         // source builds, so it has to be a country code and nothing else.
         if (!ValidationPatterns.RegionCodeRegex().IsMatch(countryCode))
-            throw new ArgumentException($"'{countryCode}' is not an ISO 3166 country code.");
+            throw new InvalidInputException($"'{countryCode}' is not an ISO 3166 country code.");
 
         var regions = await source.GetRegionsAsync(countryCode, ct);
         return Results.Ok(new AvailableRegionsResponse(Label(regions, labels)));
