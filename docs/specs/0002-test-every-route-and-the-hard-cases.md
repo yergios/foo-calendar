@@ -1,6 +1,6 @@
 # 0002. Test every route and the hard cases
 
-- Status: Ready to build
+- Status: Done (2026-11-23)
 - Date: 2026-11-23
 - Decided: on 2026-11-23, run roadmap step 4 as three change specs (this one, then
   [0003](0003-nullable-types-and-domain-errors.md), then
