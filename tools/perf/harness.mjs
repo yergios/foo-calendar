@@ -6,124 +6,22 @@
 //
 // Interactions are bracketed with console.timeStamp('start:<name>') / ('end:<name>')
 // markers in the page; the report is what the main thread did between them.
-import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { launch, settle } from "../browser/driver.mjs";
+
 const PEOPLE = Number(process.argv[2] ?? 100);
-const PORT = 9333 + Math.floor(Math.random() * 100);
 const APP_URL = process.env.APP_URL ?? "http://localhost:5055/";
-const BROWSER =
-  process.env.CHROME_HEADLESS_SHELL ??
-  path.join(
-    process.env.HOME ?? "",
-    ".cache/chrome-headless-shell/chrome-headless-shell-linux64/chrome-headless-shell",
-  );
 
-const profile = mkdtempSync(path.join(tmpdir(), "foo-calendar-bench-"));
-const browser = spawn(
-  BROWSER,
-  [
-    `--remote-debugging-port=${PORT}`,
-    `--user-data-dir=${profile}`,
-    "--window-size=1920,1080",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-extensions",
-    "--disable-background-networking",
-    "--hide-scrollbars",
-    "about:blank",
-  ],
-  { stdio: ["ignore", "ignore", "pipe"] },
-);
-browser.stderr.on("data", () => {});
-process.on("exit", () => browser.kill("SIGKILL"));
-
-async function waitForDevtools() {
-  for (let i = 0; i < 100; i++) {
-    try {
-      return await (
-        await fetch(`http://127.0.0.1:${PORT}/json/version`)
-      ).json();
-    } catch {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-  throw new Error("browser did not start");
-}
-
-class CDP {
-  constructor(ws) {
-    this.ws = ws;
-    this.id = 0;
-    this.pending = new Map();
-    this.listeners = new Map();
-  }
-  static async connect(url) {
-    const ws = new WebSocket(url);
-    await new Promise((res, rej) => {
-      ws.onopen = res;
-      ws.onerror = rej;
-    });
-    const c = new CDP(ws);
-    ws.onmessage = (m) => {
-      const msg = JSON.parse(m.data);
-      if (msg.id !== undefined) {
-        const p = c.pending.get(msg.id);
-        c.pending.delete(msg.id);
-        if (msg.error)
-          p.rej(new Error(`${msg.error.message} ${msg.error.data ?? ""}`));
-        else p.res(msg.result);
-      } else for (const l of c.listeners.get(msg.method) ?? []) l(msg.params);
-    };
-    return c;
-  }
-  send(method, params = {}, sessionId) {
-    const id = ++this.id;
-    this.ws.send(JSON.stringify({ id, method, params, sessionId }));
-    return new Promise((res, rej) => this.pending.set(id, { res, rej }));
-  }
-  on(method, fn) {
-    (
-      this.listeners.get(method) ?? this.listeners.set(method, []).get(method)
-    ).push(fn);
-  }
-}
-
-await waitForDevtools();
-const pages = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-const page = pages.find((t) => t.type === "page");
-const cdp = await CDP.connect(page.webSocketDebuggerUrl);
-const send = (m, p) => cdp.send(m, p);
-await send("Page.enable");
-await send("Runtime.enable");
-await send("Emulation.setDeviceMetricsOverride", {
-  width: 1920,
-  height: 1080,
-  deviceScaleFactor: 1,
-  mobile: false,
-});
-
-async function evaluate(expression, awaitPromise = true) {
-  const r = await send("Runtime.evaluate", {
-    expression,
-    awaitPromise,
-    returnByValue: true,
-  });
-  if (r.exceptionDetails)
-    throw new Error(
-      "page threw: " + JSON.stringify(r.exceptionDetails).slice(0, 500),
-    );
-  return r.result.value;
-}
-const frames = (k) =>
-  evaluate(
-    `new Promise(r=>{let n=0;const f=()=>{if(++n>=${k})r();else requestAnimationFrame(f)};requestAnimationFrame(f)})`,
-  );
+const browser = await launch();
+const page = browser.page;
+const send = (m, p) => page.send(m, p);
+const evaluate = (expression, awaitPromise) => page.evaluate(expression, awaitPromise);
+const frames = (k) => page.frames(k);
 const mark = (label) =>
   evaluate(`console.timeStamp(${JSON.stringify(label)})`, false);
-const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- synthetic payloads for scaling runs ----
 const FIRST = [
@@ -269,7 +167,7 @@ if (PEOPLE !== 100) {
       { urlPattern: "*/api/absences?*" },
     ],
   });
-  cdp.on("Fetch.requestPaused", (p) => {
+  page.on("Fetch.requestPaused", (p) => {
     const body = p.request.url.endsWith("/api/people")
       ? bodies.people
       : bodies.absences;
@@ -284,9 +182,9 @@ if (PEOPLE !== 100) {
 
 // ---- tracing ----
 let traceChunks = [];
-cdp.on("Tracing.dataCollected", (p) => traceChunks.push(...p.value));
+page.on("Tracing.dataCollected", (p) => traceChunks.push(...p.value));
 const tracingComplete = () =>
-  new Promise((r) => cdp.on("Tracing.tracingComplete", r));
+  new Promise((r) => page.on("Tracing.tracingComplete", r));
 await send("Tracing.start", {
   traceConfig: {
     includedCategories: [
@@ -594,5 +492,5 @@ const traceFile =
   path.join(tmpdir(), `foo-calendar-trace-${PEOPLE}.json`);
 writeFileSync(traceFile, JSON.stringify({ traceEvents: traceChunks }));
 console.log(`trace written to ${traceFile}`);
-browser.kill("SIGKILL");
+browser.close();
 process.exit(0);
