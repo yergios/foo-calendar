@@ -7,14 +7,15 @@
 // - nothing on the gap list is referenced by a test, so the list can only shrink.
 //
 // A .NET test references a requirement with [Trait("Spec", "ABS-5")]; a Vitest test puts
-// the ID in brackets in its name, e.g. it("[UI-2] clamps to the year", ...). Neither counts
-// when it is commented out or skipped ([Fact(Skip = ...)], it.skip, describe.skip, ...):
-// a test that does not run verifies nothing.
+// the ID in brackets in its name, e.g. it("[UI-2] clamps to the year", ...), and so does an
+// end-to-end test in tools/e2e (node:test, the same it()/test() shape). None counts when it
+// is commented out or skipped ([Fact(Skip = ...)], it.skip, describe.skip,
+// test(name, { skip: true }, ...), ...): a test that does not run verifies nothing.
 //
 // Its own tests: `node --test scripts/check-spec-trace.test.mjs`.
 //
 // No dependencies, so CI can run it with nothing but Node: `node scripts/check-spec-trace.mjs`.
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -172,8 +173,9 @@ function csharpReferences(source) {
   return ids;
 }
 
-/** IDs referenced by a Vitest file: [ID] in the name of an it() or test(), unless it, or
- * a describe() around it, is skipped or a todo. */
+/** IDs referenced by a Vitest or node:test file: [ID] in the name of an it() or test(),
+ * unless it, or a describe() around it, is skipped or a todo, by a modifier (it.skip) or
+ * by node:test's options argument (test(name, { skip: true }, fn)). */
 function vitestReferences(source) {
   let { text, code } = blank(source, false);
 
@@ -181,10 +183,15 @@ function vitestReferences(source) {
   // A curried call such as describe.skip.each(table)(name, fn) is followed through to its
   // last argument list.
   const call = /\b(x?)(?:it|test|describe|suite)((?:\.\w+)*)\s*\(/g;
+  // The name, then an options object naming skip or todo, before the test's function.
+  const skippingOptions = /^\s*(["'`])[^"'`]*\1\s*,\s*\{[^{}]*\b(?:skip|todo)\s*:/;
   for (const match of code.matchAll(call)) {
     const modifiers = match[2].split(".");
-    if (match[1] !== "x" && !modifiers.some((m) => ["skip", "skipIf", "todo"].includes(m)))
-      continue;
+    const skipped =
+      match[1] === "x" ||
+      modifiers.some((m) => ["skip", "skipIf", "todo"].includes(m)) ||
+      skippingOptions.test(code.slice(match.index + match[0].length));
+    if (!skipped) continue;
     // Inside a skipped call already blanked.
     if (code.slice(match.index, match.index + match[0].length) !== match[0]) continue;
 
@@ -231,6 +238,12 @@ function readReferences() {
 
   const web = path.join(root, "src", "Web", "src");
   for (const file of filesUnder(web, (name) => name.endsWith(".spec.ts"))) {
+    for (const id of vitestReferences(readFileSync(file, "utf8"))) add(id, file);
+  }
+
+  const e2e = path.join(root, "tools", "e2e");
+  const e2eFiles = existsSync(e2e) ? filesUnder(e2e, (name) => name.endsWith(".test.mjs")) : [];
+  for (const file of e2eFiles) {
     for (const id of vitestReferences(readFileSync(file, "utf8"))) add(id, file);
   }
 

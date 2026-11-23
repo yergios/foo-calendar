@@ -115,8 +115,10 @@ jobs:
         run: node --test scripts/check-spec-trace.test.mjs
 
   image:
-    name: Container image
+    name: Container image and browser checks
     runs-on: ubuntu-latest
+    env:
+      CHROME_HEADLESS_SHELL_VERSION: 152.0.7977.75
     steps:
       - uses: actions/checkout@v7
 
@@ -151,6 +153,65 @@ jobs:
           curl --fail --silent --show-error http://localhost:8080/healthchecks | grep -q '"Healthy"'
           curl --fail --silent --show-error http://localhost:8080/ | grep -q '<base href='
 
+      # A second instance whose dev identity holds no permission, for the flows that check
+      # what such a member is offered (UI-10).
+      - name: Start an instance without permissions
+        run: |
+          docker run --detach --name app-no-permissions --publish 8081:8080 \
+            --env ASPNETCORE_ENVIRONMENT=Development \
+            --env Holidays__Source=None \
+            --env Auth__DevUser__GrantAllPermissions=false \
+            foo-calendar:ci
+
+          for _ in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8081/healthchecks; then break; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://localhost:8081/healthchecks | grep -q '"Healthy"'
+
+      # The browser checks (docs/decisions/0016) run on tools/browser, which needs nothing
+      # but Node and a chrome-headless-shell.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Pinned to one Chrome for Testing release, so a new browser never changes a result
+      # by itself; bump the version deliberately.
+      - name: Cache chrome-headless-shell
+        id: chrome
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/chrome-headless-shell
+          key: chrome-headless-shell-${{ env.CHROME_HEADLESS_SHELL_VERSION }}
+
+      - name: Download chrome-headless-shell
+        if: steps.chrome.outputs.cache-hit != 'true'
+        run: |
+          mkdir --parents ~/.cache/chrome-headless-shell
+          curl --fail --silent --show-error --location --output /tmp/chrome-headless-shell.zip \
+            "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_HEADLESS_SHELL_VERSION}/linux64/chrome-headless-shell-linux64.zip"
+          unzip -q /tmp/chrome-headless-shell.zip -d ~/.cache/chrome-headless-shell
+
+      # The main flows in a real browser, failing on any Content-Security-Policy violation
+      # (SEC-3, SEC-4, UI-4, UI-10, AUTH-8, UI-9).
+      - name: End-to-end tests
+        env:
+          APP_URL: http://localhost:8080/
+          APP_URL_NO_PERMISSIONS: http://localhost:8081/
+          E2E_OUT: ${{ runner.temp }}/e2e
+        run: node --test tools/e2e/flows.test.mjs
+
+      # A screenshot, the console and the violations of each flow that failed.
+      - name: Upload end-to-end failures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-failures
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+
       - name: Container logs
         if: failure()
-        run: docker logs app
+        run: |
+          docker logs app
+          docker logs app-no-permissions || true

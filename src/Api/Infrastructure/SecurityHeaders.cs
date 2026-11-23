@@ -73,15 +73,20 @@ public static class SecurityHeaders
 
     /// <summary>The API reference's policy, for Scalar's page. Its configuration is an
     /// inline module script built per request, which <paramref name="nonce"/> allows; its
-    /// bundle is served by the app. Scalar styles itself with inline style elements and
-    /// attributes throughout, which is why styles alone are relaxed here, on this page and
-    /// never on the shell. Its fonts, telemetry and agent, which would reach Scalar's own
-    /// servers, are switched off in Program.cs, so everything else stays on the app's
-    /// origin.</summary>
+    /// bundle is served by the app. Its fonts, telemetry and agent, which would reach
+    /// Scalar's own servers, are switched off in Program.cs, so everything else stays on
+    /// the app's origin. Two relaxations, on this page only and never on the shell:
+    ///
+    /// - 'unsafe-eval': the bundle's schema validator (Zod) probes for Function() on load
+    ///   and compiles its validators with it. It works without, but the probe is a
+    ///   violation on every load, which would leave the end-to-end check unable to tell a
+    ///   new one from it.
+    /// - inline styles: Scalar styles itself with style elements and attributes throughout.
+    /// </summary>
     public static string ApiReferencePolicy(string nonce) =>
         string.Join("; ",
             "default-src 'self'",
-            $"script-src 'self' 'nonce-{nonce}'",
+            $"script-src 'self' 'nonce-{nonce}' 'unsafe-eval'",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "font-src 'self' data:",

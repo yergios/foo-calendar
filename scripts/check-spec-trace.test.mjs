@@ -20,8 +20,8 @@ const spec = `# Spec
 `;
 
 /** Runs the script on a repository holding SPEC.md above, A-2 on the gap list, and the
- * given test sources. */
-function check({ cs = "", ts = "", gaps = "A-2  needs a test\n" } = {}) {
+ * given test sources: .NET, Vitest and end-to-end. */
+function check({ cs = "", ts = "", e2e = "", gaps = "A-2  needs a test\n" } = {}) {
   const repo = mkdtempSync(path.join(tmpdir(), "spec-trace-"));
   try {
     mkdirSync(path.join(repo, "scripts"));
@@ -32,6 +32,8 @@ function check({ cs = "", ts = "", gaps = "A-2  needs a test\n" } = {}) {
     writeFileSync(path.join(repo, "tests", "spec-coverage-gaps.txt"), gaps);
     writeFileSync(path.join(repo, "tests", "Tests.cs"), cs);
     writeFileSync(path.join(repo, "src", "Web", "src", "tests.spec.ts"), ts);
+    mkdirSync(path.join(repo, "tools", "e2e"), { recursive: true });
+    writeFileSync(path.join(repo, "tools", "e2e", "flows.test.mjs"), e2e);
 
     const run = spawnSync(process.execPath, [path.join(repo, "scripts", "check-spec-trace.mjs")], {
       encoding: "utf8",
@@ -120,4 +122,21 @@ test("ignores skipped and todo Vitest tests, and tests in a skipped describe", (
 test("still counts a test after a skipped one", () => {
   const ts = 'describe.skip("group", () => {});\nit("[A-1] does it", () => {});';
   assert.ok(check({ ts }).ok);
+});
+
+test("reads end-to-end test names in tools/e2e", () => {
+  assert.ok(check({ e2e: 'test("[A-1] does it in a browser", flow(async () => {}));' }).ok);
+});
+
+test("ignores end-to-end tests skipped or left todo by node:test's options", () => {
+  for (const e2e of [
+    'test("[A-1] does it", { skip: true }, async () => {});',
+    'test("[A-1] does it", { timeout: 5000, todo: "later" }, async () => {});',
+    'test.skip("[A-1] does it", async () => {});',
+  ])
+    assert.match(check({ e2e }).output, unreferenced, e2e);
+});
+
+test("still counts an end-to-end test whose options do not skip it", () => {
+  assert.ok(check({ e2e: 'test("[A-1] does it", { timeout: 5000 }, async () => {});' }).ok);
 });

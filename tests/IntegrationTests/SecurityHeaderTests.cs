@@ -168,7 +168,7 @@ public sealed partial class SecurityHeaderTests
         var policy = Directives(first);
         var nonce = NoncePattern().Match(policy["script-src"]).Groups[1].Value;
         nonce.ShouldNotBeEmpty();
-        policy["script-src"].ShouldBe($"'self' 'nonce-{nonce}'");
+        policy["script-src"].ShouldBe($"'self' 'nonce-{nonce}' 'unsafe-eval'");
         policy["connect-src"].ShouldBe("'self'");
         policy["object-src"].ShouldBe("'none'");
         policy["frame-ancestors"].ShouldBe("'none'");
@@ -179,6 +179,7 @@ public sealed partial class SecurityHeaderTests
 
         Directives(second)["script-src"].ShouldNotBe(policy["script-src"]);
         Directives(shell)["style-src"].ShouldBe("'self'");
+        Directives(shell)["script-src"].ShouldNotContain("unsafe");
     }
 
     [GeneratedRegex("<script>(.*?)</script>", RegexOptions.Singleline)]

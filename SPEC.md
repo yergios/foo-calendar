@@ -307,7 +307,7 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **UI-3** Hovering a cell must list every absence on it, its own or not, with time ranges
   for time-based ones labelled with `Team:HomeTimeZone`. `[test]`
 - **UI-4** A member must be able to add an absence from any empty day in their own row, and
-  edit or delete their own absences from the calendar. `[review]`
+  edit or delete their own absences from the calendar. `[test]`
 - **UI-5** "Who's off today" must list everyone with an absence covering today or a bank
   holiday of their own today, each person once, time-based absences first, and for whole-day
   absences the first later working day they are back, skipping their own holidays and
@@ -325,7 +325,7 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   nothing there and fetch no token until it has left the page. `[test]`
 - **UI-10** Admin sections must be reachable only with their permission: People
   (`PeopleManage` or `ReportsRead`), Bank holidays (`HolidaysSync`), Audit log
-  (`AuditRead`). A member with none of them sees no admin entry point. `[review]`
+  (`AuditRead`). A member with none of them sees no admin entry point. `[test]`
 
 ## OBS: Telemetry
 
@@ -366,8 +366,9 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   every ID a test references must exist in this document and not be retired. A CI step must
   fail otherwise. `[ci]`
 - **TRC-2** A .NET test references a requirement with `[Trait("Spec", "ABS-5")]`; a Vitest
-  test puts the ID in brackets in its name, e.g. `it("[UI-2] clamps to the year", ...)`. A
-  test may reference several. A commented-out or skipped test references nothing. `[ci]`
+  test puts the ID in brackets in its name, e.g. `it("[UI-2] clamps to the year", ...)`, and
+  so does an end-to-end test in `tools/e2e`. A test may reference several. A commented-out or
+  skipped test references nothing. `[ci]`
 
 `scripts/check-spec-trace.mjs` is the CI step. A `[test]` requirement whose test does not
 exist yet is listed, with what is missing, in `tests/spec-coverage-gaps.txt`; the step also

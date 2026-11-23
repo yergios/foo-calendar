@@ -180,12 +180,13 @@ class Page {
     }
   }
 
-  /** Clicks the centre of the first element matching the selector, as a real pointer
-   * would: hit-tested, so an element covered by another is not what gets the click. */
-  async click(selector) {
+  /** Clicks the centre of the first element matching the selector, and whose text is
+   * `text` when given, as a real pointer would: hit-tested, so an element covered by
+   * another is not what gets the click. Waits for an enabled one to appear. */
+  async click(selector, { text, timeout } = {}) {
     const box = await this.waitFor(
-      `(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;e.scrollIntoView({block:"center",inline:"center"});const r=e.getBoundingClientRect();return r.width&&r.height?{x:r.left+r.width/2,y:r.top+r.height/2}:null})()`,
-      { what: selector },
+      `(()=>{const e=[...document.querySelectorAll(${JSON.stringify(selector)})].find(e=>!e.disabled&&(${JSON.stringify(text ?? null)}===null||e.textContent.trim()===${JSON.stringify(text ?? null)}));if(!e)return null;e.scrollIntoView({block:"center",inline:"center"});const r=e.getBoundingClientRect();return r.width&&r.height?{x:r.left+r.width/2,y:r.top+r.height/2}:null})()`,
+      { what: text ? `${selector} "${text}"` : selector, timeout },
     );
     await this.clickAt(box.x, box.y);
   }

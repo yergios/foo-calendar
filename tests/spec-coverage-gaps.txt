@@ -8,4 +8,3 @@
 #
 # Everything left is built by the change spec each line names.
 
-SEC-3    specified 2026-11-23, built by docs/specs/0004: the end-to-end suite failing on any CSP violation
