@@ -2,7 +2,6 @@ using System.Threading.Channels;
 
 using Api.Dtos;
 using Api.Interfaces;
-using Api.Services;
 
 namespace UnitTests.TestSupport;
 
@@ -20,8 +19,11 @@ public sealed class RecordingBankHolidayService : IBankHolidayService
     public Task<BankHolidaysResponse> GetForRegionsAsync(
         IReadOnlyCollection<string> regions, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
+        // The region and the code before its hyphen, its country. Spelled out rather than
+        // taken from RegionCode, so that tests of what AbsenceService does with these rows
+        // check it against the rule rather than against its own helper.
         var expanded = regions
-            .SelectMany(RegionCode.SelfAndCountry)
+            .SelectMany(region => new[] { region, region.Split('-')[0] })
             .ToHashSet(StringComparer.Ordinal);
 
         var matches = Holidays

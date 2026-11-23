@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { addDays, toIso } from "@/lib/dates";
 import { type Gen, forAll } from "@/lib/propertyTesting";
-import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
+import type { AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 
 import {
@@ -212,8 +212,12 @@ function generateSegmentsCase(gen: Gen): SegmentsCase {
 
   const absences: AbsenceDto[] = [];
   for (let attempt = gen.between(0, 12); attempt > 0; attempt--) {
-    const startDate = anyDay();
     const timeBased = gen.chance(0.3);
+    // Often onto a day that already holds a time-based absence, so stacks of them, mixed
+    // types included, are common rather than a rare coincidence.
+    const stackOn = timeBased ? absences.filter((a) => a.startTime !== null) : [];
+    const startDate =
+      stackOn.length > 0 && gen.chance(0.5) ? gen.pick(stackOn).startDate : anyDay();
     const candidate = absence(
       startDate,
       timeBased ? startDate : addDays(startDate, gen.between(0, 12)),
@@ -235,6 +239,25 @@ function generateSegmentsCase(gen: Gen): SegmentsCase {
     holiday(anyDay(), g.pick(["ES", "ES-MD", "ES-CT", "FR"])),
   );
   return { year, homeCity: gen.pick(["ES-MD", "ES", null]), absences, holidays };
+}
+
+// The legend's letters, as UI-2's "its type's letter" reads on the calendar.
+const LETTERS = { Vacation: "V", Appointment: "A", Other: "O" } as const;
+
+// The letter a painted day shows, from the rule rather than from the code: a whole-day
+// absence owns its day; a day holding only time-based ones shows the type of whichever of
+// them was given first, which is the lowest id, since the generator numbers absences in the
+// order it gives them.
+function expectedLetter(covering: readonly AbsenceDto[]): string {
+  const wholeDay = covering.filter((a) => a.startTime === null);
+  if (wholeDay.length > 0) {
+    // The generator keeps to ABS-5, so a whole-day absence is alone on its day.
+    expect(covering).toHaveLength(1);
+    return LETTERS[wholeDay[0]!.type];
+  }
+  let first = covering[0]!;
+  for (const a of covering) if (a.id < first.id) first = a;
+  return LETTERS[first.type];
 }
 
 describe("segmentsForPerson, against painting day by day", () => {
@@ -271,14 +294,13 @@ describe("segmentsForPerson, against painting day by day", () => {
           return;
         }
         const painted = !day.isWeekend && !isOwnHoliday(day.iso);
-        const owner = covering.find((a) => a.startTime === null) ?? covering[0]!;
         expect(segment, day.iso).toBeDefined();
         expect(
           segment!.absences.map((a) => a.id),
           day.iso,
         ).toEqual(covering.map((a) => a.id));
         expect(segment!.painted, day.iso).toBe(painted);
-        expect(segment!.label, day.iso).toBe(painted ? ABSENCE_TYPE_INITIALS[owner.type] : "");
+        expect(segment!.label, day.iso).toBe(painted ? expectedLetter(covering) : "");
       });
 
       // Maximal: two runs that touch differ in what they hold or how they paint.
