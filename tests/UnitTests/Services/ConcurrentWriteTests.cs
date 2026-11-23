@@ -72,11 +72,6 @@ public sealed class ConcurrentWriteTests : IDisposable
             {
                 return false;
             }
-            // BankHolidayService's collision still throws this until it moves over.
-            catch (InvalidOperationException)
-            {
-                return false;
-            }
         }
 
         var racing = Task.WhenAll(Task.Run(() => Run(first)), Task.Run(() => Run(second)));

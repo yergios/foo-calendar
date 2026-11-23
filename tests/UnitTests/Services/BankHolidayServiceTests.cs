@@ -74,7 +74,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
         await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Another Name"), Actor, Tracked));
     }
 
@@ -106,11 +106,11 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 
     [Fact]
     [Trait("Spec", "HOL-6")]
-    public async Task UpdateManualAsync_WhenHolidayDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task UpdateManualAsync_WhenHolidayDoesNotExist_ThrowsNotFoundException()
     {
         var sut = CreateService();
 
-        await Should.ThrowAsync<KeyNotFoundException>(
+        await Should.ThrowAsync<NotFoundException>(
             () => sut.UpdateManualAsync(999, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "X"), Actor, Tracked));
     }
 
@@ -123,7 +123,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 1, 1), "Renamed"), Actor, Tracked));
     }
 
@@ -137,7 +137,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 5, 1), "Renamed"), Actor, Tracked));
     }
 
@@ -176,11 +176,11 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
 
     [Fact]
     [Trait("Spec", "HOL-6")]
-    public async Task DeleteManualAsync_WhenHolidayDoesNotExist_ThrowsKeyNotFoundException()
+    public async Task DeleteManualAsync_WhenHolidayDoesNotExist_ThrowsNotFoundException()
     {
         var sut = CreateService();
 
-        await Should.ThrowAsync<KeyNotFoundException>(() => sut.DeleteManualAsync(999));
+        await Should.ThrowAsync<NotFoundException>(() => sut.DeleteManualAsync(999));
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        await Should.ThrowAsync<InvalidOperationException>(() => sut.DeleteManualAsync(holiday.Id));
+        await Should.ThrowAsync<ConflictException>(() => sut.DeleteManualAsync(holiday.Id));
     }
 
     [Fact]
@@ -435,7 +435,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var sut = CreateService();
         await sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2020, 3, 15), "Founder's Day", IsRecurringAnnually: true), Actor, Tracked);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.AddManualAsync(new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Clashing Day"), Actor, Tracked));
     }
 
@@ -458,7 +458,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         Db.SaveChanges();
         var sut = CreateService();
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        await Should.ThrowAsync<ConflictException>(
             () => sut.UpdateManualAsync(editable.Id, new AddManualHolidayRequest("CH", new DateOnly(2026, 3, 15), "Renamed"), Actor, Tracked));
     }
 
@@ -579,7 +579,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     {
         var sut = CreateService();
 
-        await Should.ThrowAsync<ArgumentException>(
+        await Should.ThrowAsync<InvalidInputException>(
             () => sut.AddManualAsync(
                 new AddManualHolidayRequest("ES-MD", new DateOnly(2026, 5, 2), "Dos de Mayo"), Actor, Tracked));
     }
@@ -605,7 +605,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
         var created = await sut.AddManualAsync(
             new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
 
-        await Should.ThrowAsync<ArgumentException>(
+        await Should.ThrowAsync<InvalidInputException>(
             () => sut.UpdateManualAsync(
                 created.Id,
                 new AddManualHolidayRequest("ES-MD", new DateOnly(2026, 5, 1), "Custom Day"),

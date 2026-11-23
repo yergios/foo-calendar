@@ -211,7 +211,7 @@ public sealed class BankHolidayService(
             .ToListAsync(ct);
 
         if (candidates.Any(b => Collides(b.Date, b.IsRecurringAnnually, date, recurring)))
-            throw new InvalidOperationException($"A holiday already exists for {region} on {date}.");
+            throw new ConflictException($"A holiday already exists for {region} on {date}.");
     }
 
     // Fair game is anywhere the team is, plus the countries those places are in, since a
@@ -222,9 +222,9 @@ public sealed class BankHolidayService(
         if (trackedRegions.Contains(region)) return;
         if (trackedRegions.Any(r => RegionCode.CountryOf(r) == region)) return;
 
-        // ArgumentException, not InvalidOperationException: this is a bad request rather
-        // than a conflict with what is already stored, and the handler maps it to a 400.
-        throw new ArgumentException(
+        // Invalid input, not a conflict: the request is wrong whatever is stored, so it is
+        // a 400 rather than a 409.
+        throw new InvalidInputException(
             $"No one on the team is in {region}, so a bank holiday can't be added for it.");
     }
 
@@ -272,10 +272,10 @@ public sealed class BankHolidayService(
         CancellationToken ct = default)
     {
         var holiday = await db.BankHolidays.FindAsync([id], ct)
-            ?? throw new KeyNotFoundException($"Bank holiday {id} not found.");
+            ?? throw new NotFoundException($"Bank holiday {id} not found.");
 
         if (holiday.Source != HolidaySource.Manual)
-            throw new InvalidOperationException("Only manually added holidays can be edited.");
+            throw new ConflictException("Only manually added holidays can be edited.");
 
         EnsureTracked(trackedRegions, request.Region);
 
@@ -309,10 +309,10 @@ public sealed class BankHolidayService(
     public async Task DeleteManualAsync(int id, CancellationToken ct = default)
     {
         var holiday = await db.BankHolidays.FindAsync([id], ct)
-            ?? throw new KeyNotFoundException($"Bank holiday {id} not found.");
+            ?? throw new NotFoundException($"Bank holiday {id} not found.");
 
         if (holiday.Source != HolidaySource.Manual)
-            throw new InvalidOperationException("Only manually added holidays can be deleted.");
+            throw new ConflictException("Only manually added holidays can be deleted.");
 
         db.BankHolidays.Remove(holiday);
         await db.SaveChangesAsync(ct);
