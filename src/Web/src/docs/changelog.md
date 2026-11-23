@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Security headers.** The page the app serves carries a strict Content-Security-Policy: scripts only from the app itself plus its one inline configuration script, allowed by a hash computed at startup; connections and frames only to the app and the identity provider in `Auth:Authority`; no plugins; no framing by other sites. Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. If a reverse proxy sets its own policy, remove it there: the app's must reach the browser unchanged.
+- The holiday sync and the retention sweep report traces and metrics over OpenTelemetry, under the `FooCalendar` source and meter: a span per sync run and per country, runs, failed countries and duration; a span per sweep and the rows it deleted per table. See [deployment](https://github.com/yergios/foo-calendar/blob/master/docs/deployment.md#the-apps-own-spans-and-metrics) for the names.
 - **Sign out** in the header of the calendar, profile and admin pages. It ends the session with the identity provider when the provider advertises an end-session endpoint, and removes everything the app stored in the browser, interface preferences included. Register `Auth:PostLogoutRedirectUri` (default `/`, resolved like `Auth:RedirectUri`) with your provider as an allowed post-logout redirect.
 - `GET /api/absences` and `GET /api/bank-holidays/catalog` refuse a range that ends before it starts or spans more than 366 days, with a 400. The app itself never asks for more than a year.
 - `Retention:AuditEntryDays` (365) and `Retention:AbsenceDays` (off) delete data that has outlived its purpose, swept daily. Absences are left alone by default — looking back over previous years is what the calendar is for. `0` keeps a table forever.
@@ -23,6 +25,8 @@
 
 ### Changed
 
+- **The identity provider's endpoints must be on `Auth:Authority`'s origin.** The new Content-Security-Policy lets the page reach only that origin besides its own, so a provider whose discovery document puts the token endpoint on another host fails to sign in, with a `connect-src` violation in the browser console. Most providers serve everything from the issuer's host.
+- The API reference no longer loads fonts from, or reports usage to, Scalar's servers, and runs under a policy of its own.
 - **`Auth:Authority` must be an `https` URL outside Development.** The API fetches the keys it validates tokens with from there, so over plain `http` anyone on the path could hand it keys of their own. A deployment whose `Auth:Authority` starts with `http://` no longer starts; the message names the setting. Development still accepts `http`, for a local identity provider.
 - **The `Sick` absence type is gone.** An absence's type is visible to the whole team, and "this person is ill" is health data, which carries a much higher bar than anything else here. Record illness as `Other`, which says someone is away without saying why — and keep health details out of the note, which is the one field the app can't reason about.
 - Branding is split in two. Colors, fonts and shape are yours to change in `src/Web/src/styles/theme.css` and are compiled in; your team's name and support links are runtime config under `Team:`. The product's own name and mark are neither — they are constants, and the footer attribution is not removable. See TRADEMARK.md.
@@ -43,6 +47,7 @@
 
 ### Fixed
 
+- Opening `/admin` directly, by a bookmark or a reload, no longer fails with "could not load its configuration".
 - A request that should carry a body but has none answers 400. It used to be a 500.
 - A signed-in request whose token lacks the claim `Auth:ClaimTypes:UserName` names answers 500 on the routes that need to know who is asking, and the logged error names the claim and the setting to change. It used to be a 409, or a profile created with no username.
 - `POST /api/admin/people` requires a `username`; a missing or blank one is a 400. It used to create a person with no username, and answer 409 to every later one.

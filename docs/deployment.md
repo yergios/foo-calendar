@@ -114,6 +114,14 @@ ReverseProxy__KnownNetworks__0=10.0.0.0/8
 
 Leaving both empty accepts forwarded headers from any peer, which is the normal container setup where the proxy is the only route in.
 
+**Leave the app's security headers alone.** The app sets its own `Content-Security-Policy` on the page it serves, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer` on every response ([0015](decisions/0015-strict-content-security-policy.md)). A proxy must pass them through unchanged: one that strips the policy, or replaces it with a site-wide one of its own, either drops the protection or breaks the app. The policy allows the page's one inline script by a hash computed at startup from this deployment's configuration, so no static policy written at the proxy can match it. Adding headers the app does not set, such as HSTS, is the proxy's job and is fine.
+
+### Content-Security-Policy and the identity provider
+
+The page may connect to, frame and submit forms to its own origin and to **the origin of `Auth:Authority`** only. Everything the sign-in library reaches must be on that origin: the discovery document, the token endpoint (fetched), and the authorization endpoint (framed, for silent renewal). Most providers serve all of them from the issuer's own host (Keycloak, Entra ID, Okta, Auth0, Authentik). A provider whose discovery document points the token endpoint at another host is refused by the browser, and signing in fails with a `connect-src` violation in the console; there is no setting to add origins.
+
+The API reference, when `ApiDocs:Enabled`, is served with a policy of its own, looser where Scalar needs it (inline styles, and `eval` for its bundled validator) and on that page only.
+
 ### Scaling
 
 The app is designed to run as a single instance, and two things assume it:
@@ -154,3 +162,22 @@ dotnet run --project src/Api
 The `Telemetry` section in `src/Api/appsettings.json` (`OtlpEndpoint`, `OtlpProtocol`, `ServiceName`) mirrors the first four and **takes precedence** when a value is non-empty; leave the keys blank to let the environment decide. See `src/Api/Configuration/TelemetryOptions.cs`.
 
 Prometheus users should scrape an OpenTelemetry Collector placed in front of the app rather than the app itself — the app only pushes OTLP and exposes no `/metrics` endpoint.
+
+### The app's own spans and metrics
+
+Besides the ASP.NET Core, HTTP client and runtime instrumentation, the app traces and measures the two jobs that run in the background, where no request would show them failing. Both come from the activity source and meter named `FooCalendar`. Their attributes carry codes, counts and durations only, never a username, a name or a note.
+
+| Span | Attributes |
+| --- | --- |
+| `holiday_sync`, one per run, i.e. one year (the scheduled sync runs two, this year and next; a hand-triggered sync and a new region on a profile run their own) | `foo_calendar.holiday_sync.year`, `.region_count`, `.failed_country_count` |
+| `holiday_sync.country`, a child of the run per country asked | `foo_calendar.holiday_sync.country`, `.outcome` (`synced` or `failed`); a failed one has an error status and `error.type`, the exception's type |
+| `retention_sweep`, one per sweep | `foo_calendar.retention.audit_entries_deleted`, `.absences_deleted` |
+
+| Metric | Type | Unit | Attributes |
+| --- | --- | --- | --- |
+| `foo_calendar.holiday_sync.runs` | counter | `{run}` | |
+| `foo_calendar.holiday_sync.failed_countries` | counter | `{country}` | `foo_calendar.holiday_sync.country` |
+| `foo_calendar.holiday_sync.duration` | histogram | `s` | |
+| `foo_calendar.retention.deleted_rows` | counter, recorded every sweep, zero included | `{row}` | `foo_calendar.retention.table` (`audit_entries` or `absences`) |
+
+Worth an alert: `failed_countries` rising (the holiday source is down or refusing a country; the log has the exception), and `runs` not rising for longer than `Holidays:SyncInterval` (the sync stopped running).

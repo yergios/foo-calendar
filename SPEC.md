@@ -385,6 +385,4 @@ fails when a listed requirement gains a reference, so that list only shrinks.
    what `master` does once pending change specs are done.
 3. A decision with alternatives worth remembering also gets a decision record.
 
-Pending change specs, to be built in this order:
-
-- [0004: Headers, telemetry, performance and end-to-end checks](docs/specs/0004-headers-telemetry-performance-e2e.md)
+Pending change specs, to be built in this order: none.

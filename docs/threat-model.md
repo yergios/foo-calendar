@@ -96,7 +96,9 @@ people they name, bounded by `Retention:AuditEntryDays`.
 What follows on its own is not in the audit log: a region's holidays deleted when its last
 occupant leaves (manual ones included, `TeamRegionService.PruneIfUnusedAsync`), the
 absences that cascade with a deleted person (only their count is recorded), the scheduled
-holiday sync, and the retention sweep. Those reach the application log, if at all.
+holiday sync, and the retention sweep. Those reach the application log, if at all; the
+sync and the sweep also emit spans and metrics of their own, carrying codes and counts only
+([OBS-1 to OBS-3](../SPEC.md#obs-telemetry)).
 
 ### Information disclosure
 
@@ -108,6 +110,9 @@ holiday sync, and the retention sweep. Those reach the application log, if at al
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |
+| Injected script reading tokens or the cached calendar | The shell's Content-Security-Policy runs scripts only from the app's origin plus the one inline bootstrap script, by its SHA-256 computed at startup from the string that is inlined; connections and frames go only to the app and the identity provider's origin, and images only to the app, so injected code that did run would find requests to anywhere else refused (navigating the page away is something no policy stops). No `unsafe-inline` or `unsafe-eval` anywhere in it ([SEC-1](../SPEC.md#sec-response-headers), [0015](decisions/0015-strict-content-security-policy.md)). The end-to-end suite fails on any violation ([SEC-3](../SPEC.md#sec-response-headers)) |
+| The app framed by another site (clickjacking), or a response sniffed into another type | `frame-ancestors 'none'` on the shell, and `X-Content-Type-Options: nosniff` on every response ([SEC-2](../SPEC.md#sec-response-headers)) |
+| Paths and queries leaking to other sites in the `Referer` header | `Referrer-Policy: no-referrer` on every response ([SEC-2](../SPEC.md#sec-response-headers)) |
 | Data leaving the system | Only country codes to the holiday source, sign-in and sign-out traffic to the IdP, and traces, metrics and logs to an OTLP collector if the deployer configures one; no email, webhooks or analytics ([0008](decisions/0008-in-app-notifications-only.md)) |
 
 ### Denial of service
@@ -135,13 +140,23 @@ record when it is.
 1. **Everyone the identity provider will issue a token to can read the whole calendar.**
    Reading absences needs only a signed-in user. Restricting who can sign in (application
    assignment in the IdP) is the deployer's control, and the one that matters most.
-2. **No security headers.** The app sets no Content-Security-Policy, `X-Content-Type-Options`
-   or `frame-ancestors`. Add them at the reverse proxy for now. Their absence matters most
-   because of the next point.
+2. **The security headers are the app's, and a proxy can undo them.** Closed as a gap on
+   2026-11-23 ([0015](decisions/0015-strict-content-security-policy.md)): the shell is
+   served with a strict Content-Security-Policy, every response with `nosniff` and
+   `Referrer-Policy: no-referrer`. What remains:
+   - a reverse proxy that strips or replaces the policy removes the protection
+     ([deployment](deployment.md#behind-a-reverse-proxy) says not to);
+   - the API reference, when `ApiDocs:Enabled`, is a page on the same origin under a looser
+     policy of its own: inline styles, and `eval` for its bundled validator. It allows only
+     its own nonce-tagged scripts and connects only to the app, but script running there
+     could read the same `localStorage` as the app. It is off by default outside
+     Development;
+   - styles are not relaxed on the shell; HSTS is the TLS terminator's to send.
 3. **Tokens live in `sessionStorage`** (the `oidc-client-ts` default), so script injected
-   into the page could read them. Vue escapes all interpolated data; the one `v-html` renders
-   the bundled in-app docs, whose only dynamic parts are the operator's `Team:OrgName` and
-   `Team:SupportUrl`.
+   into the page could read them. The Content-Security-Policy above is what keeps script
+   from being injected and what it could reach if it were; Vue escapes all interpolated
+   data, and the one `v-html` renders the bundled in-app docs, whose only dynamic parts are
+   the operator's `Team:OrgName` and `Team:SupportUrl`.
 4. **No rate limiting.** Apart from the anonymous routes above, every API route needs a
    token, which bounds who can try, but not how often. `/healthchecks` runs the database
    check on every anonymous call.

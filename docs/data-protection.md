@@ -102,7 +102,7 @@ copy, or their preferences.
 |---|---|---|
 | **Nager.Date** (`https://date.nager.at`) | **No personal data.** Country and region codes only, to fetch public holidays. | Switch it off with `Holidays:Source=None`, or use `File` for an air-gapped network. |
 | **Your identity provider** | Standard OIDC sign-in and sign-out traffic | Not applicable when running without one. |
-| **Your OTLP collector**, if you configure one | Traces, metrics and logs: request paths, timings, status codes, log messages. Never an absence note. | Off until `Telemetry:OtlpEndpoint` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [deployment](deployment.md). The collector is your processor. |
+| **Your OTLP collector**, if you configure one | Traces, metrics and logs: request paths, timings, status codes, log messages, and the background jobs' own spans and metrics, which carry country codes, years, counts and outcomes only. Never an absence note. | Off until `Telemetry:OtlpEndpoint` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [deployment](deployment.md). The collector is your processor. |
 
 Nothing else leaves. There is no telemetry to the project's author, no analytics, and no
 outbound call this list doesn't name.

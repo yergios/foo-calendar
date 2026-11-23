@@ -58,8 +58,11 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
 5. **The SPA shell is prepared once**, when a frontend build is present: `index.html` is
    read, its `<base href>` rewritten for a sub-path deployment, and the bootstrap config
    inlined as `window.__bootstrap`
-   ([0004](decisions/0004-runtime-configuration.md)). A shell with no `</head>`, or with
-   no `<base href>` while `ReverseProxy:PathBase` is set, stops the process here.
+   ([0004](decisions/0004-runtime-configuration.md)). Its Content-Security-Policy is
+   built here too, from the SHA-256 of that same inlined script, so the two cannot
+   disagree ([0015](decisions/0015-strict-content-security-policy.md)). A shell with no
+   `</head>`, or with no `<base href>` while `ReverseProxy:PathBase` is set, stops the
+   process here.
 6. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
 7. **The pipeline is assembled**, and the prepared shell mapped as the fallback route for
    GET and HEAD. An API path no route takes is kept from it: a 404 problem, or a 401 to
@@ -79,7 +82,8 @@ optional steps at the top exist only when a reverse proxy is configured.
 
 ```mermaid
 flowchart TB
-    req([request]) --> fwd["Forwarded headers<br/>(only if ReverseProxy:TrustForwardedHeaders)"]
+    req([request]) --> sec["Security headers<br/>nosniff and Referrer-Policy on every response"]
+    sec --> fwd["Forwarded headers<br/>(only if ReverseProxy:TrustForwardedHeaders)"]
     fwd --> base["Path base<br/>(only if ReverseProxy:PathBase)"]
     base --> gzip["Response compression"]
     gzip --> errors["Exception handler, status code pages"]
@@ -96,6 +100,11 @@ flowchart TB
 
 Why the order matters:
 
+- **Security headers before anything that can answer**, and written as the response
+  starts, so a static file, a 401 and a 500 from the exception handler carry them like any
+  other response. The shell's fallback route adds its own Content-Security-Policy; the API
+  reference gets a separate one, with a per-response nonce, so it cannot loosen the
+  shell's (`SecurityHeaders`).
 - **Forwarded headers first**, so everything after sees the original caller's scheme, host
   and address rather than the proxy's.
 - **Path base before routing.** Left implicit, ASP.NET Core inserts routing at the very
@@ -182,7 +191,49 @@ Two designs carry most of the frontend's performance:
   unchanged response re-renders nothing ([0011](decisions/0011-client-side-stale-while-revalidate.md)).
 
 `tools/perf/harness.mjs` measures both against a running build; its README holds the
-baseline.
+baseline, and CI holds every build to it (see [Checks](#checks)).
+
+The shell runs under a strict Content-Security-Policy: scripts only from the app's origin
+plus the inlined bootstrap script by its hash, styles only from the app's origin, and
+connections and frames only to the app and the identity provider
+([0015](decisions/0015-strict-content-security-policy.md)). Vue's style bindings set
+properties through the CSSOM, which the policy does not restrict, so nothing in the SPA
+needs inline styles; a dependency that starts injecting style or script elements fails the
+end-to-end suite.
+
+## Background jobs and telemetry
+
+The holiday sync and the retention sweep are hosted services that wake on a
+`PeriodicTimer`. A country the sync cannot fetch is logged and reported while the others
+carry on; a failed sweep is logged and retried on the next tick. Because nobody watches
+them run, they report through OpenTelemetry under
+the app's own activity source and meter, `FooCalendar` (`Infrastructure/AppTelemetry.cs`):
+
+- spans `holiday_sync` (one per year synced) with a `holiday_sync.country` child per
+  country, and `retention_sweep`;
+- metrics `foo_calendar.holiday_sync.runs`, `foo_calendar.holiday_sync.failed_countries`,
+  `foo_calendar.holiday_sync.duration` and `foo_calendar.retention.deleted_rows`.
+
+Their attributes are region and country codes, years, counts, outcomes and exception types,
+never a username, a name or a note (OBS-3). [Deployment](deployment.md#the-apps-own-spans-and-metrics)
+lists every attribute.
+
+## Checks
+
+Every push to `master` and every pull request runs `.github/workflows/ci.yml`; none of its
+steps is advisory.
+
+| Job | What fails it |
+| --- | --- |
+| API | A build warning (every analyzer on, warnings as errors, NuGet audit included), a unit or integration test, or `Api.csproj` and `package.json` disagreeing on the version |
+| Web | Typecheck, lint warnings, formatting, a Vitest test, or a high or critical `pnpm audit` advisory |
+| Spec traceability | A `[test]` requirement no test references and the gap list does not name, or a reference to an ID that is missing or retired (`scripts/check-spec-trace.mjs`, and its own tests) |
+| Container image and browser checks | The image not building, starting, migrating an empty database and serving the shell; an end-to-end flow failing or causing any Content-Security-Policy violation (`tools/e2e`); the calendar at 1000 people exceeding 5,000 DOM nodes after an interaction or three times an interaction's baseline block (`tools/perf`) |
+
+The browser checks run on a DevTools driver of the repo's own, `tools/browser/driver.mjs`,
+against a pinned `chrome-headless-shell`
+([0016](decisions/0016-own-devtools-driver-for-browser-checks.md)). A failing flow uploads
+its screenshot, console and violations; the performance results are uploaded either way.
 
 ## Where to look next
 

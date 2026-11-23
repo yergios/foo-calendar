@@ -1,6 +1,6 @@
 # 0004. Headers, telemetry, performance and end-to-end checks
 
-- Status: Ready to build
+- Status: Done
 - Date: 2026-11-23
 - Decided: [ADR 0015](../decisions/0015-strict-content-security-policy.md) (strict CSP),
   [ADR 0016](../decisions/0016-own-devtools-driver-for-browser-checks.md) (end-to-end and
