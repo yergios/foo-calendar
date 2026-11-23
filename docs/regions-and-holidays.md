@@ -84,6 +84,7 @@ Holidays__File__Path=/etc/foo-calendar/holidays.json
 ]
 ```
 
+- `region` and `date` are required; an entry missing either makes the file malformed. `name` and `recurringAnnually` are optional.
 - `region` is an ISO 3166-2 code. A country code applies nationwide; a subdivision code applies to that region only. Entries for regions nobody on the team is in are ignored on sync.
 - `recurringAnnually` ignores the year in `date` and applies its month/day to every year synced, which is what company closures usually are. (Feb 29 only lands on leap years.)
 - The file is re-read on every sync, so edits take effect on the next one without a restart. A missing or malformed file is reported as a failed country on the admin page and logged — it never silently syncs nothing.

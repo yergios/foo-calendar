@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Api.Configuration;
 using Api.Data.Models;
 using Api.Services;
@@ -87,6 +89,20 @@ public sealed class FileHolidaySourceTests : IDisposable
         var holidays = await sut.GetAsync("CH", 2026);
 
         holidays.ShouldBeEmpty();
+    }
+
+    // An entry with no region applies nowhere, and one with no date used to be stored as a
+    // holiday on 0001-01-01: both are a malformed file, and so a failed sync.
+    [Theory]
+    [Trait("Spec", "HOL-5")]
+    [InlineData("""[{ "date": "2026-08-01", "name": "No region" }]""")]
+    [InlineData("""[{ "region": null, "date": "2026-08-01", "name": "Null region" }]""")]
+    [InlineData("""[{ "region": "CH", "name": "No date" }]""")]
+    public async Task GetAsync_WhenAnEntryHasNoRegionOrNoDate_Throws(string json)
+    {
+        var sut = CreateSource(json);
+
+        await Should.ThrowAsync<JsonException>(() => sut.GetAsync("CH", 2026));
     }
 
     [Fact]

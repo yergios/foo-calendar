@@ -15,12 +15,13 @@ public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolid
 {
     /// <summary>One entry in the file. With RecurringAnnually the year in Date is ignored
     /// and its month/day is projected onto whichever year is being synced. An entry with no
-    /// region applies nowhere, so it fails the read rather than arriving as a null nothing
-    /// downstream expects: Region is the one parameter without a default, which the
-    /// options below make required, and not nullable, which they make refuse null. The
-    /// others default to what a missing value always read as.</summary>
+    /// region applies nowhere, and one with no date would land on 0001-01-01, so either fails
+    /// the read rather than arriving as a value nothing downstream expects: Region and Date
+    /// are the parameters without a default, which the options below make required, and
+    /// Region is not nullable, which they make refuse null. The others default to what a
+    /// missing value always read as.</summary>
     private sealed record FileHoliday(
-        string Region, DateOnly Date = default, string? Name = null, bool RecurringAnnually = false);
+        string Region, DateOnly Date, string? Name = null, bool RecurringAnnually = false);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
