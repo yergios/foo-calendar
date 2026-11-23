@@ -2,9 +2,13 @@
 
 `flows.test.mjs` runs the app's main flows in a real browser: onboarding, adding, editing
 and deleting an absence from the calendar, what a member with and without permissions is
-offered, signing out, and the API reference. Every flow fails on any Content-Security-Policy
-violation or uncaught exception the page reports
-([0015](../../docs/decisions/0015-strict-content-security-policy.md)). Dependency-free:
+offered, signing out, the API reference, and the shell refusing an injected inline script.
+Every flow fails on any uncaught exception and on any Content-Security-Policy violation it
+does not name as expected; a flow that expects one matches it by what was refused and
+where, so it cannot hide another
+([0015](../../docs/decisions/0015-strict-content-security-policy.md)). The `[SEC-3]` test
+at the end passes only when every flow ran and passed, so it fails when run on its own.
+Dependency-free:
 `node:test` on the DevTools driver in `tools/browser`, shared with the performance harness
 ([0016](../../docs/decisions/0016-own-devtools-driver-for-browser-checks.md)).
 
@@ -33,5 +37,5 @@ and `scripts/check-spec-trace.mjs` reads them (TRC-2).
 the profile the calendar flows use); a rerun against the same database starts over by
 deleting that profile first.
 
-A failing flow leaves a screenshot, the console, the violations and the exceptions in
-`E2E_OUT` (default `$TMPDIR/foo-calendar-e2e`), which CI uploads as an artifact.
+A failing flow leaves a screenshot, and the console, violations and exceptions of that
+flow alone, in `E2E_OUT` (default `$TMPDIR/foo-calendar-e2e`), which CI uploads as an artifact.

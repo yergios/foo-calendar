@@ -3,8 +3,9 @@
 //
 // Each test's name carries the requirement IDs it verifies in brackets, which
 // scripts/check-spec-trace.mjs reads like Vitest's. Every flow also fails on any
-// Content-Security-Policy violation or uncaught exception the page reports while it runs,
-// and saves a screenshot, the console and the violations when it fails.
+// Content-Security-Policy violation it does not name as expected, and on any uncaught
+// exception the page reports while it runs, and saves a screenshot and what the page said
+// during that flow when it fails.
 //
 // The tests run in order and build on each other: onboarding creates the profile the
 // calendar flows use.
@@ -47,30 +48,81 @@ async function api(base, route, init = {}) {
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
 
+/** Polls a condition on what the test process holds, such as the violations reported. */
+async function until(condition, what, timeout = 5_000) {
+  const deadline = Date.now() + timeout;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`timed out after ${timeout} ms waiting for ${what}`);
+    await settle(50);
+  }
+}
+
 function slug(name) {
   return name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
 }
 
-/** Wraps a flow: it must leave no new violation or uncaught exception behind, and on any
- * failure saves what the page showed and said. */
-function flow(fn) {
+/** How many flows there are, and how many ran to the end with nothing unexpected: what
+ * the [SEC-3] summary at the end reads. */
+let flowCount = 0;
+let flowsPassed = 0;
+
+/** Wraps a flow for test(): it must leave no violation behind that `expected` does not
+ * match, and no uncaught exception, and on any failure it saves what the page showed and
+ * what it said while this flow ran.
+ *
+ * @param {(t: import("node:test").TestContext) => Promise<void>} fn
+ * @param {{ expected?: ((violation: object) => boolean)[] }} [options] Violations the flow
+ *   expects, each matched by a predicate, so a known one never hides a new one.
+ */
+function flow(fn, { expected = [] } = {}) {
+  flowCount++;
   return async (t) => {
-    const violations = page.violations.length;
-    const exceptions = page.exceptions.length;
+    const from = {
+      console: page.console.length,
+      violations: page.violations.length,
+      exceptions: page.exceptions.length,
+    };
+    const own = (kind) => page[kind].slice(from[kind]);
     try {
       await fn(t);
-      assert.deepEqual(page.violations.slice(violations), [], "Content-Security-Policy violations");
-      assert.deepEqual(page.exceptions.slice(exceptions), [], "uncaught exceptions");
+      const unexpected = own("violations").filter((v) => !expected.some((match) => match(v)));
+      assert.deepEqual(unexpected, [], "Content-Security-Policy violations");
+      assert.deepEqual(own("exceptions"), [], "uncaught exceptions");
+      flowsPassed++;
     } catch (error) {
       mkdirSync(OUT, { recursive: true });
       const base = path.join(OUT, slug(t.name));
       await page.screenshot(`${base}.png`).catch(() => {});
-      writeFileSync(`${base}.console.json`, JSON.stringify(page.console, null, 2));
-      writeFileSync(`${base}.violations.json`, JSON.stringify(page.violations, null, 2));
-      writeFileSync(`${base}.exceptions.json`, JSON.stringify(page.exceptions, null, 2));
+      for (const kind of ["console", "violations", "exceptions"])
+        writeFileSync(`${base}.${kind}.json`, JSON.stringify(own(kind), null, 2));
       throw error;
     }
   };
+}
+
+/** The path of a URL, or "" when it is not one (an inline script has no file). */
+function pathOf(url) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return "";
+  }
+}
+
+/** Whether a violation, as the event or as the console report, is the API reference's
+ * one known one: Scalar's bundle probing whether eval works, which the reference's policy
+ * refuses (docs/decisions/0017). Matched by directive, blocked URI and file, never by
+ * line, so the same probe moving within the bundle still matches and nothing else does. */
+function scalarEvalProbe(v) {
+  const fromScalar = (url) => pathOf(url).endsWith("/scalar/scalar.js");
+  if ("report" in v) return /'unsafe-eval'/.test(v.report) && fromScalar(v.url);
+  return /^script-src(-elem)?$/.test(v.directive) && v.blockedURI === "eval" && fromScalar(v.sourceFile);
+}
+
+/** Whether a violation is an inline script refused, as the event or the console report. */
+function inlineScriptRefused(v) {
+  if ("report" in v) return /^Executing inline script violates/.test(v.report);
+  return v.directive === "script-src-elem" && v.blockedURI === "inline";
 }
 
 /** The calendar with the signed-in member's own row in it. */
@@ -266,6 +318,32 @@ test(
   }),
 );
 
-test("[SEC-3] no flow caused a Content-Security-Policy violation", () => {
-  assert.deepEqual(page.violations, []);
+test(
+  "[SEC-1] the shell refuses an injected inline script, and its source file is not served",
+  flow(async () => {
+    await openCalendar();
+    // What an injection would amount to: a script element carrying inline code, inserted
+    // into the live page. The policy allows the bootstrap script by its hash and nothing
+    // else inline.
+    await page.evaluate(`(() => {
+      const script = document.createElement("script");
+      script.textContent = "window.__injected = true";
+      document.head.append(script);
+    })()`);
+    // The report arrives as an event after the refusal, not with it.
+    await until(() => page.violations.some(inlineScriptRefused), "the refusal to be reported");
+    assert.equal(await page.evaluate(`window.__injected === true`), false, "the inline script ran");
+
+    // Served off disk it would have no policy at all; it is a missing file instead.
+    await page.navigate(new URL("index.html", APP_URL).href);
+    assert.equal(await page.evaluate(`typeof window.__bootstrap`), "undefined", "the SPA booted");
+    assert.match(await page.evaluate(`document.body.innerText`), /404/);
+  }, { expected: [inlineScriptRefused] }),
+);
+
+// Every flow above already fails on a violation it did not expect. This is the summary for
+// SEC-3, and it holds only when every one of them ran and passed: run on its own, or with
+// any flow skipped, filtered out or failing, it fails rather than passing on nothing.
+test("[SEC-3] every flow ran without a Content-Security-Policy violation it did not expect", () => {
+  assert.equal(flowsPassed, flowCount, "flows that did not run, or did not pass");
 });

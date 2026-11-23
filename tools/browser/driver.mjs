@@ -93,7 +93,7 @@ class Page {
     this.exceptions = [];
     /** Content-Security-Policy violations, from the event and from the browser's own
      * console report of one: { directive, blockedURI, sourceFile, line, sample } or
-     * { report }. */
+     * { report, url }. */
     this.violations = [];
   }
 
@@ -112,7 +112,13 @@ class Page {
     );
     s.on("Log.entryAdded", ({ entry }) => {
       this.console.push({ type: entry.level, text: entry.text, source: entry.source });
-      if (/Content Security Policy/i.test(entry.text)) this.violations.push({ report: entry.text });
+      // The script the report came from, when the browser says: what tells one known
+      // violation from another with the same text.
+      if (/Content Security Policy/i.test(entry.text))
+        this.violations.push({
+          report: entry.text,
+          url: entry.url ?? entry.stackTrace?.callFrames?.[0]?.url ?? "",
+        });
     });
     s.on("Runtime.bindingCalled", (p) => {
       if (p.name === VIOLATION_BINDING) this.violations.push(JSON.parse(p.payload));
