@@ -32,18 +32,18 @@ RUN pnpm build
 # 1xx images stopped at 10.0.103). Ubuntu ships the 1xx band with every servicing release,
 # so this stays patched. Only the build runs on it; the runtime stage below is Microsoft's.
 #
-# Both pinned, so the same commit builds with the same compiler. To bump them:
-# - the image: the digest Docker Hub serves for ubuntu:24.04, e.g. from
-#   https://hub.docker.com/v2/repositories/library/ubuntu/tags/24.04 ("digest");
-# - the SDK: the version Launchpad publishes for dotnet-sdk-10.0 in noble-updates
-#   (https://launchpad.net/ubuntu/noble/amd64/dotnet-sdk-10.0), which must stay in the
-#   10.0.1xx band global.json pins. The archive keeps only the newest version, so once
-#   Ubuntu ships the next servicing release this one stops resolving and the build fails
-#   until it is bumped.
+# The image is pinned by digest; bump it with the digest Docker Hub serves for
+# ubuntu:24.04 (https://hub.docker.com/v2/repositories/library/ubuntu/tags/24.04).
+#
+# The SDK is pinned to the band, not a version: the 10.0.1* glob is the same rule as
+# global.json's latestPatch, so a servicing release is picked up rather than breaking the
+# build. An exact version would stop resolving every time Ubuntu publishes the next one,
+# since its archive keeps only the newest. A new patch arrives when this layer is rebuilt:
+# on a digest bump, or whenever the build cache does not hold it.
 FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS api
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends dotnet-sdk-10.0=10.0.115-0ubuntu1~24.04.1 \
+    && apt-get install --yes --no-install-recommends 'dotnet-sdk-10.0=10.0.1*' \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
