@@ -244,6 +244,17 @@ var authOptions = services.AddOptions<AuthOptions>()
         "Auth:Provider=None is only allowed in Development.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Authority),
         "Auth:Authority must be configured.")
+    // Tokens are validated against keys fetched from here, so plain http lets anyone on the
+    // path hand the API keys of their own. A local identity provider in Development is the
+    // one place that is worth allowing. Blank is left to the check above.
+    .Validate(o => o.Provider == AuthOptions.ProviderNone
+            || string.IsNullOrWhiteSpace(o.Authority)
+            || (Uri.TryCreate(o.Authority, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || (isDevelopment && uri.Scheme == Uri.UriSchemeHttp))),
+        isDevelopment
+            ? "Auth:Authority must be an absolute https or http URL, e.g. \"http://localhost:8080/realms/team\"."
+            : "Auth:Authority must be an absolute https URL, e.g. \"https://login.example.com/realms/team\". " +
+              "http is accepted only in Development.")
     .Validate(o => o.Provider == AuthOptions.ProviderNone || !string.IsNullOrWhiteSpace(o.Audience),
         "Auth:Audience must be configured.")
     // The API never uses ClientId itself, but the SPA can't start a login without it, and
@@ -314,6 +325,10 @@ else
         {
             options.Authority = authConfig.Authority;
             options.Audience = authConfig.Audience;
+
+            // The validation above already refuses http outside Development; this lets the
+            // http it accepts there actually be used, against a local identity provider.
+            options.RequireHttpsMetadata = !isDevelopment;
 
             // Keep claims under the names the token gives them. The default renames the
             // common ones to WS-Federation URIs ("sub" to ClaimTypes.NameIdentifier, "roles"

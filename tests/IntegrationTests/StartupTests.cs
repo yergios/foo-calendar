@@ -163,6 +163,49 @@ public sealed class StartupTests
         Should.NotThrow(() => app.Services);
     }
 
+    // Development included: the dev bypass is off here, so the app validates bearer tokens
+    // the way a deployment does and the authority's scheme matters.
+    private static TestApp WithAuthority(string environment, string authority) =>
+        new([.. IdentityProvider.Where(s => s.Key != "Auth:Authority"),
+            ("Auth:Provider", "Oidc"),
+            ("Auth:Authority", authority)])
+        {
+            Environment = environment,
+        };
+
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [InlineData("Production", "https://idp.example.test/")]
+    [InlineData("Development", "https://idp.example.test/")]
+    [InlineData("Development", "http://localhost:8080/realms/team")]
+    public void AuthorityOverHttps_OrOverHttpInDevelopment_Starts(string environment, string authority)
+    {
+        using var app = WithAuthority(environment, authority);
+
+        Should.NotThrow(() => app.Services);
+    }
+
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    public void AuthorityOverHttpOutsideDevelopment_StopsStartupNamingIt()
+    {
+        using var app = WithAuthority("Production", "http://idp.example.test/");
+
+        StartupFailure(app).Message.ShouldContain("Auth:Authority must be an absolute https URL");
+    }
+
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [InlineData("Production", "/realms/team")]
+    [InlineData("Production", "idp.example.test")]
+    [InlineData("Development", "/realms/team")]
+    public void RelativeAuthority_StopsStartupNamingIt(string environment, string authority)
+    {
+        using var app = WithAuthority(environment, authority);
+
+        StartupFailure(app).Message.ShouldContain("Auth:Authority must be an absolute");
+    }
+
     [Fact]
     [Trait("Spec", "CFG-4")]
     public void ValidConfiguration_MigratesAnEmptyDatabase()
