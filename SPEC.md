@@ -161,7 +161,7 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   holidays ([HOL-9](#hol-bank-holidays)). Totals are reported per type for `Vacation` and
   `Other`. `[test]`
 - **ABS-11** A member must be able to read their own totals; reading everyone's must require
-  `ReportsRead`. `[test]`
+  `ReportsRead`. A year outside 1900..2999, here or on the people list, is a 400. `[test]`
 - **ABS-12** Creating, updating and deleting an absence must each record an audit entry with
   the type and dates, never the note. `[test]`
 
@@ -197,8 +197,9 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   tracked region and their countries in the range. It must answer 400 when `to < from` or when
   the range spans more than 366 days. `[test]`
 - **HOL-11** A holder of `HolidaysSync` must be able to trigger a sync for a year, for every
-  tracked region or for one named tracked region; an untracked region is a 400. The response
-  lists synced and failed regions, and the action is audited. `[test]`
+  tracked region or for one named tracked region; an untracked region, or a year outside
+  1900..2999, is a 400. The response lists synced and failed regions, and the action is
+  audited. `[test]`
 - **HOL-12** Adding, editing and deleting a manual holiday must each record an audit entry.
   `[test]`
 

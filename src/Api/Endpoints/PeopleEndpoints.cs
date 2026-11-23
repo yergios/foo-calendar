@@ -72,6 +72,9 @@ public static class PeopleEndpoints
         IPersonService people,
         CancellationToken ct)
     {
+        if (year is not null)
+            RequestYear.EnsureValid(year.Value);
+
         var sort = sortBy ?? PersonSortColumn.Name;
 
         // Vacation/other are the same per-year numbers the ReportsRead-gated stats
@@ -122,8 +125,10 @@ public static class PeopleEndpoints
         IAbsenceService absences,
         CancellationToken ct)
     {
-        var person = await currentPerson.GetAsync(ct);
         var targetYear = year ?? DateTime.UtcNow.Year; // This will be wrong only ~1hr/year at midnight
+        RequestYear.EnsureValid(targetYear);
+
+        var person = await currentPerson.GetAsync(ct);
 
         var result = await absences.GetStatsAsync(person, targetYear, ct);
         return Results.Ok(result);

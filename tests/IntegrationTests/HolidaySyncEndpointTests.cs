@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Api.Configuration;
 using Api.Data.Models;
 using Api.Dtos;
+using Api.Endpoints;
 using Api.Interfaces;
 using Api.Services;
 
@@ -115,6 +116,27 @@ public sealed class HolidaySyncEndpointTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         SyncEntries(app).ShouldBeEmpty();
+    }
+
+    // A year no source could answer for: before it was checked, the sync reported every
+    // region as failed, or with a file source threw building the dates.
+    [Theory]
+    [Trait("Spec", "HOL-11")]
+    [Trait("Spec", "ERR-1")]
+    [InlineData(0)]
+    [InlineData(RequestYear.Min - 1)]
+    [InlineData(RequestYear.Max + 1)]
+    [InlineData(10000)]
+    public async Task SyncingAYearOutOfRange_IsABadRequest_AndNotAudited(int year)
+    {
+        using var app = AppWithASource();
+        using var client = app.CreateClient();
+
+        using var response = await client.PostAsync(Sync($"year={year}"), content: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        SyncEntries(app).ShouldBeEmpty();
+        app.Query(db => db.BankHolidays.Count()).ShouldBe(0);
     }
 
     // TestApp runs with Holidays:Source=None unless told otherwise.

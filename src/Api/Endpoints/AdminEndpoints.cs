@@ -83,6 +83,8 @@ public static class AdminEndpoints
         IAbsenceService absences,
         CancellationToken ct)
     {
+        RequestYear.EnsureValid(year);
+
         var result = await absences.GetAllStatsAsync(year, ct);
         return Results.Ok(result);
     }
@@ -131,6 +133,9 @@ public static class AdminEndpoints
         IAuditLog audit,
         CancellationToken ct)
     {
+        // First: a year no source could answer for is wrong whatever is configured.
+        RequestYear.EnsureValid(year);
+
         // Nothing to sync from, so say so rather than reporting every region as synced.
         if (holidayOptions.Value.Source == HolidayOptions.SourceNone)
             throw new ConflictException(
