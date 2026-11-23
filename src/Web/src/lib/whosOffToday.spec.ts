@@ -34,12 +34,13 @@ function absence(
   };
 }
 
-function appointment(owner: PersonDto, date: string): AbsenceDto {
-  return absence(owner, date, date, {
-    type: "Appointment",
-    startTime: "09:00:00",
-    endTime: "10:30:00",
-  });
+function appointment(
+  owner: PersonDto,
+  date: string,
+  startTime = "09:00:00",
+  endTime = "10:30:00",
+): AbsenceDto {
+  return absence(owner, date, date, { type: "Appointment", startTime, endTime });
 }
 
 let nextHolidayId = 1;
@@ -95,16 +96,57 @@ describe("whosOffToday", () => {
     expect(nationwide.map((e) => e.person.displayName)).toEqual(["Swiss", "Zurich"]);
   });
 
-  it("[UI-5] lists each person once, for their absence rather than also their holiday", () => {
+  it("[UI-5] lists each person once, with every time range of their appointments", () => {
     const entries = whosOffToday(
       TODAY,
       [ana],
-      [absence(ana, TODAY, TODAY), appointment(ana, TODAY)],
-      [holiday(TODAY, "CH")],
+      [appointment(ana, TODAY, "14:00:00", "15:00:00"), appointment(ana, TODAY)],
+      [],
     );
 
-    expect(entries.map((e) => e.kind)).toEqual(["absence", "absence"]);
-    expect(entries.every((e) => e.person === ana)).toBe(true);
+    expect(entries).toEqual([
+      expect.objectContaining({
+        person: ana,
+        kind: "absence",
+        initial: "A",
+        detail: "09:00–10:30, 14:00–15:00",
+        backOn: null,
+      }),
+    ]);
+  });
+
+  it("[UI-5] lists each person once, for their appointment rather than also their holiday", () => {
+    const entries = whosOffToday(TODAY, [ana], [appointment(ana, TODAY)], [holiday(TODAY, "CH")]);
+
+    expect(entries).toEqual([
+      expect.objectContaining({ kind: "absence", initial: "A", detail: "09:00–10:30" }),
+    ]);
+  });
+
+  it("[UI-5] lists each person once, as their holiday with the return date of their absence", () => {
+    const entries = whosOffToday(
+      TODAY,
+      [ana, ben],
+      [absence(ana, "2026-08-10", "2026-08-14"), absence(ben, TODAY, TODAY)],
+      [holiday(TODAY, "CH", "Knabenschiessen")],
+    );
+
+    expect(entries).toEqual([
+      expect.objectContaining({
+        person: ana,
+        kind: "holiday",
+        initial: "H",
+        typeLabel: "Bank holiday",
+        detail: "Knabenschiessen · Back on the 17/08",
+        backOn: "2026-08-17",
+      }),
+      expect.objectContaining({
+        person: ben,
+        kind: "holiday",
+        detail: "Knabenschiessen · Back on the 13/08",
+        backOn: "2026-08-13",
+      }),
+    ]);
   });
 
   it("[UI-5] orders time-based absences first, then holidays, then Vacation, then Other, by name", () => {
