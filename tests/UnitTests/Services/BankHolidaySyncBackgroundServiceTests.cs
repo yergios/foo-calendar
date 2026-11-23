@@ -42,19 +42,34 @@ public sealed class BankHolidaySyncBackgroundServiceTests : IAsyncDisposable
         return syncs;
     }
 
+    // Each run syncs two years, this one and the next. The service reads the clock itself,
+    // so the test reads it either side of the runs and takes whichever year the service
+    // reports, as long as it is one of those: read separately, the two could straddle
+    // midnight on 31 December.
+    private static void ShouldBeThisYearAndNext(
+        List<(IReadOnlyList<string> Regions, int Year)> syncs, int yearBefore, int yearAfter)
+    {
+        for (var i = 0; i < syncs.Count; i += 2)
+        {
+            var thisYear = syncs[i].Year;
+            thisYear.ShouldBeOneOf(yearBefore, yearAfter);
+            syncs[i + 1].Year.ShouldBe(thisYear + 1);
+        }
+    }
+
     // An interval far longer than the test, so anything synced came from the run at start.
     [Fact]
     [Trait("Spec", "HOL-2")]
     public async Task AtStartup_SyncsEveryTrackedRegionForThisYearAndNext()
     {
         using var sut = CreateSut(TimeSpan.FromDays(7));
-        var thisYear = DateTime.UtcNow.Year;
+        var yearBefore = DateTime.UtcNow.Year;
 
         await sut.StartAsync(CancellationToken.None);
         var syncs = await NextSyncsAsync(2);
         await sut.StopAsync(CancellationToken.None);
 
-        syncs.Select(s => s.Year).ShouldBe([thisYear, thisYear + 1]);
+        ShouldBeThisYearAndNext(syncs, yearBefore, DateTime.UtcNow.Year);
         syncs.ShouldAllBe(s => s.Regions.SequenceEqual(Tracked));
     }
 
@@ -63,12 +78,12 @@ public sealed class BankHolidaySyncBackgroundServiceTests : IAsyncDisposable
     public async Task AfterEachInterval_SyncsAgain()
     {
         using var sut = CreateSut(TimeSpan.FromMilliseconds(50));
-        var thisYear = DateTime.UtcNow.Year;
+        var yearBefore = DateTime.UtcNow.Year;
 
         await sut.StartAsync(CancellationToken.None);
         var syncs = await NextSyncsAsync(6);
         await sut.StopAsync(CancellationToken.None);
 
-        syncs.Select(s => s.Year).ShouldBe([thisYear, thisYear + 1, thisYear, thisYear + 1, thisYear, thisYear + 1]);
+        ShouldBeThisYearAndNext(syncs, yearBefore, DateTime.UtcNow.Year);
     }
 }
