@@ -68,6 +68,13 @@ suspect: say why in the commit.
   `!` and `#nullable disable` need a comment saying why the value cannot be null there.
 - Remove the `CA1062` suppression's nullable remark from `.editorconfig` if the reasoning
   changes, and keep the suppression only if it still applies.
+- Known defect this must close (found in the 0002 review fixes, 2026-11-23): with nullable
+  off, minimal APIs treat a request body as optional, so `POST /api/people` with no body
+  reaches the handler with `null` and answers 500. Once body parameters are non-nullable the
+  framework answers 400. Add a test that every body-taking API route answers 400, not 500,
+  to a member sending no body (ERR-1). Then tighten `RouteAccessTests`'
+  `AMemberWithNoPermissions_...` check from "not 401/403" to "not 401/403 and below 500",
+  as the permission-route checks already are.
 
 ## Order of work
 
