@@ -97,10 +97,17 @@ services.AddOptions<ReverseProxyOptions>()
 // ---- Database -------------------------------------------------------------
 
 services.AddDbContext<AppDbContext>(o =>
-    o.UseSqlite(
-        config.GetConnectionString(ConnectionStrings.FooCalendarDb)
-            ?? throw new InvalidOperationException(
-                $"ConnectionStrings:{ConnectionStrings.FooCalendarDb} must be configured.")));
+{
+    var connectionString = config.GetConnectionString(ConnectionStrings.FooCalendarDb);
+
+    // Blank as well as missing: SQLite takes an empty connection string as a temporary
+    // database, deleted when it closes, so the app would run and keep nothing.
+    if (string.IsNullOrWhiteSpace(connectionString))
+        throw new InvalidOperationException(
+            $"ConnectionStrings:{ConnectionStrings.FooCalendarDb} must be configured.");
+
+    o.UseSqlite(connectionString);
+});
 
 // ---- Services -------------------------------------------------------------
 

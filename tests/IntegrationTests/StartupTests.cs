@@ -103,6 +103,65 @@ public sealed class StartupTests
         StartupFailure(app).Message.ShouldContain(named);
     }
 
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    [InlineData("Team:HomeRegion")]
+    [InlineData("Team:HomeTimeZone")]
+    [InlineData("ConnectionStrings:FooCalendarDb")]
+    public void RequiredSettingLeftBlank_StopsStartupNamingIt(string key)
+    {
+        using var app = new TestApp((key, ""));
+
+        StartupFailure(app).Message.ShouldContain($"{key} must be configured");
+    }
+
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    public void HomeTimeZoneThatIsNotAnIanaId_StopsStartupNamingIt()
+    {
+        using var app = new TestApp(("Team:HomeTimeZone", "Central European Time"));
+
+        StartupFailure(app).Message.ShouldContain("Team:HomeTimeZone must be a valid IANA timezone id");
+    }
+
+    private static readonly (string Key, string Value)[] IdentityProvider =
+    [
+        ("Auth:Authority", "https://idp.example.test/"),
+        ("Auth:Audience", "foo-calendar"),
+        ("Auth:ClientId", "foo-calendar-spa"),
+    ];
+
+    // Outside Development there is no dev bypass, so the identity provider settings, blank
+    // in appsettings.json, have to come from the deployment.
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [InlineData("Auth:Authority")]
+    [InlineData("Auth:Audience")]
+    [InlineData("Auth:ClientId")]
+    public void IdentityProviderSettingMissingOutsideDevelopment_StopsStartupNamingIt(string missing)
+    {
+        using var app = new TestApp([.. IdentityProvider.Where(s => s.Key != missing)])
+        {
+            Environment = "Production",
+        };
+
+        var message = StartupFailure(app).Message;
+
+        message.ShouldContain($"{missing} must be configured");
+        foreach (var (configured, _) in IdentityProvider.Where(s => s.Key != missing))
+            message.ShouldNotContain(configured);
+    }
+
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    public void IdentityProviderConfiguredOutsideDevelopment_Starts()
+    {
+        using var app = new TestApp(IdentityProvider) { Environment = "Production" };
+
+        Should.NotThrow(() => app.Services);
+    }
+
     [Fact]
     [Trait("Spec", "CFG-4")]
     public void ValidConfiguration_MigratesAnEmptyDatabase()
