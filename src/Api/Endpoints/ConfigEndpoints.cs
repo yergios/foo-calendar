@@ -47,7 +47,7 @@ public sealed record BootstrapAuthConfig(
     // interface, not for the gate.
     Dictionary<string, List<string>> Permissions,
     List<string> PermissionsClaims,
-    BootstrapDevUser DevUser);
+    BootstrapDevUser? DevUser);
 
 /// <summary>Only populated when Auth:Provider=None, which is Development-only. It lets the
 /// SPA present the same identity the API's DevAuthHandler is already authenticating as.</summary>

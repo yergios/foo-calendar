@@ -5,7 +5,7 @@ namespace Api.Interfaces;
 /// <summary>One holiday as it arrives from a source, already resolved to the region it
 /// applies to. Whatever shape the source uses to express "nationwide" is its own business
 /// and has been expanded by the time it gets here.</summary>
-public sealed record SourceHoliday(string Region, DateOnly Date, string Name);
+public sealed record SourceHoliday(string Region, DateOnly Date, string? Name);
 
 /// <summary>Where public holidays come from. Swapping the implementation is how a
 /// deployment that can't reach the public internet, or that observes company-specific

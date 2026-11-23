@@ -20,7 +20,7 @@ public interface IPersonService
     Task<PeoplePageResponse> GetPageAsync(
         int page,
         int pageSize,
-        string search,
+        string? search,
         IReadOnlyList<string> regions,
         string sortBy,
         bool descending,

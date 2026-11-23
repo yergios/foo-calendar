@@ -3,6 +3,7 @@
   <PropertyGroup>
     <!-- Make sure version matches that of `src/Web/package.json` -->
     <Version>1.0.0</Version>
+    <Nullable>enable</Nullable>
     <UserSecretsId>5f95d388-df5b-4f29-b659-7834ddd4f7e2</UserSecretsId>
   </PropertyGroup>
 

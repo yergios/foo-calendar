@@ -41,10 +41,8 @@ public sealed class BankHolidayService(
         CancellationToken ct = default)
     {
         // Expand each region to itself + its country code, so "ES-MD" also pulls in nationwide "ES" rows.
-        var expanded = regions
-            .SelectMany(RegionCode.SelfAndCountry)
-            .Distinct()
-            .ToList();
+        // Typed as nullable only to be compared with the nullable column in SQL.
+        List<string?> expanded = [.. regions.SelectMany(RegionCode.SelfAndCountry).Distinct()];
 
         // Recurring rows are rare, so they're the only ones fetched unfiltered by date (there's
         // no SQL-side way to test "does this month/day fall in range" without pulling it in the
@@ -63,11 +61,11 @@ public sealed class BankHolidayService(
         // every year the requested range touches, and keep only the occurrences that
         // actually land inside [from, to].
         var recurring = recurringEntities
-            .SelectMany(
-                h => Enumerable.Range(from.Year, to.Year - from.Year + 1),
-                (h, year) => (Holiday: h, Date: BankHoliday.OccurrenceIn(h.Date, year)))
-            .Where(x => x.Date is DateOnly d && d >= from && d <= to)
-            .Select(x => BankHolidayDto.FromEntity(x.Holiday) with { Date = x.Date.Value });
+            .SelectMany(h => Enumerable.Range(from.Year, to.Year - from.Year + 1)
+                .Select(year => BankHoliday.OccurrenceIn(h.Date, year))
+                .OfType<DateOnly>()
+                .Where(d => d >= from && d <= to)
+                .Select(d => BankHolidayDto.FromEntity(h) with { Date = d }));
 
         var holidays = oneTime.Concat(recurring).OrderBy(h => h.Date).ToList();
 
@@ -105,7 +103,8 @@ public sealed class BankHolidayService(
         // can't translate, so it still runs as one SQL WHERE clause instead of pulling every
         // row to the client.
         var existing = await db.BankHolidays
-            .Where(b => b.Region == countryCode || b.Region.StartsWith(countryCode + RegionCode.Separator))
+            .Where(b => b.Region == countryCode
+                || (b.Region != null && b.Region.StartsWith(countryCode + RegionCode.Separator)))
             .ToListAsync(ct);
 
         // The overwhelming majority of rows are exact-date, non-recurring, so they get an O(1)
@@ -116,7 +115,7 @@ public sealed class BankHolidayService(
             .ToDictionary(b => (b.Region, b.Date));
         var recurring = existing.Where(b => b.IsRecurringAnnually).ToList();
 
-        BankHoliday FindExisting(string region, DateOnly date)
+        BankHoliday? FindExisting(string region, DateOnly date)
         {
             if (exact.TryGetValue((region, date), out var match)) return match;
             return recurring.FirstOrDefault(b => b.Region == region && Collides(b.Date, true, date, false));
@@ -124,7 +123,7 @@ public sealed class BankHolidayService(
 
         // Tracks (region, date) pairs already handled during this call, whether pre-existing
         // or just queued, so a second Nager entry landing on the same day gets skipped.
-        var seen = new HashSet<(string Region, DateOnly Date)>(existing.Select(b => (b.Region, b.Date)));
+        var seen = new HashSet<(string? Region, DateOnly Date)>(existing.Select(b => (b.Region, b.Date)));
 
         foreach (var h in holidays)
         {

@@ -94,12 +94,12 @@ public static class AdminEndpoints
     private static async Task<IResult> GetAuditLog(
         int? page,
         int? pageSize,
-        string search,
-        string action,
+        string? search,
+        string? action,
         DateTime? from,
         DateTime? to,
-        string sortBy,
-        string sortDir,
+        string? sortBy,
+        string? sortDir,
         IAuditLog audit,
         CancellationToken ct)
     {
@@ -124,7 +124,7 @@ public static class AdminEndpoints
 
     private static async Task<IResult> SyncBankHolidays(
         int year,
-        string region,
+        string? region,
         IOptions<HolidayOptions> holidayOptions,
         ITeamRegionService teamRegions,
         IBankHolidayService bankHolidays,

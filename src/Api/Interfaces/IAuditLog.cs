@@ -10,8 +10,8 @@ public interface IAuditLog
     /// to save.</summary>
     Task RecordAsync(
         string action,
-        string target,
-        string details = null,
+        string? target,
+        string? details = null,
         CancellationToken ct = default);
 
     /// <summary>Newest first by default. <paramref name="search"/> matches <c>Actor</c> as a
@@ -23,8 +23,8 @@ public interface IAuditLog
     Task<AuditEntriesResponse> ReadAsync(
         int limit,
         int offset,
-        string search = null,
-        string action = null,
+        string? search = null,
+        string? action = null,
         DateTime? from = null,
         DateTime? to = null,
         string sortBy = AuditSortColumn.OccurredAt,

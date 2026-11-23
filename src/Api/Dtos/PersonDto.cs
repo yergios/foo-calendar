@@ -4,9 +4,9 @@ namespace Api.Dtos;
 
 public sealed record PersonDto(
     int Id,
-    string Username,
-    string DisplayName,
-    string HomeCity)
+    string? Username,
+    string? DisplayName,
+    string? HomeCity)
 {
     public static PersonDto FromEntity(Person person) => new(
         person.Id,

@@ -28,7 +28,7 @@ public static partial class SpaShell
     /// <summary>The shell to serve, read and rewritten for this deployment, or null when
     /// there is no frontend build. Separate from <see cref="MapSpaFallback"/> so Program.cs
     /// can run it, and fail on a broken shell, before the database is migrated.</summary>
-    public static string Prepare(WebApplication app, string pathBase)
+    public static string? Prepare(WebApplication app, string pathBase)
     {
         var indexPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
 
@@ -71,7 +71,7 @@ public static partial class SpaShell
 
     /// <summary>Serves <paramref name="shell"/> from <see cref="Prepare"/>, or nothing when
     /// it is null.</summary>
-    public static void MapSpaFallback(this WebApplication app, string shell)
+    public static void MapSpaFallback(this WebApplication app, string? shell)
     {
         if (shell is null) return;
 

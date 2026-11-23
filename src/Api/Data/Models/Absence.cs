@@ -10,7 +10,9 @@ public sealed class Absence
 {
     public int Id { get; set; }
     public int PersonId { get; set; }
-    public Person Person { get; set; } = null;
+    // Loaded only when a query includes it; nothing in the app does, so it is null on
+    // every entity the app reads.
+    public Person? Person { get; set; }
 
     public required DateOnly StartDate { get; set; }
     public required DateOnly EndDate { get; set; }
@@ -23,13 +25,13 @@ public sealed class Absence
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
 
-    public string Note { get; set; }
+    public string? Note { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
     // The username of whoever performed the action. Currently always the absence's own
     // owner, since there's no admin-on-behalf-of flow for absences, but stored as its own
     // field rather than derived from Person so that doesn't have to stay true forever.
-    public required string CreatedBy { get; set; }
-    public string UpdatedBy { get; set; }
+    public required string? CreatedBy { get; set; }
+    public string? UpdatedBy { get; set; }
 }

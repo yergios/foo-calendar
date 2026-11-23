@@ -38,17 +38,17 @@ public sealed class AuditEntry
 
     /// <summary>Username of whoever did it, or "system" for the scheduled jobs that have no
     /// signed-in user behind them.</summary>
-    public required string Actor { get; set; }
+    public required string? Actor { get; set; }
 
     /// <summary>One of <see cref="AuditActions"/>.</summary>
-    public required string Action { get; set; }
+    public required string? Action { get; set; }
 
     /// <summary>What it happened to, as it read at the time: a display name, a holiday's
     /// name and region. Denormalized on purpose, since the point is to still make sense
     /// once the thing it names has been deleted.</summary>
-    public required string Target { get; set; }
+    public required string? Target { get; set; }
 
     /// <summary>The part worth reading afterwards: what changed, how much of it, or what
     /// went with it. Never carries an absence note, which is the author's alone.</summary>
-    public string Details { get; set; }
+    public string? Details { get; set; }
 }

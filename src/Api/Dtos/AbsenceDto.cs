@@ -10,7 +10,7 @@ public sealed record AbsenceDto(
     DateOnly StartDate,
     DateOnly EndDate,
     AbsenceType Type,
-    string Note,
+    string? Note,
     DateTime CreatedAt,
     TimeOnly? StartTime,
     TimeOnly? EndTime)

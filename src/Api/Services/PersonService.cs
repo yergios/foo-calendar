@@ -17,7 +17,7 @@ public sealed class PersonService(
     IAbsenceService absenceService) : IPersonService
 {
     // What a person was, for a log entry that still reads sensibly once they are gone.
-    private static string Describe(Person person) =>
+    private static string? Describe(Person person) =>
         person.HomeCity is null ? person.Username : $"{person.Username}, {person.HomeCity}";
 
     public async Task<PersonDto> CreateAsync(
@@ -70,7 +70,7 @@ public sealed class PersonService(
     public async Task<PeoplePageResponse> GetPageAsync(
         int page,
         int pageSize,
-        string search,
+        string? search,
         IReadOnlyList<string> regions,
         string sortBy,
         bool descending,
@@ -358,5 +358,5 @@ public sealed class PersonService(
             ? row[index].Trim()
             : "";
 
-    private static string NullIfEmpty(string value) => value.Length == 0 ? null : value;
+    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
 }

@@ -5,10 +5,10 @@ namespace Api.Dtos;
 public sealed record AuditEntryDto(
     int Id,
     DateTime OccurredAt,
-    string Actor,
-    string Action,
-    string Target,
-    string Details)
+    string? Actor,
+    string? Action,
+    string? Target,
+    string? Details)
 {
     public static AuditEntryDto FromEntity(AuditEntry entry) => new(
         entry.Id,

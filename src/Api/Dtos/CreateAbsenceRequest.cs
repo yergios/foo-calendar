@@ -8,7 +8,7 @@ public sealed record CreateAbsenceRequest(
     [Required] DateOnly StartDate,
     [Required] DateOnly EndDate,
     [Required] AbsenceType Type,
-    [MaxLength(500)] string Note,
+    [MaxLength(500)] string? Note,
     // Not [Required] here since they're legitimately null for a whole-day absence.
     // Whether they're required, forbidden, or optional depends on Type (and, for Other, on
     // whether the caller supplied one), so that's enforced in Validate() below instead.

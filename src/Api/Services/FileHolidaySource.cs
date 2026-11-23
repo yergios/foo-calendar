@@ -14,10 +14,19 @@ namespace Api.Services;
 public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolidaySource
 {
     /// <summary>One entry in the file. With RecurringAnnually the year in Date is ignored
-    /// and its month/day is projected onto whichever year is being synced.</summary>
-    private sealed record FileHoliday(string Region, DateOnly Date, string Name, bool RecurringAnnually);
+    /// and its month/day is projected onto whichever year is being synced. An entry with no
+    /// region applies nowhere, so it fails the read rather than arriving as a null nothing
+    /// downstream expects: Region is the one parameter without a default, which the
+    /// options below make required, and not nullable, which they make refuse null. The
+    /// others default to what a missing value always read as.</summary>
+    private sealed record FileHoliday(
+        string Region, DateOnly Date = default, string? Name = null, bool RecurringAnnually = false);
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        RespectNullableAnnotations = true,
+        RespectRequiredConstructorParameters = true,
+    };
 
     public HolidaySource Kind => HolidaySource.File;
 
@@ -43,8 +52,10 @@ public sealed class FileHolidaySource(IOptions<HolidayOptions> options) : IHolid
                 .Select(e => (Entry: e, Date: e.RecurringAnnually
                     ? BankHoliday.OccurrenceIn(e.Date, year)
                     : e.Date))
-                .Where(x => x.Date is DateOnly d && d.Year == year)
-                .Select(x => new SourceHoliday(x.Entry.Region, x.Date.Value, x.Entry.Name))
+                .Where(x => x.Date?.Year == year)
+                // Not null: a 29 February with no occurrence this year has no year either,
+                // so the Where above already dropped it.
+                .Select(x => new SourceHoliday(x.Entry.Region, x.Date!.Value, x.Entry.Name))
         ];
     }
 

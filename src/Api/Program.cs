@@ -186,6 +186,14 @@ services.AddValidation();
 services.AddProblemDetails();
 services.AddExceptionHandler<DomainExceptionHandler>();
 
+// In Development, minimal APIs throw on a request they cannot bind, such as one missing its
+// body or a required parameter, rather than answering it. The exception carries the status
+// they answer with everywhere else, which the handler would otherwise turn into a 500.
+services.AddExceptionHandler(o => o.StatusCodeSelector = exception =>
+    exception is BadHttpRequestException badRequest
+        ? badRequest.StatusCode
+        : StatusCodes.Status500InternalServerError);
+
 // ---- Health checks --------------------------------------------------------
 
 services.AddHealthChecks()

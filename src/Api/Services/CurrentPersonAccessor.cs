@@ -13,13 +13,13 @@ public sealed class CurrentPersonAccessor(
     IHttpContextAccessor httpContextAccessor,
     IOptions<AuthOptions> authOptions) : ICurrentPersonAccessor
 {
-    private Person cached;
+    private Person? cached;
 
     public async Task<Person> GetAsync(CancellationToken ct = default) =>
         await FindAsync(ct)
             ?? throw new NotFoundException("No person exists for this account yet.");
 
-    public async Task<Person> FindAsync(CancellationToken ct = default)
+    public async Task<Person?> FindAsync(CancellationToken ct = default)
     {
         if (cached is not null) return cached;
 

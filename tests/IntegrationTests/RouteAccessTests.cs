@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 
 using Api.Configuration;
@@ -7,6 +9,7 @@ using Api.Services;
 
 using IntegrationTests.TestSupport;
 
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -138,7 +141,9 @@ public sealed partial class RouteAccessTests
             ServiceOverrides = KeepTheSourceLocal,
         };
 
-    private sealed record Route(string Key, HttpMethod Method, Uri Url);
+    /// <summary><paramref name="TakesBody"/>: the route reads a JSON body, which routing
+    /// records as the content types it accepts.</summary>
+    private sealed record Route(string Key, HttpMethod Method, Uri Url, bool TakesBody);
 
     // A request per route, its parameters filled in with values the route accepts. Nothing
     // else about the request has to be valid: authorization answers before the route reads
@@ -153,10 +158,11 @@ public sealed partial class RouteAccessTests
                     "/" + RouteParameter().Replace(pattern, p => SampleValue(p.Groups["name"].Value)).TrimStart('/'),
                     UriKind.Relative);
                 var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods;
+                var takesBody = endpoint.Metadata.GetMetadata<IAcceptsMetadata>() is not null;
 
                 return methods is null
-                    ? [new Route($"* {pattern}", HttpMethod.Get, url)]
-                    : methods.Select(m => new Route($"{m} {pattern}", new HttpMethod(m), url));
+                    ? [new Route($"* {pattern}", HttpMethod.Get, url, takesBody)]
+                    : methods.Select(m => new Route($"{m} {pattern}", new HttpMethod(m), url, takesBody));
             })];
 
     private static string SampleValue(string parameter) => parameter switch
@@ -172,9 +178,9 @@ public sealed partial class RouteAccessTests
     [GeneratedRegex(@"\{\*{0,2}(?<name>\w+)[^}]*\}")]
     private static partial Regex RouteParameter();
 
-    // The query a permission route requires, so that one let in is answered rather than
-    // failed: in Development, where the member tests run, a missing required parameter is
-    // thrown rather than answered 400, and the 500 that comes back says nothing about access.
+    // The query a permission route requires, so that one let in is answered by the route
+    // itself rather than by binding's 400 for the missing parameter, which would say
+    // nothing about whether the route runs for that member.
     private static readonly Dictionary<string, string> RequiredQuery = new(StringComparer.Ordinal)
     {
         ["GET /api/admin/people/stats"] = "year=2026",
@@ -252,7 +258,7 @@ public sealed partial class RouteAccessTests
             var status = await SendAsync(client, route);
 
             if (AccessOf(route) is Anonymous or Member)
-                status.ShouldNotBeOneOf([HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden], route.Key);
+                ShouldBeAnswered(status, route);
             else
                 status.ShouldBe(HttpStatusCode.Forbidden, route.Key);
         }
@@ -283,6 +289,35 @@ public sealed partial class RouteAccessTests
 
         foreach (var route in routes)
             ShouldBeAnswered(await SendAsync(client, route), route);
+    }
+
+    // With the body optional, as it was while nullable reference types were off, a route
+    // reading one got null and answered 500. Development included: there the framework
+    // throws rather than answers, and the 400 has to survive the exception handler.
+    [Theory]
+    [Trait("Spec", "ERR-1")]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task ABodyTakingRoute_SentNoBody_IsABadRequest(string environment)
+    {
+        using var identityProvider = new TestIdentityProvider();
+        using var app = environment == "Development"
+            ? MemberHolding(HolidayOptions.SourceNone, [.. Permissions.All])
+            : new TestApp { Environment = environment, Shell = Shell, IdentityProvider = identityProvider };
+        using var client = app.CreateClient();
+
+        // Every permission, under the claim name appsettings.json reads them from.
+        if (environment != "Development")
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                identityProvider.Mint(
+                    [new Claim("sub", "token-user"), .. Permissions.All.Select(p => new Claim("permissions", p))]));
+
+        var routes = Routes(app).Where(r => r.TakesBody && r.Url.OriginalString.StartsWith("/api/", StringComparison.Ordinal)).ToList();
+        routes.ShouldNotBeEmpty();
+
+        foreach (var route in routes)
+            (await SendAsync(client, route)).ShouldBe(HttpStatusCode.BadRequest, route.Key);
     }
 
     // Let in, and then answered by the route: not refused, and not failed either, which a

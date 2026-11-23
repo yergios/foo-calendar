@@ -20,8 +20,8 @@ public sealed class AuditLog(
 
     public async Task RecordAsync(
         string action,
-        string target,
-        string details = null,
+        string? target,
+        string? details = null,
         CancellationToken ct = default)
     {
         db.AuditEntries.Add(new AuditEntry
@@ -39,8 +39,8 @@ public sealed class AuditLog(
     public async Task<AuditEntriesResponse> ReadAsync(
         int limit,
         int offset,
-        string search = null,
-        string action = null,
+        string? search = null,
+        string? action = null,
         DateTime? from = null,
         DateTime? to = null,
         string sortBy = AuditSortColumn.OccurredAt,

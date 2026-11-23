@@ -19,7 +19,8 @@ public sealed class TeamRegionService(
     {
         var regions = await db.People
             .Where(p => p.HomeCity != null && p.HomeCity != "")
-            .Select(p => p.HomeCity)
+            // Not null: the Where above keeps only people who have one.
+            .Select(p => p.HomeCity!)
             .Distinct()
             .ToListAsync(ct);
 
@@ -30,7 +31,7 @@ public sealed class TeamRegionService(
         return regions;
     }
 
-    public async Task EnsureSyncedAsync(string region, CancellationToken ct = default)
+    public async Task EnsureSyncedAsync(string? region, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(region)) return;
 
@@ -57,7 +58,7 @@ public sealed class TeamRegionService(
         }
     }
 
-    public async Task PruneIfUnusedAsync(string region, CancellationToken ct = default)
+    public async Task PruneIfUnusedAsync(string? region, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(region)) return;
 
@@ -74,7 +75,8 @@ public sealed class TeamRegionService(
         // need Spain's national holidays after the last person in ES-MD leaves. Written as
         // an inline predicate rather than RegionCode.BelongsTo() so EF can translate it.
         if (country != homeCountry && !await db.People.AnyAsync(
-            p => p.HomeCity == country || p.HomeCity.StartsWith(country + RegionCode.Separator), ct))
+            p => p.HomeCity == country
+                || (p.HomeCity != null && p.HomeCity.StartsWith(country + RegionCode.Separator)), ct))
             doomed.Add(country);
 
         if (doomed.Count == 0) return;

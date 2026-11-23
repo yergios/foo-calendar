@@ -32,15 +32,16 @@ public static class PeopleEndpoints
         CancellationToken ct)
     {
         var claimTypes = authOptions.Value.ClaimTypes;
+        var username = user.GetUsername(claimTypes.UserName);
 
         var create = new CreatePersonRequest(
-            user.FindFirstValue(claimTypes.UserName),
+            username,
             user.FindFirstValue(claimTypes.FirstName),
             user.FindFirstValue(claimTypes.LastName),
             request.DisplayName,
             request.HomeCity);
 
-        var created = await people.CreateAsync(create, create.Username, ct);
+        var created = await people.CreateAsync(create, username, ct);
         return Results.Created("/api/people/me", created);
     }
 
@@ -61,10 +62,10 @@ public static class PeopleEndpoints
     private static async Task<IResult> GetPaged(
         int? page,
         int? pageSize,
-        string search,
+        string? search,
         string[] regions,
-        string sortBy,
-        string sortDir,
+        string? sortBy,
+        string? sortDir,
         int? year,
         ClaimsPrincipal user,
         IOptions<AuthOptions> authOptions,
@@ -110,7 +111,8 @@ public static class PeopleEndpoints
         CancellationToken ct)
     {
         var person = await currentPerson.GetAsync(ct);
-        var updated = await people.UpdateAsync(person.Id, request, person.Username, ct);
+        // Not null: the accessor found this person by their username.
+        var updated = await people.UpdateAsync(person.Id, request, person.Username!, ct);
         return Results.Ok(updated);
     }
 

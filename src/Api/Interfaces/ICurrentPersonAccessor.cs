@@ -11,5 +11,5 @@ public interface ICurrentPersonAccessor
     /// <summary>Null instead, for the read-only paths that work perfectly well before
     /// anyone has set a profile up: the calendar is visible from the first sign-in.
     /// </summary>
-    Task<Person> FindAsync(CancellationToken ct = default);
+    Task<Person?> FindAsync(CancellationToken ct = default);
 }

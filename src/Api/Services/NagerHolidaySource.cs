@@ -13,14 +13,14 @@ public sealed class NagerHolidaySource(HttpClient http) : IHolidaySource
 {
     private sealed record NagerHoliday(
         DateOnly Date,
-        string LocalName,
-        string Name,
-        string CountryCode,
+        string? LocalName,
+        string? Name,
+        string? CountryCode,
         bool Global,
-        string[] Counties,
-        string[] Types);
+        string[]? Counties,
+        string[]? Types);
 
-    private sealed record NagerCountry(string CountryCode);
+    private sealed record NagerCountry(string? CountryCode);
 
     // Which countries and subdivisions exist barely changes, and these back a picker that
     // is opened far more often than holidays are synced, so they are fetched once per
@@ -58,7 +58,8 @@ public sealed class NagerHolidaySource(HttpClient http) : IHolidaySource
         if (Cache.TryGetValue(CountriesKey, out var cached)) return cached;
 
         var countries = await http.GetFromJsonAsync<List<NagerCountry>>("AvailableCountries", ct) ?? [];
-        return Cache[CountriesKey] = [.. countries.Select(c => c.CountryCode).Order(StringComparer.Ordinal)];
+        return Cache[CountriesKey] =
+            [.. countries.Select(c => c.CountryCode).OfType<string>().Order(StringComparer.Ordinal)];
     }
 
     public async Task<IReadOnlyList<string>> GetRegionsAsync(

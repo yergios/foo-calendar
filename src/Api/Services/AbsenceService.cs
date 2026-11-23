@@ -67,7 +67,7 @@ public sealed class AbsenceService(
 
         // One fetch covering every region anyone's home city touches, rather than one round
         // trip per person: a team's home regions are few, however many people share them.
-        var regions = people.Select(p => p.HomeCity).Where(c => c is not null).Distinct().ToList();
+        var regions = people.Select(p => p.HomeCity).OfType<string>().Distinct().ToList();
         var holidays = regions.Count > 0
             ? (await bankHolidays.GetForRegionsAsync(regions, yearStart, yearEnd, ct)).Holidays
             : [];
@@ -95,7 +95,7 @@ public sealed class AbsenceService(
     // a region to itself plus its country, so this comes back holding exactly the holidays
     // that count as this person's own.
     private async Task<HashSet<DateOnly>> HolidayDatesForAsync(
-        string homeCity, DateOnly from, DateOnly to, CancellationToken ct)
+        string? homeCity, DateOnly from, DateOnly to, CancellationToken ct)
     {
         if (homeCity is null) return [];
         var response = await bankHolidays.GetForRegionsAsync([homeCity], from, to, ct);
@@ -109,7 +109,7 @@ public sealed class AbsenceService(
     // filtered per person: a per-person scan over every holiday in play would cost
     // O(people x holidays) for what a lookup answers in two key hits each.
     private static HashSet<DateOnly> DatesApplyingTo(
-        string region, ILookup<string, BankHolidayDto> holidaysByRegion) =>
+        string region, ILookup<string?, BankHolidayDto> holidaysByRegion) =>
         RegionCode.SelfAndCountry(region)
             .SelectMany(r => holidaysByRegion[r])
             .Select(h => h.Date)
