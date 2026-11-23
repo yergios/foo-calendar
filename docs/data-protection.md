@@ -84,12 +84,13 @@ under the `foo-calendar:` key prefix:
 
 In `sessionStorage`, under the same prefix, the page to return to after signing in. The
 OIDC library (`oidc-client-ts`) keeps the sign-in session, tokens included, in
-`sessionStorage`, and the state of a sign-in in progress in `localStorage`, both under its
-own `oidc.` keys.
+`sessionStorage`, and the state of a sign-in in progress in `localStorage`, both under the
+app's prefix too (`foo-calendar:oidc.`).
 
-**Signing out** removes all of it: the app deletes every key under its prefix in both
-storages, the library removes its session, and when the identity provider advertises an
-end-session endpoint the browser is sent there to end the provider's session too. On a
+**Signing out** removes all of it: the app stops writing to either storage, deletes every
+key under its prefix in both, the library's session and sign-in state with them, and when
+the identity provider advertises an end-session endpoint the browser is sent there to end
+the provider's session too. On a
 shared computer that is what keeps the next person from seeing the last one's calendar
 copy, or their preferences.
 

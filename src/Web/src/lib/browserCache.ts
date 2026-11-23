@@ -1,10 +1,22 @@
 /**
  * Every key the app writes to localStorage or sessionStorage starts with this, interface
- * preferences included, so sign-out can remove all of it (see clearAppStorage) without
- * touching anything another app on the same origin stored. The OIDC library's own entries
- * are not under it: they are removed through the library.
+ * preferences and the OIDC library's session included (see initAuth), so sign-out can
+ * remove all of it (see clearAppStorage) without touching anything another app on the same
+ * origin stored.
  */
 export const STORAGE_PREFIX = "foo-calendar:";
+
+// Set when sign-out starts and never unset, since sign-out ends by leaving the page.
+let writesStopped = false;
+
+/**
+ * Makes every later writeCache a no-op. What sign-out calls first: a request already in
+ * flight when it starts would otherwise write what it fetched back into the storage that
+ * sign-out is clearing, where it would outlive the session.
+ */
+export function stopCacheWrites(): void {
+  writesStopped = true;
+}
 
 // Collect first: removing while indexing shifts the storage's key order underneath.
 function removeKeys(storage: Storage, doomed: (key: string) => boolean): void {
@@ -26,8 +38,10 @@ export function readCache<T>(key: string): T | null {
   }
 }
 
-/** JSON-stringifies and stores a value. Best effort: silently no-ops if unavailable. */
+/** JSON-stringifies and stores a value. Best effort: silently no-ops if unavailable, and
+ * once sign-out has started. */
 export function writeCache<T>(key: string, value: T): void {
+  if (writesStopped) return;
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
   } catch {

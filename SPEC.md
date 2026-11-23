@@ -287,9 +287,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **UI-8** A change to a cached shape must change its cache key version, and older versions
   must be swept. `[test]`
 - **UI-9** Everything the app itself stores in `localStorage` or `sessionStorage`, user
-  interface preferences included, must live under the app's key prefix, so sign-out
-  (AUTH-8) can remove all of it and nothing belonging to another app on the same origin. The
-  OIDC library's own session is removed through the library. `[test]`
+  interface preferences and the OIDC library's session and sign-in state included, must live
+  under the app's key prefix, so sign-out (AUTH-8) can remove all of it and nothing
+  belonging to another app on the same origin. Once sign-out starts, the app must write
+  nothing there and fetch no token until it has left the page. `[test]`
 - **UI-10** Admin sections must be reachable only with their permission: People
   (`PeopleManage` or `ReportsRead`), Bank holidays (`HolidaysSync`), Audit log
   (`AuditRead`). A member with none of them sees no admin entry point. `[review]`

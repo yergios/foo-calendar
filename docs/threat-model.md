@@ -102,7 +102,7 @@ holiday sync, and the retention sweep. Those reach the application log, if at al
 | Threat | Mitigation |
 | --- | --- |
 | Notes read by colleagues | Projected away in the database query for anyone but the author, admins included; never in the audit log ([0007](decisions/0007-no-special-category-data.md)) |
-| The next user of a shared browser reading the cached calendar | Sign-out removes every key under the app's storage prefix in `localStorage` and `sessionStorage` (`clearAppStorage` in `lib/browserCache.ts`), removes the OIDC session through the library, and ends the provider's session where it has an end-session endpoint (`signOut` in `auth/index.ts`) |
+| The next user of a shared browser reading the cached calendar | Sign-out stops the app writing to storage or fetching tokens, removes every key under the app's storage prefix in `localStorage` and `sessionStorage`, the OIDC library's session and sign-in state included (`clearAppStorage` in `lib/browserCache.ts`), clears again just before leaving the page, and ends the provider's session where it has an end-session endpoint (`signOut` in `auth/index.ts`) |
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |

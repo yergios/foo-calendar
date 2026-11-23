@@ -1,10 +1,10 @@
-import { type User as OidcUser, UserManager } from "oidc-client-ts";
+import { type User as OidcUser, UserManager, WebStorageStateStore } from "oidc-client-ts";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import { appUrl } from "@/lib/appUrl";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
-import { clearAppStorage } from "@/lib/browserCache";
+import { STORAGE_PREFIX, clearAppStorage, stopCacheWrites } from "@/lib/browserCache";
 import type { BootstrapAuthConfig } from "@/types/config";
 import type { Permission } from "@/types/permission";
 
@@ -13,9 +13,16 @@ import type { Permission } from "@/types/permission";
 // when no real OIDC tenant is available (see DevAuthHandler on the API side).
 const DEV_PROVIDER = "None";
 
+// The library's default is "oidc.". Under the app's prefix instead, its session and any
+// sign-in in progress go with everything else when sign-out clears the app's storage, and
+// that clearing never has to touch "oidc." keys another app on this origin may own.
+const OIDC_PREFIX = `${STORAGE_PREFIX}oidc.`;
+
 let userManager: UserManager | null = null;
 let isDevMode = false;
 let devToken = "";
+// Set when sign-out starts. Sign-out ends by leaving the page, so it is never unset.
+let signingOut = false;
 
 const oidcUser = ref<OidcUser | null>(null);
 const devProfile = ref<Record<string, unknown> | null>(null);
@@ -68,11 +75,15 @@ export function initAuth(auth: BootstrapAuthConfig): void {
     post_logout_redirect_uri: appUrl(auth.postLogoutRedirectUri),
     scope: auth.scope,
     response_type: "code",
+    userStore: new WebStorageStateStore({ prefix: OIDC_PREFIX, store: sessionStorage }),
+    stateStore: new WebStorageStateStore({ prefix: OIDC_PREFIX, store: localStorage }),
     automaticSilentRenew: false,
     // "audience" isn't part of core OIDC, but several providers (e.g. Auth0) use it to
     // select which API the access token is issued for. Passed through only if set.
     extraQueryParams: auth.audience ? { audience: auth.audience } : undefined,
   });
+
+  moveLegacySession(auth);
 
   userManager.events.addUserLoaded((u) => {
     oidcUser.value = u;
@@ -94,13 +105,32 @@ export function initAuth(auth: BootstrapAuthConfig): void {
     });
 }
 
+/**
+ * Moves a session the library stored under its default "oidc." prefix, before it was given
+ * the app's, so the upgrade signs nobody out and sign-out still finds it. The key is the
+ * library's own (UserManager's user store key); if that ever changes, the worst case is
+ * signing in again. Sessions live in sessionStorage, which goes when the tab closes, so
+ * this can go a release after it shipped.
+ */
+function moveLegacySession(auth: BootstrapAuthConfig): void {
+  try {
+    const key = `user:${auth.authority}:${auth.clientId}`;
+    const legacy = sessionStorage.getItem(`oidc.${key}`);
+    if (legacy === null) return;
+    sessionStorage.setItem(OIDC_PREFIX + key, legacy);
+    sessionStorage.removeItem(`oidc.${key}`);
+  } catch {
+    // Best effort only: without it, the member signs in again.
+  }
+}
+
 /** Reactive auth state consumed by the router guard and App.vue. */
 export function useAuth() {
   return { isAuthenticated, isLoading: isAuthLoading, user: currentProfile };
 }
 
 export async function signinRedirect(appState?: { targetUrl?: string }): Promise<void> {
-  if (isDevMode || !userManager) return;
+  if (isDevMode || !userManager || signingOut) return;
   await userManager.signinRedirect(appState ? { state: appState } : undefined);
 }
 
@@ -110,23 +140,36 @@ export async function signinRedirect(appState?: { targetUrl?: string }): Promise
  * who used it last, and they are cheap to set again.
  */
 export async function signOut(): Promise<void> {
-  clearAppStorage();
+  // From here until the page is left, nothing may write to storage or fetch a token. A
+  // revalidation already in flight would otherwise put back the calendar this clears, and
+  // a request finding no user once it is removed would sign in again silently, storing a
+  // new session wherever the provider's own one is still alive.
+  signingOut = true;
+  stopCacheWrites();
   useAuthStore().reset();
 
   if (isDevMode || !userManager) {
     // The dev identity has no session anywhere to end; starting over from empty storage is
     // all signing out can mean here.
+    clearAppStorage();
     window.location.reload();
     return;
   }
 
-  // Read before removeUser drops it: the provider takes the id token as the hint of whose
-  // session to end, and some refuse to end one without it.
+  // Read before the storage holding it is cleared: the provider takes the id token as the
+  // hint of whose session to end, and some refuse to end one without it.
   const user = await userManager.getUser();
+  // The library's session and sign-in state are under the app's prefix, so this removes
+  // them too; removeUser is still what tells the library, and its listeners, it is gone.
+  clearAppStorage();
   await userManager.removeUser();
-  await userManager.clearStaleState();
+  const endSession = await hasEndSessionEndpoint(userManager);
 
-  if (await hasEndSessionEndpoint(userManager)) {
+  // Again, last thing before leaving: anything that was already past the checks above when
+  // sign-out started, such as a silent renew under way, may have written since.
+  clearAppStorage();
+
+  if (endSession) {
     await userManager.signoutRedirect({ id_token_hint: user?.id_token });
     return;
   }
@@ -259,6 +302,10 @@ export const useAuthStore = defineStore("auth", () => {
 let inFlightToken: Promise<string> | null = null;
 
 export async function resolveAccessToken(): Promise<string> {
+  // Never settles: the page is about to be left, a token now could only come from a silent
+  // sign-in that sign-out is undoing, and an error would only flash up on the way out.
+  if (signingOut) return new Promise<string>(() => {});
+
   const authStore = useAuthStore();
 
   if (isDevMode) return devToken;
