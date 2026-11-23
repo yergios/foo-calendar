@@ -127,12 +127,12 @@ public sealed class PersonService(
         return new([.. people.Select(p => PersonDto.FromEntity(p))], total);
     }
 
-    // Vacation/sick/other aren't database columns - they're a per-year, day-by-day
+    // Vacation/other totals aren't database columns - they're a per-year, day-by-day
     // computation over each person's absences (see AbsenceService.GetAllStatsAsync) - so
     // sorting by one means pulling the filtered set into memory to join against it, rather
     // than an ORDER BY the database can do on its own. Same cost the admin reports view
     // already pays every time it loads a year of stats; this only pays it when someone
-    // actually asks to sort by one of these three columns.
+    // actually asks to sort by one of these columns.
     private async Task<PeoplePageResponse> GetStatsSortedPageAsync(
         IQueryable<Person> query,
         int page,

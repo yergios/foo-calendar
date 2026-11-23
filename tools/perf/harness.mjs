@@ -216,17 +216,14 @@ function synthetic(n) {
     username: `user${i}`,
     displayName: `${FIRST[i % 30]} ${LAST[Math.floor(i / 30) % 30]}${i >= 900 ? " " + i : ""}`,
     homeCity: REGIONS[i % 10],
-    emailOnAbsenceReviewed: false,
-    emailOnNewAbsenceRequest: false,
-    emailOnWeeklyDigest: false,
   }));
   people.sort((a, b) => a.displayName.localeCompare(b.displayName));
   const absences = [];
   let id = 1;
+  // The seed's plan (tools/Seed), so a synthetic team draws the same rows a real one does.
   const plan = [
     ["Vacation", 8, 2, 7],
-    ["Sick", 10, 1, 3],
-    ["Other", 8, 1, 2],
+    ["Other", 18, 1, 3],
     ["Appointment", 26, 1, 1],
   ];
   for (const p of people)
