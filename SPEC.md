@@ -74,9 +74,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   permission, regardless of what the SPA shows. `[test]`
 - **AUTH-7** The SPA must decide what to offer from the same permission map the API
   enforces, read from the bootstrap configuration. `[review]`
-- **AUTH-8** A signed-in member must be able to sign out from any page. Signing out must end
-  the OIDC session with the identity provider and remove everything the app stored in the
-  browser (see [UI-9](#ui-calendar-and-browser)). `[test]`
+- **AUTH-8** A signed-in member must be able to sign out from the app header, on the pages
+  that show it (the calendar, profile and admin pages). Signing out must end the OIDC session
+  with the identity provider and remove everything the app stored in the browser (see
+  [UI-9](#ui-calendar-and-browser)). `[test]`
 
 ## PPL: People
 

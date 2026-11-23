@@ -24,7 +24,7 @@
 
 So the calendar appears instantly on your next visit, the app keeps a copy of what it last showed you in this browser's storage: the team, the year's absences and bank holidays (with your own notes only, never anyone else's), your own profile, and how you last sorted and filtered the team. Your identity provider's sign-in session is kept there too, by the sign-in library.
 
-**Sign out** (top right of every page) removes all of it from this browser, and ends your session with the identity provider where it supports that. On a shared computer, sign out when you're done.
+**Sign out** (top right of the calendar, profile and admin pages) removes all of it from this browser, and ends your session with the identity provider where it supports that. On a shared computer, sign out when you're done.
 
 ### Where data goes
 

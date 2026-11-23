@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Sign out** in the header, on every page. It ends the session with the identity provider when the provider advertises an end-session endpoint, and removes everything the app stored in the browser, interface preferences included. Register `Auth:PostLogoutRedirectUri` (default `/`, resolved like `Auth:RedirectUri`) with your provider as an allowed post-logout redirect.
+- **Sign out** in the header of the calendar, profile and admin pages. It ends the session with the identity provider when the provider advertises an end-session endpoint, and removes everything the app stored in the browser, interface preferences included. Register `Auth:PostLogoutRedirectUri` (default `/`, resolved like `Auth:RedirectUri`) with your provider as an allowed post-logout redirect.
 - `GET /api/absences` and `GET /api/bank-holidays/catalog` refuse a range that ends before it starts or spans more than 366 days, with a 400. The app itself never asks for more than a year.
 - `Retention:AuditEntryDays` (365) and `Retention:AbsenceDays` (off) delete data that has outlived its purpose, swept daily. Absences are left alone by default — looking back over previous years is what the calendar is for. `0` keeps a table forever.
 - [`docs/data-protection.md`](https://github.com/yergios/foo-calendar/blob/master/docs/data-protection.md): every personal-data field the app stores, everywhere data leaves, and what is the deploying team's own responsibility.
