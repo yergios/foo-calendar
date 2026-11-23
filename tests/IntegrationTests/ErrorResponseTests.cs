@@ -6,6 +6,7 @@ using Api.Services;
 using IntegrationTests.TestSupport;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 
@@ -35,6 +36,8 @@ public sealed class ErrorResponseTests
         nameof(UnauthorizedAccessException) => new UnauthorizedAccessException(Message),
         nameof(KeyNotFoundException) => new KeyNotFoundException(Message),
         nameof(InvalidOperationException) => new InvalidOperationException(Message),
+        nameof(BadHttpRequestException) => new BadHttpRequestException(
+            Message, StatusCodes.Status413PayloadTooLarge),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such exception in this test."),
     };
 
@@ -114,5 +117,25 @@ public sealed class ErrorResponseTests
             && entry.Exception != null
             && entry.Exception.GetType().Name == kind
             && entry.Exception.Message == Message);
+    }
+
+    // What Kestrel throws for a body over its size limit, outside Development as much as in
+    // it: the status it carries is the answer, still without the exception's message.
+    [Fact]
+    [Trait("Spec", "ERR-2")]
+    public async Task ABadHttpRequestException_IsAnsweredWithItsStatus_SayingNothingAboutIt()
+    {
+        using var app = Throwing(nameof(BadHttpRequestException));
+
+        var response = await GetAsync(app);
+
+        response.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        response.ContentType.ShouldBe(ProblemJson);
+        response.Body.ShouldNotContain(Message);
+        response.Body.ShouldNotContain(nameof(BadHttpRequestException));
+        using var problem = JsonDocument.Parse(response.Body);
+        problem.RootElement.GetProperty("status").GetInt32().ShouldBe(413);
+        problem.RootElement.TryGetProperty("detail", out _).ShouldBeFalse();
+        problem.RootElement.TryGetProperty("exception", out _).ShouldBeFalse();
     }
 }

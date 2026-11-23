@@ -202,9 +202,12 @@ services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
 });
 services.AddExceptionHandler<DomainExceptionHandler>();
 
-// In Development, minimal APIs throw on a request they cannot bind, such as one missing its
-// body or a required parameter, rather than answering it. The exception carries the status
-// they answer with everywhere else, which the handler would otherwise turn into a 500.
+// BadHttpRequestException carries the status its thrower meant, which the handler would
+// otherwise turn into a 500. In every environment: Kestrel throws it for a body it refuses,
+// such as one over the size limit (413) or too slow to arrive (408), and in Development
+// minimal APIs throw it for a request they cannot bind, which they answer 400 elsewhere.
+// Like any answer below 500 it keeps the default writer's generic text, never the
+// exception's message.
 services.AddExceptionHandler(o => o.StatusCodeSelector = exception =>
     exception is BadHttpRequestException badRequest
         ? badRequest.StatusCode
