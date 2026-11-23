@@ -79,6 +79,21 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   with the identity provider and remove everything the app stored in the browser (see
   [UI-9](#ui-calendar-and-browser)). `[test]`
 
+## SEC: Response headers
+
+- **SEC-1** The SPA shell must be served with a Content-Security-Policy that allows scripts
+  only from the app's own origin plus the inlined bootstrap script by its SHA-256 hash,
+  computed at startup; connections and frames only to the app's own origin and
+  `Auth:Authority`'s origin; no plugins; `base-uri` and `form-action` limited to the app and
+  the identity provider; and `frame-ancestors 'none'`. Any relaxation, such as inline
+  styles, must carry its reason next to it in the code. `[test]`
+- **SEC-2** Every response must carry `X-Content-Type-Options: nosniff` and a
+  `Referrer-Policy` that sends no path or query to other origins. `[test]`
+- **SEC-3** The SPA must run under that policy without a single violation in the end-to-end
+  flows. `[test]`
+- **SEC-4** The API reference, when enabled, must work under a policy of its own, stated in
+  the code. `[test]`
+
 ## PPL: People
 
 - **PPL-1** A member without a profile must be able to read the calendar, and must be able
@@ -242,7 +257,8 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   database untouched. `[test]`
 - **CFG-2** Required settings: `Team:HomeRegion` (a region code), `Team:HomeTimeZone` (an
   IANA id), `ConnectionStrings:FooCalendarDb`, and outside Development `Auth:Authority`,
-  `Auth:Audience` and `Auth:ClientId`. `[test]`
+  `Auth:Audience` and `Auth:ClientId`. `Auth:Authority` must be an absolute `https` URL;
+  `http` is accepted only in Development. `[test]`
 - **CFG-3** Settings of features that no longer exist must stop the app when they ask for
   that feature, rather than being silently ignored: `AbsenceApprovals:Enabled` with any value
   but `false`, and any value under `Auth:Permissions:AbsencesApprove`. The message must say
@@ -263,6 +279,16 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   `ApiDocs:Enabled`, which defaults to on in Development and off elsewhere. `[test]`
 - **CFG-10** Forwarded headers must be ignored unless `ReverseProxy:TrustForwardedHeaders`
   is set. `[review]`
+
+## ERR: Errors
+
+- **ERR-1** A request that breaks a domain rule must be answered with problem details: 400
+  for invalid input, 403 for acting on what the caller does not own, 404 for what does not
+  exist, 409 for a conflict with what is stored, each with the rule's own message. Only
+  errors the domain raises on purpose map to these. `[test]`
+- **ERR-2** Outside Development, any other failure must be answered 500 with problem details
+  that carry no exception message, type or stack, and must be logged with the exception.
+  (Development shows ASP.NET Core's developer exception page on purpose.) `[test]`
 
 ## UI: Calendar and browser
 
@@ -295,6 +321,24 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   (`PeopleManage` or `ReportsRead`), Bank holidays (`HolidaysSync`), Audit log
   (`AuditRead`). A member with none of them sees no admin entry point. `[review]`
 
+## OBS: Telemetry
+
+- **OBS-1** The holiday sync must emit a trace span per run and per country, recording the
+  year, the country and the outcome, and metrics for runs, failed countries and duration.
+  `[test]`
+- **OBS-2** The retention sweep must emit a trace span per run and a counter of deleted rows
+  per table. `[test]`
+- **OBS-3** No span, metric or log attribute the app adds may carry a username, a name or an
+  absence note; region and country codes, counts and durations are fine. `[review]`
+
+## PERF: Performance
+
+- **PERF-1** With 1000 people, the calendar's DOM must stay under 5,000 nodes through every
+  measured interaction ([0010](docs/decisions/0010-windowed-calendar-grid.md)). `[ci]`
+- **PERF-2** With 1000 people, no measured interaction's longest main-thread block may
+  exceed three times its baseline in `tools/perf/README.md`. The slack absorbs CI noise;
+  the check exists to catch a return to work that grows with the team. `[ci]`
+
 ## BLD: Build and quality
 
 - **BLD-1** The .NET build must have zero warnings with every analyzer rule enabled and
@@ -307,6 +351,8 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **BLD-4** The container image must build, start against an empty database, report healthy
   and serve the shell. `[ci]`
 - **BLD-5** `Api.csproj` and `package.json` must carry the same version. `[ci]`
+- **BLD-6** Nullable reference types must be enabled in every C# project, with no
+  suppressions of nullable warnings except at a site that says why. `[ci]`
 
 ## TRC: Traceability
 
@@ -332,5 +378,8 @@ fails when a listed requirement gains a reference, so that list only shrinks.
    what `master` does once pending change specs are done.
 3. A decision with alternatives worth remembering also gets a decision record.
 
-Pending change specs: none. [0001](docs/specs/0001-remove-approvals-and-close-review-gaps.md),
-the last, is done.
+Pending change specs, to be built in this order:
+
+- [0002: Test every route and the hard cases](docs/specs/0002-test-every-route-and-the-hard-cases.md)
+- [0003: Nullable types and domain errors](docs/specs/0003-nullable-types-and-domain-errors.md)
+- [0004: Headers, telemetry, performance and end-to-end checks](docs/specs/0004-headers-telemetry-performance-e2e.md)

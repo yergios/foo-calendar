@@ -26,3 +26,11 @@ CFG-7    needs route tests of /.well-known/security.txt: contact, fallback to Te
 CFG-8    needs route tests of /healthchecks returning only the status and of /healthchecks/detail requiring AuditRead
 CFG-9    needs route tests of the OpenAPI document and API reference with ApiDocs:Enabled on and off
 UI-5     needs the "Who's off today" rules moved out of WhosOffTodayModal.vue into a module Vitest can test
+SEC-1    specified 2026-11-23, built by docs/specs/0004: a test of the shell's Content-Security-Policy, including the bootstrap script hash
+SEC-2    specified 2026-11-23, built by docs/specs/0004: a test of nosniff and Referrer-Policy on the shell, an API route and a static file
+SEC-3    specified 2026-11-23, built by docs/specs/0004: the end-to-end suite failing on any CSP violation
+SEC-4    specified 2026-11-23, built by docs/specs/0004: a test that the API reference loads under its own policy
+ERR-1    specified 2026-11-23, built by docs/specs/0003: tests that each domain error type maps to its status and message
+ERR-2    specified 2026-11-23, built by docs/specs/0003: a test that an unexpected exception answers 500 with no exception detail and is logged
+OBS-1    specified 2026-11-23, built by docs/specs/0004: tests of the sync's spans and metrics with an in-memory exporter
+OBS-2    specified 2026-11-23, built by docs/specs/0004: tests of the sweep's span and deleted-rows counter with an in-memory exporter
