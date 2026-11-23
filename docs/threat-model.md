@@ -73,6 +73,7 @@ named permission on top ([0006](decisions/0006-fail-closed-per-permission-author
 | Threat | Mitigation |
 | --- | --- |
 | A forged or foreign token | JWT bearer validation against `Auth:Authority` and `Auth:Audience` (`Program.cs`) |
+| Signing keys fetched from an `http` authority, replaced on the way | `Auth:Authority` must be an absolute `https` URL outside Development, checked at startup, and the bearer handler requires https metadata there too ([CFG-2](../SPEC.md#cfg-configuration-and-startup)) |
 | The dev bypass reaching production | `Auth:Provider=None` is refused outside Development at startup, and logs a warning when on |
 | A client forging its address in logs via `X-Forwarded-For` | Forwarded headers are ignored unless `ReverseProxy:TrustForwardedHeaders` is set, and can be limited to known proxies |
 
@@ -103,6 +104,7 @@ holiday sync, and the retention sweep. Those reach the application log, if at al
 | --- | --- |
 | Notes read by colleagues | Projected away in the database query for anyone but the author, admins included; never in the audit log ([0007](decisions/0007-no-special-category-data.md)) |
 | The next user of a shared browser reading the cached calendar | Sign-out stops the app writing to storage or fetching tokens, removes every key under the app's storage prefix in `localStorage` and `sessionStorage`, the OIDC library's session and sign-in state included (`clearAppStorage` in `lib/browserCache.ts`), clears again just before leaving the page, and ends the provider's session where it has an end-session endpoint (`signOut` in `auth/index.ts`) |
+| Internals in error responses | A 500 answers problem details with no exception message, type or stack, in every environment; the exception goes to the log. Only the domain's own errors, below 500, carry their message ([ERR-2](../SPEC.md#err-errors)) |
 | Internals in health check output | The anonymous endpoint returns only the overall status; exception messages and paths are behind `AuditRead` |
 | A crafted country code steering the outbound holiday request | Validated as ISO 3166 before it is put into the upstream URL (`RegionEndpoints`) |
 | A config value breaking out of the inlined `<script>` | Serialized with the default JSON encoder, which escapes `<`, `>` and `&` (`SpaShell`) |

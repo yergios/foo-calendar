@@ -23,6 +23,7 @@
 
 ### Changed
 
+- **`Auth:Authority` must be an `https` URL outside Development.** The API fetches the keys it validates tokens with from there, so over plain `http` anyone on the path could hand it keys of their own. A deployment whose `Auth:Authority` starts with `http://` no longer starts; the message names the setting. Development still accepts `http`, for a local identity provider.
 - **The `Sick` absence type is gone.** An absence's type is visible to the whole team, and "this person is ill" is health data, which carries a much higher bar than anything else here. Record illness as `Other`, which says someone is away without saying why — and keep health details out of the note, which is the one field the app can't reason about.
 - Branding is split in two. Colors, fonts and shape are yours to change in `src/Web/src/styles/theme.css` and are compiled in; your team's name and support links are runtime config under `Team:`. The product's own name and mark are neither — they are constants, and the footer attribution is not removable. See TRADEMARK.md.
 - `Branding:AppName` is gone; `Branding:SupportUrl` and `Branding:IssueUrl` are now `Team:SupportUrl` and `Team:IssueUrl`.
@@ -42,6 +43,12 @@
 
 ### Fixed
 
+- A request that should carry a body but has none answers 400. It used to be a 500.
+- A signed-in request whose token lacks the claim `Auth:ClaimTypes:UserName` names answers 500 on the routes that need to know who is asking, and the logged error names the claim and the setting to change. It used to be a 409, or a profile created with no username.
+- `POST /api/admin/people` requires a `username`; a missing or blank one is a 400. It used to create a person with no username, and answer 409 to every later one.
+- A year outside 1900 to 2999 on the stats routes, the people list or the holiday sync answers 400. Some used to answer 500.
+- The holiday file (`Holidays:Source=File`) refuses an entry with no `region` or no `date`: the file counts as malformed and the sync reports the country as failed. An entry with no date used to be read as 1 January of year 1.
+- A server error answers with problem details that say nothing about the exception, in Development as well; the exception is in the log.
 - **Bearer token claims are read under the names the identity provider issues them.** The API used to rename the common ones to long-form names on the way in (`sub` became `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier`, `roles` became `http://schemas.microsoft.com/ws/2008/06/identity/claims/role`, and so on), so the `Auth:ClaimTypes` defaults, `sub`, `given_name`, `family_name` and `email`, and claim types such as `roles` listed in `Auth:ClaimTypes:Permissions`, found nothing: no username, no names, no permissions. If you set any `Auth:ClaimTypes` value to a long-form name to work around that, set it back to the name in the token (`sub`, `roles`, `groups`, ...). Left as it is, it now matches nothing, and people signing in lose their username or their permissions without any error.
 - An API request no route takes no longer gets the app's page with a 200. A path no route matches answers 404, a method or content type the route doesn't take 405 or 415, each as problem details, and 401 to anyone not signed in. The page itself is served for GET and HEAD only.
 - A configuration value inlined into the page the API serves can no longer end its script element: `<`, `>` and `&` are escaped, so a value containing `</script>` stays data.
