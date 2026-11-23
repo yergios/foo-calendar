@@ -422,13 +422,17 @@ var serviceVersion = Assembly.GetExecutingAssembly()
 var telemetry = services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+    // AppTelemetry is the app's own: spans and metrics of the holiday sync and the
+    // retention sweep, which run where no request would show them.
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation())
+        .AddHttpClientInstrumentation()
+        .AddSource(AppTelemetry.Name))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
-        .AddRuntimeInstrumentation())
+        .AddRuntimeInstrumentation()
+        .AddMeter(AppTelemetry.Name))
     .WithLogging();
 
 // With no endpoint from either source nothing is listening, so skip the exporter rather

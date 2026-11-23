@@ -1,5 +1,6 @@
 using Api.Configuration;
 using Api.Data;
+using Api.Infrastructure;
 using Api.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,8 @@ public sealed class RetentionService(
 {
     public async Task<RetentionSweepResult> SweepAsync(CancellationToken ct = default)
     {
+        using var span = AppTelemetry.ActivitySource.StartActivity(AppTelemetry.RetentionSweepSpan);
+
         var config = options.Value;
         var now = DateTime.UtcNow;
 
@@ -44,6 +47,15 @@ public sealed class RetentionService(
         }
 
         var result = new RetentionSweepResult(auditEntries, absences);
+
+        // Every sweep, zero included, so a table's series exists from the first run and a
+        // sweep that stopped deleting reads as zeros rather than as no data.
+        span?.SetTag(AppTelemetry.AuditEntriesDeletedAttribute, result.AuditEntries);
+        span?.SetTag(AppTelemetry.AbsencesDeletedAttribute, result.Absences);
+        AppTelemetry.RetentionDeletedRows.Add(result.AuditEntries,
+            new KeyValuePair<string, object?>(AppTelemetry.TableAttribute, AppTelemetry.AuditEntriesTable));
+        AppTelemetry.RetentionDeletedRows.Add(result.Absences,
+            new KeyValuePair<string, object?>(AppTelemetry.TableAttribute, AppTelemetry.AbsencesTable));
 
         // Logging every sweep would be a daily line saying nothing; logging only the ones
         // that deleted something is what makes the line worth reading when it appears.

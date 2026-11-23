@@ -1,8 +1,10 @@
 using System.Data;
+using System.Diagnostics;
 
 using Api.Data;
 using Api.Data.Models;
 using Api.Dtos;
+using Api.Infrastructure;
 using Api.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
@@ -162,16 +164,26 @@ public sealed class BankHolidayService(
     public async Task<IReadOnlyList<string>> SyncRegionsAsync(
         IReadOnlyCollection<string> regions, int year, CancellationToken ct = default)
     {
+        var started = Stopwatch.GetTimestamp();
+        using var run = AppTelemetry.ActivitySource.StartActivity(AppTelemetry.HolidaySyncSpan);
+        run?.SetTag(AppTelemetry.YearAttribute, year);
+        run?.SetTag(AppTelemetry.RegionCountAttribute, regions.Count);
+
         var failed = new List<string>();
+        var failedCountries = 0;
 
         // One fetch per country, however many of its regions are in play: a source has no
         // narrower unit than a country, so asking per region would just repeat the same
         // request.
         foreach (var country in regions.GroupBy(RegionCode.CountryOf, StringComparer.Ordinal))
         {
+            using var span = AppTelemetry.ActivitySource.StartActivity(AppTelemetry.HolidaySyncCountrySpan);
+            span?.SetTag(AppTelemetry.CountryAttribute, country.Key);
+
             try
             {
                 await SyncCountryAsync(country.Key, [.. country], year, ct);
+                span?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeSynced);
             }
 #pragma warning disable CA1031 // Catch-all on purpose: a failed country is reported in failedRegions, and must not stop the rest syncing.
             catch (Exception ex)
@@ -180,8 +192,21 @@ public sealed class BankHolidayService(
                 // one country failing shouldn't block the rest
                 logger.LogWarning(ex, "Bank holiday sync failed for {Country} {Year}", country.Key, year);
                 failed.AddRange(country);
+                failedCountries++;
+
+                // The exception's type and not its message, which is the source's or the
+                // database's text and could carry anything (OBS-3). The log has the rest.
+                span?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeFailed);
+                span?.SetTag("error.type", ex.GetType().FullName);
+                span?.SetStatus(ActivityStatusCode.Error);
+                AppTelemetry.HolidaySyncFailedCountries.Add(
+                    1, new KeyValuePair<string, object?>(AppTelemetry.CountryAttribute, country.Key));
             }
         }
+
+        run?.SetTag(AppTelemetry.FailedCountryCountAttribute, failedCountries);
+        AppTelemetry.HolidaySyncRuns.Add(1);
+        AppTelemetry.HolidaySyncDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);
 
         return failed;
     }
