@@ -2,6 +2,8 @@ using System.Net;
 using System.Text.RegularExpressions;
 
 using Api.Configuration;
+using Api.Interfaces;
+using Api.Services;
 
 using IntegrationTests.TestSupport;
 
@@ -77,21 +79,64 @@ public sealed partial class RouteAccessTests
     private const string Shell =
         "<!doctype html><html><head><base href=\"/\"></head><body></body></html>";
 
+    /// <summary>
+    /// Each holiday configuration a deployment can run, because what the app maps may depend
+    /// on it: None, which is what TestApp starts with unless told otherwise, and a source,
+    /// the shipped default. A route mapped only with a source would otherwise never be
+    /// enumerated here at all.
+    /// </summary>
+    private static readonly string[] HolidaySources = [HolidayOptions.SourceNone, HolidayOptions.SourceNager];
+
+    public static TheoryData<string> EachHolidaySource => [.. HolidaySources];
+
+    public static TheoryData<string, string> EveryPermissionUnderEachHolidaySource
+    {
+        get
+        {
+            var data = new TheoryData<string, string>();
+            foreach (var source in HolidaySources)
+            {
+                foreach (var permission in Permissions.All)
+                    data.Add(permission, source);
+            }
+
+            return data;
+        }
+    }
+
+    // With a source configured, nothing may leave the machine: the source is the stand-in
+    // None uses, which answers that there is nothing to sync, and the scheduled sync is taken
+    // out so nothing calls it unasked. Both are no-ops under None.
+    private static void KeepTheSourceLocal(IServiceCollection services)
+    {
+        services.AddSingleton<IHolidaySource, DisabledHolidaySource>();
+        var scheduled = services.SingleOrDefault(d => d.ImplementationType == typeof(BankHolidaySyncBackgroundService));
+        if (scheduled is not null)
+            services.Remove(scheduled);
+    }
+
     /// <summary>The app as a deployment runs it: real bearer tokens and every optional route
     /// present. No request here carries a token, so the identity provider is never asked.
     /// </summary>
-    private static TestApp Deployment() => new(
+    private static TestApp Deployment(string holidaySource) => new(
         ("Auth:Authority", "https://idp.example.test/"),
         ("Auth:Audience", "foo-calendar"),
         ("Auth:ClientId", "foo-calendar-spa"),
-        ("ApiDocs:Enabled", "true"))
+        ("ApiDocs:Enabled", "true"),
+        ("Holidays:Source", holidaySource))
     {
         Environment = "Production",
         Shell = Shell,
+        ServiceOverrides = KeepTheSourceLocal,
     };
 
-    private static TestApp MemberHolding(params string[] permissions) =>
-        new() { Shell = Shell, Permissions = permissions };
+    private static TestApp MemberHolding(string holidaySource, params string[] permissions) =>
+        new(("Holidays:Source", holidaySource))
+        {
+            Shell = Shell,
+            Permissions = permissions,
+            ServiceOverrides = KeepTheSourceLocal,
+        };
 
     private sealed record Route(string Key, HttpMethod Method, Uri Url);
 
@@ -127,12 +172,24 @@ public sealed partial class RouteAccessTests
     [GeneratedRegex(@"\{\*{0,2}(?<name>\w+)[^}]*\}")]
     private static partial Regex RouteParameter();
 
+    // The query a permission route requires, so that one let in is answered rather than
+    // failed: in Development, where the member tests run, a missing required parameter is
+    // thrown rather than answered 400, and the 500 that comes back says nothing about access.
+    private static readonly Dictionary<string, string> RequiredQuery = new(StringComparer.Ordinal)
+    {
+        ["GET /api/admin/people/stats"] = "year=2026",
+        ["POST /api/admin/bank-holidays/sync"] = "year=2026",
+    };
+
     private static async Task<HttpStatusCode> SendAsync(HttpClient client, Route route)
     {
         // No body: routing passes a request naming no content type to a route that reads
         // JSON, whose authorization answers first. One naming another type would get
         // routing's 415 instead, which says nothing about who may call the route.
-        using var request = new HttpRequestMessage(route.Method, route.Url);
+        var url = RequiredQuery.TryGetValue(route.Key, out var query)
+            ? new Uri($"{route.Url}?{query}", UriKind.Relative)
+            : route.Url;
+        using var request = new HttpRequestMessage(route.Method, url);
         using var response = await client.SendAsync(request);
         return response.StatusCode;
     }
@@ -143,14 +200,19 @@ public sealed partial class RouteAccessTests
             : throw new ShouldAssertException(
                 $"{route.Key} has no entry in RouteAccessTests.Access: decide who may call it.");
 
+    // Every route any supported configuration maps. Deployment enables the API docs, and
+    // each holiday configuration is started in turn.
     [Fact]
     [Trait("Spec", "AUTH-3")]
     [Trait("Spec", "AUTH-6")]
     public void EveryRoute_HasAnEntryInTheAccessTable()
     {
-        using var app = Deployment();
-
-        var served = Routes(app).Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+        var served = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in HolidaySources)
+        {
+            using var app = Deployment(source);
+            served.UnionWith(Routes(app).Select(r => r.Key));
+        }
 
         served.Where(key => !Access.ContainsKey(key)).ShouldBeEmpty(
             "These routes have no entry in RouteAccessTests.Access: decide who may call them.");
@@ -158,11 +220,12 @@ public sealed partial class RouteAccessTests
             "These entries in RouteAccessTests.Access name routes the app no longer serves.");
     }
 
-    [Fact]
+    [Theory]
     [Trait("Spec", "AUTH-3")]
-    public async Task WithoutCredentials_OnlyTheAnonymousRoutesAnswer()
+    [MemberData(nameof(EachHolidaySource))]
+    public async Task WithoutCredentials_OnlyTheAnonymousRoutesAnswer(string holidaySource)
     {
-        using var app = Deployment();
+        using var app = Deployment(holidaySource);
         using var client = app.CreateClient();
 
         foreach (var route in Routes(app))
@@ -170,17 +233,18 @@ public sealed partial class RouteAccessTests
             var status = await SendAsync(client, route);
 
             if (AccessOf(route) == Anonymous)
-                status.ShouldNotBeOneOf([HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden], route.Key);
+                ShouldBeAnswered(status, route);
             else
                 status.ShouldBe(HttpStatusCode.Unauthorized, route.Key);
         }
     }
 
-    [Fact]
+    [Theory]
     [Trait("Spec", "AUTH-6")]
-    public async Task AMemberWithNoPermissions_IsRefusedEveryPermissionRoute_AndNothingElse()
+    [MemberData(nameof(EachHolidaySource))]
+    public async Task AMemberWithNoPermissions_IsRefusedEveryPermissionRoute_AndNothingElse(string holidaySource)
     {
-        using var app = MemberHolding();
+        using var app = MemberHolding(holidaySource);
         using var client = app.CreateClient();
 
         foreach (var route in Routes(app))
@@ -194,14 +258,12 @@ public sealed partial class RouteAccessTests
         }
     }
 
-    public static TheoryData<string> EveryPermission => [.. Permissions.All];
-
     [Theory]
     [Trait("Spec", "AUTH-6")]
-    [MemberData(nameof(EveryPermission))]
-    public async Task APermissionRoute_IsRefusedToAMemberHoldingEveryOtherPermission(string permission)
+    [MemberData(nameof(EveryPermissionUnderEachHolidaySource))]
+    public async Task APermissionRoute_IsRefusedToAMemberHoldingEveryOtherPermission(string permission, string holidaySource)
     {
-        using var app = MemberHolding([.. Permissions.All.Where(p => p != permission)]);
+        using var app = MemberHolding(holidaySource, [.. Permissions.All.Where(p => p != permission)]);
         using var client = app.CreateClient();
 
         foreach (var route in Routes(app).Where(r => AccessOf(r) == permission))
@@ -210,16 +272,24 @@ public sealed partial class RouteAccessTests
 
     [Theory]
     [Trait("Spec", "AUTH-6")]
-    [MemberData(nameof(EveryPermission))]
-    public async Task APermissionRoute_AnswersAMemberHoldingThatPermissionAlone(string permission)
+    [MemberData(nameof(EveryPermissionUnderEachHolidaySource))]
+    public async Task APermissionRoute_AnswersAMemberHoldingThatPermissionAlone(string permission, string holidaySource)
     {
-        using var app = MemberHolding(permission);
+        using var app = MemberHolding(holidaySource, permission);
         using var client = app.CreateClient();
 
         var routes = Routes(app).Where(r => AccessOf(r) == permission).ToList();
         routes.ShouldNotBeEmpty();
 
         foreach (var route in routes)
-            (await SendAsync(client, route)).ShouldNotBe(HttpStatusCode.Forbidden, route.Key);
+            ShouldBeAnswered(await SendAsync(client, route), route);
+    }
+
+    // Let in, and then answered by the route: not refused, and not failed either, which a
+    // check for "not 403" alone would also pass.
+    private static void ShouldBeAnswered(HttpStatusCode status, Route route)
+    {
+        status.ShouldNotBeOneOf([HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden], route.Key);
+        ((int)status).ShouldBeLessThan(500, route.Key);
     }
 }
