@@ -244,9 +244,9 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   IANA id), `ConnectionStrings:FooCalendarDb`, and outside Development `Auth:Authority`,
   `Auth:Audience` and `Auth:ClientId`. `[test]`
 - **CFG-3** Settings of features that no longer exist must stop the app when they ask for
-  that feature, rather than being silently ignored: `AbsenceApprovals:Enabled=true` and any
-  value under `Auth:Permissions:AbsencesApprove`. The message must say the feature was
-  removed. `[test]`
+  that feature, rather than being silently ignored: `AbsenceApprovals:Enabled` with any value
+  but `false`, and any value under `Auth:Permissions:AbsencesApprove`. The message must say
+  the feature was removed. `[test]`
 - **CFG-4** Pending migrations must be applied at startup, after validation. `[test]`
 - **CFG-5** The SPA shell must have its `<base href>` set to `ReverseProxy:PathBase` and
   carry the bootstrap configuration inline; startup must fail if the shell has no

@@ -47,8 +47,8 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
 1. **Options are bound and their validation rules attached** (`ValidateOnStart`). Two
    retired setting shapes (`Auth:AdminPermission(s)`, a scalar
    `Auth:ClaimTypes:Permissions`) and the settings of the removed approval workflow
-   (`AbsenceApprovals:Enabled=true`, `Auth:Permissions:AbsencesApprove`) are rejected on
-   the spot.
+   (`AbsenceApprovals:Enabled` other than `false`, `Auth:Permissions:AbsencesApprove`) are
+   rejected on the spot.
 2. **Services are registered.** The holiday source is chosen here from `Holidays:Source`
    (Nager, File, or None), and the sync job is only registered when there is a source.
 3. **The dev bypass announces itself**: with `Auth:Provider=None` a warning is logged.

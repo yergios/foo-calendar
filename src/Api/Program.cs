@@ -213,8 +213,12 @@ if (config[$"{AuthOptions.SectionName}:ClaimTypes:Permissions"] is not null)
 
 // Settings of a feature that no longer exists (docs/decisions/0014). Ignoring them would
 // leave a deployment believing absences still wait for review, so asking for the feature
-// stops the app. Leaving it off is harmless and passes.
-if (config.GetValue<bool>("AbsenceApprovals:Enabled"))
+// stops the app. Leaving it off is harmless and passes. Anything but false counts as
+// asking: "yes" or "1" was meant as on, and failing to convert it to a bool would hide the
+// message saying what to do.
+var absenceApprovals = config["AbsenceApprovals:Enabled"]?.Trim();
+if (!string.IsNullOrEmpty(absenceApprovals)
+    && !string.Equals(absenceApprovals, "false", StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException(
         "AbsenceApprovals:Enabled is set, but absence approvals were removed: every absence " +
         "is in effect when it is created. Remove the setting.");

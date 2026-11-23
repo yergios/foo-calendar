@@ -177,11 +177,16 @@ public sealed class StartupTests
         app.TableNames().ShouldContain("Absences");
     }
 
-    [Fact]
+    // Not only true: a value that isn't a bool at all was still meant as asking for it.
+    [Theory]
     [Trait("Spec", "CFG-3")]
-    public void AbsenceApprovalsEnabled_StopsStartupSayingTheFeatureWasRemoved()
+    [InlineData("true")]
+    [InlineData("True")]
+    [InlineData("yes")]
+    [InlineData("1")]
+    public void AbsenceApprovalsEnabled_StopsStartupSayingTheFeatureWasRemoved(string value)
     {
-        using var app = new TestApp(("AbsenceApprovals:Enabled", "true"));
+        using var app = new TestApp(("AbsenceApprovals:Enabled", value));
 
         var failure = StartupFailure(app);
 
@@ -189,12 +194,16 @@ public sealed class StartupTests
         failure.Message.ShouldContain("removed");
     }
 
-    // Off is what every deployment that never used the feature has, and asks for nothing.
-    [Fact]
+    // Off, or left blank, is what every deployment that never used the feature has, and
+    // asks for nothing.
+    [Theory]
     [Trait("Spec", "CFG-3")]
-    public void AbsenceApprovalsDisabled_Starts()
+    [InlineData("false")]
+    [InlineData("False")]
+    [InlineData("")]
+    public void AbsenceApprovalsDisabled_Starts(string value)
     {
-        using var app = new TestApp(("AbsenceApprovals:Enabled", "false"));
+        using var app = new TestApp(("AbsenceApprovals:Enabled", value));
 
         Should.NotThrow(() => app.Services);
     }
