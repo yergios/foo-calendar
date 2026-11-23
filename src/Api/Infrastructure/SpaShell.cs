@@ -9,6 +9,10 @@ using Microsoft.Extensions.Options;
 
 namespace Api.Infrastructure;
 
+/// <summary>The SPA shell's HTML and the Content-Security-Policy it is served with, both
+/// prepared once by <see cref="SpaShell.Prepare"/>.</summary>
+public sealed record PreparedShell(string Html, string ContentSecurityPolicy);
+
 /// <summary>
 /// Serves the SPA's index.html for anything that isn't an API route or a static file.
 ///
@@ -22,13 +26,16 @@ namespace Api.Infrastructure;
 ///   first paint; embedding it in the shell that was going to be downloaded anyway costs
 ///   nothing. The shell is already no-store, which is the caching policy that payload
 ///   needs anyway - a browser holding a stale copy would keep pointing at a retired IdP.
+///
+/// Its Content-Security-Policy is built here too, from the inlined script itself
+/// (docs/decisions/0015).
 /// </summary>
 public static partial class SpaShell
 {
     /// <summary>The shell to serve, read and rewritten for this deployment, or null when
     /// there is no frontend build. Separate from <see cref="MapSpaFallback"/> so Program.cs
     /// can run it, and fail on a broken shell, before the database is migrated.</summary>
-    public static string? Prepare(WebApplication app, string pathBase)
+    public static PreparedShell? Prepare(WebApplication app, string pathBase)
     {
         var indexPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
 
@@ -66,12 +73,22 @@ public static partial class SpaShell
         var json = app.Services
             .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
             .Value.SerializerOptions;
-        return InlineBootstrapConfig(html, team, auth, json, indexPath);
+        var script = BootstrapScript(team, auth, json);
+
+        // The validation that ran before this has made sure Authority is an absolute URL
+        // whenever there is a provider. The dev identity has none to talk to.
+        var identityProvider = auth.Provider == AuthOptions.ProviderNone
+            ? null
+            : new Uri(auth.Authority).GetLeftPart(UriPartial.Authority);
+
+        return new(
+            InlineScript(html, script, indexPath),
+            SecurityHeaders.ShellPolicy(script, identityProvider));
     }
 
     /// <summary>Serves <paramref name="shell"/> from <see cref="Prepare"/>, or nothing when
     /// it is null.</summary>
-    public static void MapSpaFallback(this WebApplication app, string? shell)
+    public static void MapSpaFallback(this WebApplication app, PreparedShell? shell)
     {
         if (shell is null) return;
 
@@ -86,7 +103,8 @@ public static partial class SpaShell
             // The shell names the hashed asset files, so a cached copy outlives the assets
             // it points at. The assets themselves stay cacheable; only this must not be.
             http.Response.Headers.CacheControl = "no-store";
-            return Results.Content(shell, "text/html; charset=utf-8");
+            http.Response.Headers.ContentSecurityPolicy = shell.ContentSecurityPolicy;
+            return Results.Content(shell.Html, "text/html; charset=utf-8");
         })
         .WithMetadata(navigation)
         // Opting out of the fallback authorization policy: this is the page that has to
@@ -102,8 +120,8 @@ public static partial class SpaShell
             .WithMetadata(navigation);
     }
 
-    private static string InlineBootstrapConfig(
-        string html, TeamOptions team, AuthOptions auth, JsonSerializerOptions options, string indexPath)
+    /// <summary>The bootstrap configuration as the text of a script element.</summary>
+    private static string BootstrapScript(TeamOptions team, AuthOptions auth, JsonSerializerOptions options)
     {
         // The API's options, but never their encoder: ASP.NET Core sets that to
         // UnsafeRelaxedJsonEscaping, which is fine for a response body and unsafe here. The
@@ -115,8 +133,12 @@ public static partial class SpaShell
         var escaping = new JsonSerializerOptions(options) { Encoder = JavaScriptEncoder.Default };
 #pragma warning restore CA1869
         var json = JsonSerializer.Serialize(ConfigEndpoints.Build(team, auth), escaping);
-        var tag = $"<script>window.__bootstrap={json}</script>";
+        return $"window.__bootstrap={json}";
+    }
 
+    private static string InlineScript(string html, string script, string indexPath)
+    {
+        var tag = $"<script>{script}</script>";
         var head = html.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
 
         // Same reasoning as the base-href check above: the shell is our own build output,

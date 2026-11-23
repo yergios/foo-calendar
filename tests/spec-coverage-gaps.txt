@@ -8,9 +8,6 @@
 #
 # Everything left is built by the change spec each line names.
 
-SEC-1    specified 2026-11-23, built by docs/specs/0004: a test of the shell's Content-Security-Policy, including the bootstrap script hash
-SEC-2    specified 2026-11-23, built by docs/specs/0004: a test of nosniff and Referrer-Policy on the shell, an API route and a static file
 SEC-3    specified 2026-11-23, built by docs/specs/0004: the end-to-end suite failing on any CSP violation
-SEC-4    specified 2026-11-23, built by docs/specs/0004: a test that the API reference loads under its own policy
 OBS-1    specified 2026-11-23, built by docs/specs/0004: tests of the sync's spans and metrics with an in-memory exporter
 OBS-2    specified 2026-11-23, built by docs/specs/0004: tests of the sweep's span and deleted-rows counter with an in-memory exporter

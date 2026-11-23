@@ -496,7 +496,11 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 // ---- Middleware ------------------------------------------------------------
 
-// First in the pipeline, so everything after it sees the scheme, host and client address
+// Before anything that can answer, so every response carries the headers, the ones the
+// static files, the exception handler and the status code pages write included.
+app.UseSecurityHeaders();
+
+// First of the rest of the pipeline, so everything after it sees the scheme, host and client address
 // the original caller used rather than the proxy's.
 if (proxyConfig.TrustForwardedHeaders)
     app.UseForwardedHeaders();
@@ -614,8 +618,17 @@ if (apiDocsEnabled)
     // resolves it against the page's path minus the UI's prefix, so it lands on
     // "<pathbase>/openapi/v1.json" at the root and behind a sub-path alike. Spelling it out
     // here, with or without the path base, breaks one of those two.
+    //
+    // The page gets a policy of its own (SecurityHeaders.ApiReferencePolicy): a fresh nonce
+    // per response allows Scalar's inline configuration script, and everything that would
+    // reach Scalar's own servers from the browser is off, so the policy keeps connections
+    // and fonts on the app's origin.
     app.MapScalarApiReference(apiDocs.RoutePrefix, options => options
-        .WithTitle($"{ProductInfo.Name} API"))
+        .WithTitle($"{ProductInfo.Name} API")
+        .WithNonce()
+        .DisableDefaultFonts()
+        .DisableTelemetry()
+        .DisableAgent())
         .AllowAnonymous();
 }
 
