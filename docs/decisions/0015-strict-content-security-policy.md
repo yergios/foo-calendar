@@ -1,6 +1,6 @@
 # 15. A strict Content-Security-Policy, with the bootstrap script hashed at startup
 
-- Status: Accepted (implementation in [change spec 0004](../specs/0004-headers-telemetry-performance-e2e.md))
+- Status: Accepted, amended by [0017](0017-csp-and-budget-adjustments.md): extra provider origins, no framed silent renewal, no eval on the API reference
 - Date: 2026-11-23
 
 ## Context

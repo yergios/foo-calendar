@@ -1,6 +1,6 @@
 # 16. Browser checks run on the repo's own DevTools driver
 
-- Status: Accepted (implementation in [change spec 0004](../specs/0004-headers-telemetry-performance-e2e.md))
+- Status: Accepted, amended by [0017](0017-csp-and-budget-adjustments.md): the timing budget has a one-frame floor
 - Date: 2026-11-23
 
 ## Context

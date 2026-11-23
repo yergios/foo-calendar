@@ -19,7 +19,8 @@ format and conventions are in [0001](0001-record-architecture-decisions.md).
 | [12](0012-elastic-license-unmodified.md) | Elastic License 2.0, unmodified, with attribution carried by trademark | 2026-08-12 | Accepted |
 | [13](0013-strict-static-analysis.md) | Every analyzer rule on, warnings fail the build | 2026-11-22 | Accepted |
 | [14](0014-remove-absence-approvals.md) | Remove absence approvals | 2026-11-22 | Accepted |
-| [15](0015-strict-content-security-policy.md) | A strict Content-Security-Policy, with the bootstrap script hashed at startup | 2026-11-23 | Accepted |
-| [16](0016-own-devtools-driver-for-browser-checks.md) | Browser checks run on the repo's own DevTools driver | 2026-11-23 | Accepted |
+| [15](0015-strict-content-security-policy.md) | A strict Content-Security-Policy, with the bootstrap script hashed at startup | 2026-11-23 | Accepted, amended by 17 |
+| [16](0016-own-devtools-driver-for-browser-checks.md) | Browser checks run on the repo's own DevTools driver | 2026-11-23 | Accepted, amended by 17 |
+| [17](0017-csp-and-budget-adjustments.md) | Adjust the CSP for real providers, and floor the timing budget at a frame | 2026-11-23 | Accepted |
 
 To add one, copy the shape of an existing record, take the next number, and add a row here.
