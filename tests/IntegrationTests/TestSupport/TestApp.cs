@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace IntegrationTests.TestSupport;
@@ -49,6 +52,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// </summary>
     public IReadOnlyCollection<string> Permissions { get; init; }
 
+    /// <summary>When set, the app validates real bearer tokens (Auth:Provider=Oidc) issued
+    /// by this provider, whose metadata it is handed rather than downloads. Any environment
+    /// may use it; outside Development it is the only way in.</summary>
+    public TestIdentityProvider IdentityProvider { get; init; }
+
     /// <summary>Everything the app logged, startup included.</summary>
     public RecordingLoggerProvider Logs { get; } = new();
 
@@ -91,6 +99,21 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);
+
+        if (IdentityProvider is not null)
+        {
+            builder.UseSetting("Auth:Provider", "Oidc");
+            builder.UseSetting("Auth:Authority", TestIdentityProvider.Issuer);
+            builder.UseSetting("Auth:Audience", TestIdentityProvider.Audience);
+            builder.UseSetting("Auth:ClientId", TestIdentityProvider.ClientId);
+
+            // Configure rather than PostConfigure: JwtBearer's own post-configuration turns a
+            // configuration it finds here into the static source it reads keys from, instead
+            // of building one that fetches them from the authority.
+            builder.ConfigureTestServices(services => services.Configure<JwtBearerOptions>(
+                JwtBearerDefaults.AuthenticationScheme,
+                o => o.Configuration = IdentityProvider.Configuration));
+        }
 
         if (Permissions is not null)
         {

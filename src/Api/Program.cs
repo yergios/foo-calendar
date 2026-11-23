@@ -311,6 +311,12 @@ else
         {
             options.Authority = authConfig.Authority;
             options.Audience = authConfig.Audience;
+
+            // Keep claims under the names the token gives them. The default renames the
+            // common ones to WS-Federation URIs ("sub" to ClaimTypes.NameIdentifier, "roles"
+            // to ClaimTypes.Role, ...), so Auth:ClaimTypes, which names claims as the
+            // provider issues them, would find nothing: no username, no permissions.
+            options.MapInboundClaims = false;
         });
 }
 
