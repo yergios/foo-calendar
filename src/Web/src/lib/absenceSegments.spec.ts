@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { toIso } from "@/lib/dates";
-import type { AbsenceDto } from "@/types/absence";
+import { addDays, toIso } from "@/lib/dates";
+import { type Gen, forAll } from "@/lib/propertyTesting";
+import { ABSENCE_TYPE_INITIALS, type AbsenceDto } from "@/types/absence";
 import type { BankHolidayDto } from "@/types/bankHoliday";
 
 import {
@@ -183,6 +184,113 @@ describe("segmentsForPerson", () => {
     const holidays = holidaysByIso(holiday("2026-01-06", "CH-ZH"));
     const result = segmentsForPerson([v], days, dayIndex, null, holidays);
     expect(result).toEqual([{ start: 4, end: 8, absences: [v], painted: true, label: "V" }]);
+  });
+});
+
+// What a person's row looks like for a year, built the way the API allows it: whole-day
+// absences share no day with any other absence, time-based ones stack only with each other.
+interface SegmentsCase {
+  year: number;
+  homeCity: string | null;
+  absences: AbsenceDto[];
+  holidays: BankHolidayDto[];
+}
+
+function yearDays(year: number) {
+  const result = [];
+  for (const d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1))
+    result.push({ iso: toIso(d), isWeekend: d.getDay() === 0 || d.getDay() === 6 });
+  return result;
+}
+
+function generateSegmentsCase(gen: Gen): SegmentsCase {
+  const year = gen.between(2024, 2028);
+  // From a fortnight before the year, so some absences have to be clamped at either end.
+  const anyDay = () => addDays(`${year - 1}-12-18`, gen.between(0, 380));
+  const overlaps = (a: AbsenceDto, b: AbsenceDto) =>
+    a.startDate <= b.endDate && b.startDate <= a.endDate;
+
+  const absences: AbsenceDto[] = [];
+  for (let attempt = gen.between(0, 12); attempt > 0; attempt--) {
+    const startDate = anyDay();
+    const timeBased = gen.chance(0.3);
+    const candidate = absence(
+      startDate,
+      timeBased ? startDate : addDays(startDate, gen.between(0, 12)),
+      timeBased
+        ? {
+            type: gen.pick(["Appointment", "Other"] as const),
+            startTime: "09:00:00",
+            endTime: "10:00:00",
+          }
+        : { type: gen.pick(["Vacation", "Other"] as const) },
+    );
+    const allowed = absences.every(
+      (a) => !overlaps(a, candidate) || (a.startTime !== null && candidate.startTime !== null),
+    );
+    if (allowed) absences.push(candidate);
+  }
+
+  const holidays = gen.list(0, 25, (g) =>
+    holiday(anyDay(), g.pick(["ES", "ES-MD", "ES-CT", "FR"])),
+  );
+  return { year, homeCity: gen.pick(["ES-MD", "ES", null]), absences, holidays };
+}
+
+describe("segmentsForPerson, against painting day by day", () => {
+  it("[UI-2] [HOL-9] partitions the absent days into maximal runs that paint like each day", () => {
+    forAll(300, generateSegmentsCase, ({ year, homeCity, absences, holidays }) => {
+      const daysOfYear = yearDays(year);
+      const result = segmentsForPerson(
+        absences,
+        daysOfYear,
+        dayIndexOf(daysOfYear),
+        homeCity,
+        holidaysByIso(...holidays),
+      );
+
+      // The person's own holidays: their country's nationwide ones and their exact region's.
+      const country = homeCity?.split("-")[0];
+      const isOwnHoliday = (iso: string) =>
+        holidays.some((h) => h.date === iso && (h.region === homeCity || h.region === country));
+
+      const segmentOf = new Array<(typeof result)[number] | undefined>(daysOfYear.length);
+      let previousEnd = -1;
+      for (const segment of result) {
+        expect(segment.start).toBeGreaterThan(previousEnd);
+        expect(segment.end).toBeGreaterThanOrEqual(segment.start);
+        for (let i = segment.start; i <= segment.end; i++) segmentOf[i] = segment;
+        previousEnd = segment.end;
+      }
+
+      daysOfYear.forEach((day, i) => {
+        const covering = absences.filter((a) => a.startDate <= day.iso && day.iso <= a.endDate);
+        const segment = segmentOf[i];
+        if (covering.length === 0) {
+          expect(segment, day.iso).toBeUndefined();
+          return;
+        }
+        const painted = !day.isWeekend && !isOwnHoliday(day.iso);
+        const owner = covering.find((a) => a.startTime === null) ?? covering[0]!;
+        expect(segment, day.iso).toBeDefined();
+        expect(
+          segment!.absences.map((a) => a.id),
+          day.iso,
+        ).toEqual(covering.map((a) => a.id));
+        expect(segment!.painted, day.iso).toBe(painted);
+        expect(segment!.label, day.iso).toBe(painted ? ABSENCE_TYPE_INITIALS[owner.type] : "");
+      });
+
+      // Maximal: two runs that touch differ in what they hold or how they paint.
+      for (let k = 1; k < result.length; k++) {
+        const [before, after] = [result[k - 1]!, result[k]!];
+        if (before.end + 1 !== after.start) continue;
+        const same =
+          before.painted === after.painted &&
+          before.absences.map((a) => a.id).join() === after.absences.map((a) => a.id).join();
+        expect(same, `runs ending ${before.end} and starting ${after.start}`).toBe(false);
+      }
+    });
   });
 });
 
