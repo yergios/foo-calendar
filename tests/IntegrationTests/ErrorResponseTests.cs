@@ -6,8 +6,11 @@ using Api.Services;
 using IntegrationTests.TestSupport;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Shouldly;
@@ -135,6 +138,60 @@ public sealed class ErrorResponseTests
         response.Body.ShouldNotContain(nameof(BadHttpRequestException));
         using var problem = JsonDocument.Parse(response.Body);
         problem.RootElement.GetProperty("status").GetInt32().ShouldBe(413);
+        problem.RootElement.TryGetProperty("detail", out _).ShouldBeFalse();
+        problem.RootElement.TryGetProperty("exception", out _).ShouldBeFalse();
+    }
+
+    /// <summary>A handler that writes what the default one leaves out: the exception's
+    /// message as the detail, and the exception itself as an extension. Stands in for a
+    /// library, a later framework version or a well-meant change doing the same.</summary>
+    private sealed class LeakingExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
+    {
+        public async ValueTask<bool> TryHandleAsync(
+            HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return await problemDetails.TryWriteAsync(new ProblemDetailsContext
+            {
+                HttpContext = httpContext,
+                Exception = exception,
+                ProblemDetails = new ProblemDetails
+                {
+                    Status = StatusCodes.Status500InternalServerError,
+                    Detail = exception.Message,
+                    Extensions = { ["exception"] = exception.ToString() },
+                },
+            });
+        }
+    }
+
+    // The default writer leaves the detail out on its own, so the tests above would pass
+    // without the scrub in Program.cs. This one fails without it.
+    [Theory]
+    [Trait("Spec", "ERR-2")]
+    [InlineData("Production")]
+    [InlineData("Development")]
+    public async Task A500WhoseWriterAddsTheException_IsScrubbedOfIt(string environment)
+    {
+        using var app = new TestApp(
+            ("Auth:Authority", "https://idp.example.test/"),
+            ("Auth:Audience", "foo-calendar"),
+            ("Auth:ClientId", "foo-calendar-spa"))
+        {
+            Environment = environment,
+            ServiceOverrides = services => services.AddExceptionHandler<LeakingExceptionHandler>(),
+            Endpoints = routes => routes
+                .MapGet("/api/test/throw", string () => throw Exception(nameof(InvalidOperationException)))
+                .AllowAnonymous(),
+        };
+
+        var response = await GetAsync(app);
+
+        response.Status.ShouldBe(HttpStatusCode.InternalServerError);
+        response.ContentType.ShouldBe(ProblemJson);
+        response.Body.ShouldNotContain(Message);
+        response.Body.ShouldNotContain(nameof(InvalidOperationException));
+        using var problem = JsonDocument.Parse(response.Body);
         problem.RootElement.TryGetProperty("detail", out _).ShouldBeFalse();
         problem.RootElement.TryGetProperty("exception", out _).ShouldBeFalse();
     }
