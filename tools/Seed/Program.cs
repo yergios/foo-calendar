@@ -111,12 +111,12 @@ internal static class Program
         "Green", "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell", "Mitchell", "Carter", "Roberts",
     ];
 
-    private static readonly string[] VacationNotes =
+    private static readonly string?[] VacationNotes =
         ["Summer trip", "Family vacation", "Long weekend getaway", "Annual leave", null, null];
 
     // Nothing here says why someone was unwell: seed data ends up in screenshots and demo
     // deployments, and the app deliberately has nowhere to record that (see AbsenceType).
-    private static readonly string[] OtherNotes =
+    private static readonly string?[] OtherNotes =
         ["Personal errand", "Moving day", "Family matter", "Home repair", null, null];
 
     private static readonly string[] AppointmentNotes =
@@ -343,14 +343,14 @@ internal static class Program
     private sealed class NoOpAuditLog : IAuditLog
     {
         public Task RecordAsync(
-            string action, string target, string details = null, CancellationToken ct = default) =>
+            string action, string? target, string? details = null, CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public Task<AuditEntriesResponse> ReadAsync(
             int limit,
             int offset,
-            string search = null,
-            string action = null,
+            string? search = null,
+            string? action = null,
             DateTime? from = null,
             DateTime? to = null,
             string sortBy = AuditSortColumn.OccurredAt,
@@ -487,7 +487,7 @@ internal static class Program
         return absence;
     }
 
-    private static string PickNote(AbsenceType type, Random rng)
+    private static string? PickNote(AbsenceType type, Random rng)
     {
         var pool = type switch
         {

@@ -443,9 +443,10 @@ dotnet_naming_rule.types_and_namespaces_should_be_pascalcase.severity = warning
 dotnet_diagnostic.CA1002.severity = none
 
 # CA1062: Validate public arguments for null. Same reasoning: there are no callers outside
-# the solution. Arguments come from model binding, DI or this solution's own code, and with
-# nullable annotations off (Directory.Build.props) a guard per method would only trade a
-# NullReferenceException for an ArgumentNullException.
+# the solution. Arguments come from model binding, DI or this solution's own code, all of it
+# compiled with nullable reference types on (Directory.Build.props), so the compiler already
+# refuses a null where a parameter says there is none. The rule ignores those annotations and
+# would ask for a runtime guard per method on top.
 dotnet_diagnostic.CA1062.severity = none
 
 # CA1515: Make public types internal. They are public so the test project can use them;
@@ -466,11 +467,6 @@ dotnet_diagnostic.CA1724.severity = none
 # is bound from configuration as text and parsed once where its HttpClient is registered.
 dotnet_diagnostic.CA1054.severity = none
 dotnet_diagnostic.CA1056.severity = none
-
-# CA1805: Do not initialize unnecessarily. Carried over from the original configuration.
-# Today it fires only on the explicit "= null" of the Absence.Person navigation, which
-# changes nothing at runtime.
-dotnet_diagnostic.CA1805.severity = none
 
 # CA1812: Internal class is never instantiated. Fires on the private records that
 # System.Text.Json deserializes into, which it creates by reflection the analyzer can't see.

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <Nullable>enable</Nullable>
 
     <Product>Foo Calendar</Product>
     <Copyright>Copyright (c) 2026 Sergio Y. Lee</Copyright>
