@@ -109,6 +109,11 @@ jobs:
       - name: Check
         run: node scripts/check-spec-trace.mjs
 
+      # The check's own tests, so a change to how it reads tests can't quietly start
+      # counting a skipped or commented-out one.
+      - name: Test the check
+        run: node --test scripts/check-spec-trace.test.mjs
+
   image:
     name: Container image
     runs-on: ubuntu-latest

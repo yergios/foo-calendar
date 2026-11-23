@@ -314,7 +314,7 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   fail otherwise. `[ci]`
 - **TRC-2** A .NET test references a requirement with `[Trait("Spec", "ABS-5")]`; a Vitest
   test puts the ID in brackets in its name, e.g. `it("[UI-2] clamps to the year", ...)`. A
-  test may reference several. `[ci]`
+  test may reference several. A commented-out or skipped test references nothing. `[ci]`
 
 `scripts/check-spec-trace.mjs` is the CI step. A `[test]` requirement whose test does not
 exist yet is listed, with what is missing, in `tests/spec-coverage-gaps.txt`; the step also
