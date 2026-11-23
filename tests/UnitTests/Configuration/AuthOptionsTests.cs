@@ -36,7 +36,6 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
-    [Trait("Spec", "AUTH-2")]
     public void AllPermissionValues_DeduplicatesTheValueSharedBySeveralPermissions()
     {
         var options = WithPermissions(
@@ -47,7 +46,6 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
-    [Trait("Spec", "AUTH-2")]
     public void EffectiveDevPermissions_WhenGrantingEverything_HoldsEveryConfiguredValue()
     {
         var options = WithPermissions(
@@ -58,7 +56,6 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
-    [Trait("Spec", "AUTH-2")]
     public void EffectiveDevPermissions_WhenNotGrantingEverything_HoldsOnlyWhatTheDevUserLists()
     {
         var options = WithPermissions(

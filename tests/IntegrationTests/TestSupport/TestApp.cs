@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 
 namespace IntegrationTests.TestSupport;
 
 /// <summary>
 /// The real app, Program.cs and all, in memory, against a SQLite file of its own in a fresh
-/// temporary directory. Development with the dev identity, as `dotnet run` would start it,
-/// with the holiday source off so nothing leaves the machine. Settings passed in are applied
+/// temporary directory. Development with the dev identity, as `dotnet run` would start it
+/// (unless <see cref="Environment"/> says otherwise), with the holiday source off so nothing leaves the machine. Settings passed in are applied
 /// on top of appsettings.json, the way environment variables are in a deployment.
 ///
 /// Nothing starts until the first use of <see cref="WebApplicationFactory{T}.Services"/> or
@@ -38,6 +39,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// a test that needs a shell must not depend on one being there.</summary>
     public string Shell { get; init; }
 
+    /// <summary>The hosting environment, Development unless a test needs to see what a
+    /// deployment does.</summary>
+    public string Environment { get; init; } = "Development";
+
+    /// <summary>Everything the app logged, startup included.</summary>
+    public RecordingLoggerProvider Logs { get; } = new();
+
     /// <summary>The names of the tables in the database file, read without going through
     /// the app, so it also answers when the app failed to start.</summary>
     public List<string> TableNames()
@@ -58,7 +66,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment(Environment);
+        builder.ConfigureLogging(logging => logging.AddProvider(Logs));
 
         if (Shell is not null)
         {
