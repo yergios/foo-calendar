@@ -44,7 +44,7 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     private readonly RecordingAuditLog audit = new();
 
     private BankHolidayService CreateService(
-        Func<string, int, IReadOnlyList<SourceHoliday>> responder = null,
+        Func<string, int, IReadOnlyList<SourceHoliday>>? responder = null,
         HolidaySource kind = HolidaySource.Nager) =>
         new(Db,
             new StubHolidaySource(responder ?? ((_, _) => []), kind),

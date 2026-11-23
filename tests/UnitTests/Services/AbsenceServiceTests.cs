@@ -22,7 +22,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         sut = new AbsenceService(Db, bankHolidays, audit);
     }
 
-    private Person CreatePerson(string username = "jdoe", string homeCity = null)
+    private Person CreatePerson(string username = "jdoe", string? homeCity = null)
     {
         var person = new Person
         {
@@ -38,8 +38,8 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     }
 
     private static CreateAbsenceRequest Request(
-        string start, string end, AbsenceType type = AbsenceType.Vacation, string note = null,
-        string startTime = null, string endTime = null) =>
+        string start, string end, AbsenceType type = AbsenceType.Vacation, string? note = null,
+        string? startTime = null, string? endTime = null) =>
         new(
             DateOnly.Parse(start, CultureInfo.InvariantCulture), DateOnly.Parse(end, CultureInfo.InvariantCulture), type, note,
             startTime is null ? null : TimeOnly.Parse(startTime, CultureInfo.InvariantCulture),
@@ -403,7 +403,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceCreated);
         entry.Target.ShouldBe(person.DisplayName);
         entry.Details.ShouldBe("Other, 2026-03-02 → 2026-03-06");
-        entry.Details.ShouldNotContain("Flu");
+        entry.Details.ShouldNotBeNull().ShouldNotContain("Flu");
     }
 
     [Fact]
@@ -422,7 +422,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceUpdated);
         entry.Target.ShouldBe(person.DisplayName);
         entry.Details.ShouldBe("Vacation, 2026-04-02 → 2026-04-06");
-        entry.Details.ShouldNotContain("Trip");
+        entry.Details.ShouldNotBeNull().ShouldNotContain("Trip");
     }
 
     [Fact]
@@ -484,7 +484,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
         var entry = audit.Entries.Single(e => e.Action == AuditActions.AbsenceDeleted);
         entry.Target.ShouldBe(person.DisplayName);
         entry.Details.ShouldBe("Other, 2026-03-02 → 2026-03-06");
-        entry.Details.ShouldNotContain("Flu");
+        entry.Details.ShouldNotBeNull().ShouldNotContain("Flu");
     }
 
     [Fact]

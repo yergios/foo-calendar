@@ -36,7 +36,7 @@ public sealed class UnmatchedApiRequestTests
     private static TestApp SignedInMember() => new() { Shell = Shell, Permissions = [] };
 
     private static async Task<HttpResponseMessage> SendAsync(
-        TestApp app, string method, string path, string contentType = null)
+        TestApp app, string method, string path, string? contentType = null)
     {
         using var client = app.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative));
@@ -56,7 +56,7 @@ public sealed class UnmatchedApiRequestTests
     [InlineData("GET", "/api/nope", null)]
     [InlineData("GET", "/api", null)]
     [InlineData("DELETE", "/api/absences/abc", null)]
-    public async Task WithoutCredentials_AnyApiRequest_IsUnauthorized(string method, string path, string contentType)
+    public async Task WithoutCredentials_AnyApiRequest_IsUnauthorized(string method, string path, string? contentType)
     {
         using var app = Deployment();
 
@@ -87,7 +87,7 @@ public sealed class UnmatchedApiRequestTests
     [InlineData("POST", "/api/absences", "text/plain", HttpStatusCode.UnsupportedMediaType)]
     [InlineData("PUT", "/api/people/me", "text/plain", HttpStatusCode.UnsupportedMediaType)]
     public async Task SignedIn_AnApiRequestNoRouteTakes_AnswersAsRoutingDoes(
-        string method, string path, string contentType, HttpStatusCode expected)
+        string method, string path, string? contentType, HttpStatusCode expected)
     {
         using var app = SignedInMember();
 

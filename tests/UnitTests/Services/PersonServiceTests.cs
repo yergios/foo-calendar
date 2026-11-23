@@ -198,7 +198,7 @@ public sealed class PersonServiceTests : SqliteTestBase
         audit.Entries.ShouldBeEmpty();
     }
 
-    private static CreatePersonRequest CreateRequestNamed(string username, string displayName, string region = null) =>
+    private static CreatePersonRequest CreateRequestNamed(string username, string displayName, string? region = null) =>
         new(username, "First", "Last", displayName, region);
 
     [Fact]
@@ -281,12 +281,12 @@ public sealed class PersonServiceTests : SqliteTestBase
         var oneWeek = await sut.CreateAsync(CreateRequestNamed("oneWeek", "One Week"), "admin");
         var twoWeeks = await sut.CreateAsync(CreateRequestNamed("twoWeeks", "Two Weeks"), "admin");
 
-        var person = await Db.People.FindAsync(oneWeek.Id);
+        var person = (await Db.People.FindAsync(oneWeek.Id)).ShouldNotBeNull();
         await absences.CreateAsync(
             person,
             new CreateAbsenceRequest(new DateOnly(2026, 3, 2), new DateOnly(2026, 3, 6), AbsenceType.Vacation, null));
 
-        person = await Db.People.FindAsync(twoWeeks.Id);
+        person = (await Db.People.FindAsync(twoWeeks.Id)).ShouldNotBeNull();
         await absences.CreateAsync(
             person,
             new CreateAbsenceRequest(new DateOnly(2026, 4, 6), new DateOnly(2026, 4, 17), AbsenceType.Vacation, null));

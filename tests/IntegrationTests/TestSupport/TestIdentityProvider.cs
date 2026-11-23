@@ -38,11 +38,11 @@ public sealed class TestIdentityProvider : IDisposable
     /// for the app: its own issuer, the app's audience, valid for the next hour, signed
     /// with its own key.</summary>
     public string Mint(
-        IEnumerable<Claim> claims = null,
+        IEnumerable<Claim>? claims = null,
         string issuer = Issuer,
         string audience = Audience,
         DateTime? expires = null,
-        SecurityKey signingKey = null)
+        SecurityKey? signingKey = null)
     {
         var expiry = expires ?? DateTime.UtcNow.AddHours(1);
 

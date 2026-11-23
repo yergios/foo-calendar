@@ -7,20 +7,20 @@ namespace UnitTests.TestSupport;
 /// standing up a holiday source to watch it happen.</summary>
 public sealed class RecordingTeamRegionService : ITeamRegionService
 {
-    public List<string> Synced { get; } = [];
-    public List<string> Pruned { get; } = [];
+    public List<string?> Synced { get; } = [];
+    public List<string?> Pruned { get; } = [];
     public IReadOnlyList<string> InUse { get; set; } = [];
 
     public Task<IReadOnlyList<string>> InUseAsync(CancellationToken ct = default) =>
         Task.FromResult(InUse);
 
-    public Task EnsureSyncedAsync(string region, CancellationToken ct = default)
+    public Task EnsureSyncedAsync(string? region, CancellationToken ct = default)
     {
         Synced.Add(region);
         return Task.CompletedTask;
     }
 
-    public Task PruneIfUnusedAsync(string region, CancellationToken ct = default)
+    public Task PruneIfUnusedAsync(string? region, CancellationToken ct = default)
     {
         Pruned.Add(region);
         return Task.CompletedTask;

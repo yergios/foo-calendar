@@ -42,7 +42,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// wwwroot/index.html holds this, as if it were the frontend build. Left unset, the
     /// content root is the Api project, whose wwwroot exists only after a frontend build, so
     /// a test that needs a shell must not depend on one being there.</summary>
-    public string Shell { get; init; }
+    public string? Shell { get; init; }
 
     /// <summary>The hosting environment, Development unless a test needs to see what a
     /// deployment does.</summary>
@@ -52,23 +52,23 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// rather than all of them; empty is a member with none. Each is granted by the claim
     /// value appsettings.json maps it to by default, which is the permission's own name.
     /// </summary>
-    public IReadOnlyCollection<string> Permissions { get; init; }
+    public IReadOnlyCollection<string>? Permissions { get; init; }
 
     /// <summary>When set, the app validates real bearer tokens (Auth:Provider=Oidc) issued
     /// by this provider, whose metadata it is handed rather than downloads. Any environment
     /// may use it; outside Development it is the only way in.</summary>
-    public TestIdentityProvider IdentityProvider { get; init; }
+    public TestIdentityProvider? IdentityProvider { get; init; }
 
     /// <summary>Everything the app logged, startup included.</summary>
     public RecordingLoggerProvider Logs { get; } = new();
 
     /// <summary>Files under wwwroot besides the shell, keyed by their path in it, e.g.
     /// "assets/app.js". Only written when <see cref="Shell"/> is set.</summary>
-    public IReadOnlyDictionary<string, string> WebRootFiles { get; init; }
+    public IReadOnlyDictionary<string, string>? WebRootFiles { get; init; }
 
     /// <summary>Changes to the app's services, applied after Program.cs registered its own:
     /// a stand-in for something outside the process, or a hosted service taken out.</summary>
-    public Action<IServiceCollection> ServiceOverrides { get; init; }
+    public Action<IServiceCollection>? ServiceOverrides { get; init; }
 
     /// <summary>Writes straight to the app's database, for what no route lets the test
     /// identity do itself, such as adding other people. Starts the app if it hasn't.
@@ -120,7 +120,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
             foreach (var (path, content) in WebRootFiles ?? new Dictionary<string, string>())
             {
                 var file = Path.Combine(contentRoot, "wwwroot", path);
-                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                // Not null: the file sits under wwwroot, so it has a directory.
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 File.WriteAllText(file, content);
             }
 

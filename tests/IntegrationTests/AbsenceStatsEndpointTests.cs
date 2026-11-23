@@ -75,7 +75,7 @@ public sealed class AbsenceStatsEndpointTests
         using var app = new TestApp { Permissions = [Permissions.ReportsRead] };
         using var client = await SignedInWithAbsencesAsync(app);
 
-        var stats = await client.GetFromJsonAsync<AllAbsenceStatsResponse>(EveryonesStats);
+        var stats = (await client.GetFromJsonAsync<AllAbsenceStatsResponse>(EveryonesStats)).ShouldNotBeNull();
 
         var people = app.Query(db => db.People.ToDictionary(p => p.Id, p => p.Username));
         stats.Stats

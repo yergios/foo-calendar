@@ -48,7 +48,7 @@ public sealed class AbsenceServicePropertyTests : SqliteTestBase
         bankHolidays.Holidays.Clear();
     }
 
-    private Person AddPerson(string username, string homeCity = null)
+    private Person AddPerson(string username, string? homeCity = null)
     {
         var person = new Person
         {
@@ -150,18 +150,18 @@ public sealed class AbsenceServicePropertyTests : SqliteTestBase
                 await Should.NotThrowAsync(() => sut.UpdateAsync(person, ids[c.Updated], RequestFor(c.Requested)));
         });
 
-    public sealed record Member(string HomeCity, List<Span> Absences);
+    public sealed record Member(string? HomeCity, List<Span> Absences);
 
     public sealed record TotalsCase(int Year, List<Member> People, List<BankHolidayDto> Holidays);
 
     // Sibling subdivisions of one country, the country itself, another country and nowhere,
     // so that one person's holidays sit beside holidays that are not theirs.
-    private static readonly string[] HomeCities = ["ES-MD", "ES-CT", "ES", "FR-BRE", null];
+    private static readonly string?[] HomeCities = ["ES-MD", "ES-CT", "ES", "FR-BRE", null];
     private static readonly string[] HolidayRegions = ["ES", "ES-MD", "ES-CT", "FR", "FR-BRE", "FR-IDF"];
 
     // A person's own holidays: their country's nationwide ones and their exact region's,
     // never a sibling region's. The country is the code before the hyphen.
-    private static HashSet<DateOnly> OwnHolidays(string homeCity, IEnumerable<BankHolidayDto> holidays) =>
+    private static HashSet<DateOnly> OwnHolidays(string? homeCity, IEnumerable<BankHolidayDto> holidays) =>
         homeCity is null
             ? []
             : [.. holidays.Where(h => h.Region == homeCity || h.Region == homeCity.Split('-')[0]).Select(h => h.Date)];

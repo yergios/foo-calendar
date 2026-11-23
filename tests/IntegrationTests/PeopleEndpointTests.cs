@@ -49,7 +49,7 @@ public sealed class PeopleEndpointTests
         using var created = await client.PostAsJsonAsync(People, new UpdatePersonRequest("JD", "CH-ZH"));
 
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var person = await created.Content.ReadFromJsonAsync<PersonDto>();
+        var person = (await created.Content.ReadFromJsonAsync<PersonDto>()).ShouldNotBeNull();
         person.Username.ShouldBe("jdoe");
         person.DisplayName.ShouldBe("JD");
         person.HomeCity.ShouldBe("CH-ZH");
@@ -74,7 +74,7 @@ public sealed class PeopleEndpointTests
             Url("/api/admin/people"), new CreatePersonRequest("someone", "Some", "One", "Someone", null));
 
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var person = await created.Content.ReadFromJsonAsync<PersonDto>();
+        var person = (await created.Content.ReadFromJsonAsync<PersonDto>()).ShouldNotBeNull();
         person.Username.ShouldBe("someone");
 
         using var updated = await client.PutAsJsonAsync(
@@ -127,8 +127,8 @@ public sealed class PeopleEndpointTests
         SeedVacations(app);
         using var client = app.CreateClient();
 
-        var page = await client.GetFromJsonAsync<PeoplePageResponse>(
-            Url($"/api/people/paged?sortBy=vacation&sortDir={direction}&year=2026"));
+        var page = (await client.GetFromJsonAsync<PeoplePageResponse>(
+            Url($"/api/people/paged?sortBy=vacation&sortDir={direction}&year=2026"))).ShouldNotBeNull();
 
         page.People.Select(p => p.Username).ShouldBe(expected);
     }

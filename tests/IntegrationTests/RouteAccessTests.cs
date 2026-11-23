@@ -153,7 +153,7 @@ public sealed partial class RouteAccessTests
             .OfType<RouteEndpoint>()
             .SelectMany(endpoint =>
             {
-                var pattern = endpoint.RoutePattern.RawText;
+                var pattern = endpoint.RoutePattern.RawText.ShouldNotBeNull();
                 var url = new Uri(
                     "/" + RouteParameter().Replace(pattern, p => SampleValue(p.Groups["name"].Value)).TrimStart('/'),
                     UriKind.Relative);

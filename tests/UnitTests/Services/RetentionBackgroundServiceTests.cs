@@ -56,7 +56,7 @@ public sealed class RetentionBackgroundServiceTests
             // Waiting for the sweep after the failed one.
         }
 
-        sut.ExecuteTask.IsFaulted.ShouldBeFalse();
+        sut.ExecuteTask.ShouldNotBeNull().IsFaulted.ShouldBeFalse();
         await sut.StopAsync(CancellationToken.None);
 
         var error = logger.Entries.Where(e => e.Level == LogLevel.Error).ShouldHaveSingleItem();

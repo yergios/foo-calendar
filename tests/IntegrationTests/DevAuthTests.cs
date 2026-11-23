@@ -27,7 +27,7 @@ public sealed class DevAuthTests
             new Uri("/api/people", UriKind.Relative), new UpdatePersonRequest("Someone", null));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var created = await response.Content.ReadFromJsonAsync<PersonDto>();
+        var created = (await response.Content.ReadFromJsonAsync<PersonDto>()).ShouldNotBeNull();
         created.Username.ShouldBe("someone-else");
     }
 

@@ -71,8 +71,8 @@ public sealed class ShellTests
         var html = await client.GetStringAsync(Url("/cal/"));
         var endpoint = await client.GetStringAsync(Url("/cal/api/config/bootstrap"));
 
-        var inlined = JsonNode.Parse(InlinedBootstrap(html));
-        inlined["orgName"].GetValue<string>().ShouldBe("Acme Engineering");
+        var inlined = JsonNode.Parse(InlinedBootstrap(html)).ShouldNotBeNull();
+        inlined["orgName"].ShouldNotBeNull().GetValue<string>().ShouldBe("Acme Engineering");
         JsonNode.DeepEquals(inlined, JsonNode.Parse(endpoint)).ShouldBeTrue();
     }
 

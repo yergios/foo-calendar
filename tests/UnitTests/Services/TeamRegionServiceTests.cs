@@ -39,7 +39,7 @@ public sealed class TeamRegionServiceTests : SqliteTestBase
             Options.Create(new TeamOptions { HomeRegion = homeRegion }),
             NullLogger<TeamRegionService>.Instance);
 
-    private void AddPerson(string username, string homeCity) =>
+    private void AddPerson(string username, string? homeCity) =>
         Db.People.Add(new Person
         {
             Username = username,

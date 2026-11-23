@@ -77,7 +77,7 @@ public sealed class NagerHolidaySourceTests
     [Trait("Spec", "HOL-3")]
     public async Task GetAsync_RequestsTheYearAndCountryAsked()
     {
-        Uri requested = null;
+        Uri? requested = null;
         var sut = CreateSource(request =>
         {
             requested = request.RequestUri;
@@ -86,7 +86,7 @@ public sealed class NagerHolidaySourceTests
 
         await sut.GetAsync("ES", 2027);
 
-        requested.ToString().ShouldEndWith("PublicHolidays/2027/ES");
+        requested.ShouldNotBeNull().ToString().ShouldEndWith("PublicHolidays/2027/ES");
     }
 
     [Fact]

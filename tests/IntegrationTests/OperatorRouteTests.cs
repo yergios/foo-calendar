@@ -118,7 +118,7 @@ public sealed class OperatorRouteTests
     /// <summary>What the API documentation routes answer a signed-in member. Outside
     /// Development the member brings a token: a route that doesn't exist is still behind the
     /// fallback policy, so without one it would be 401 rather than 404.</summary>
-    private static async Task<HttpStatusCode[]> ApiDocsStatusAsync(string environment, string enabled)
+    private static async Task<HttpStatusCode[]> ApiDocsStatusAsync(string environment, string? enabled)
     {
         using var identityProvider = new TestIdentityProvider();
         (string, string)[] settings = enabled is null ? [] : [("ApiDocs:Enabled", enabled)];
@@ -143,7 +143,7 @@ public sealed class OperatorRouteTests
     [InlineData("Development", "false", HttpStatusCode.NotFound)]
     [InlineData("Production", null, HttpStatusCode.NotFound)]
     [InlineData("Production", "true", HttpStatusCode.OK)]
-    public async Task TheApiDocs_AreServedOnlyWhenEnabled(string environment, string enabled, HttpStatusCode expected)
+    public async Task TheApiDocs_AreServedOnlyWhenEnabled(string environment, string? enabled, HttpStatusCode expected)
     {
         var statuses = await ApiDocsStatusAsync(environment, enabled);
 

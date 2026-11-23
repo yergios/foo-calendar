@@ -6,7 +6,7 @@ namespace IntegrationTests.TestSupport;
 /// nothing else, for what the test identity can't create through a route itself.</summary>
 public static class Rows
 {
-    public static Person Person(string username, string homeCity = null) => new()
+    public static Person Person(string username, string? homeCity = null) => new()
     {
         Username = username,
         DisplayName = username,

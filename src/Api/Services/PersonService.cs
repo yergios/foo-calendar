@@ -71,7 +71,7 @@ public sealed class PersonService(
         int page,
         int pageSize,
         string? search,
-        IReadOnlyList<string> regions,
+        IReadOnlyList<string>? regions,
         string sortBy,
         bool descending,
         int? statsYear,

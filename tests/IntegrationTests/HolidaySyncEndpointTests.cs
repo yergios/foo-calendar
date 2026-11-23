@@ -74,7 +74,7 @@ public sealed class HolidaySyncEndpointTests
         using var response = await client.PostAsync(Sync("year=2026"), content: null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var result = await response.Content.ReadFromJsonAsync<SyncBankHolidaysResponse>();
+        var result = (await response.Content.ReadFromJsonAsync<SyncBankHolidaysResponse>()).ShouldNotBeNull();
         result.SyncedRegions.ShouldBe(["CH-ZH"]);
         result.FailedRegions.ShouldBe(["ES-MD"]);
 
@@ -97,7 +97,7 @@ public sealed class HolidaySyncEndpointTests
         using var response = await client.PostAsync(Sync("year=2026&region=CH-ZH"), content: null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var result = await response.Content.ReadFromJsonAsync<SyncBankHolidaysResponse>();
+        var result = (await response.Content.ReadFromJsonAsync<SyncBankHolidaysResponse>()).ShouldNotBeNull();
         result.SyncedRegions.ShouldBe(["CH-ZH"]);
         result.FailedRegions.ShouldBeEmpty();
 

@@ -5,6 +5,7 @@
        answers. Everything that can be tested on one class lives in UnitTests. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

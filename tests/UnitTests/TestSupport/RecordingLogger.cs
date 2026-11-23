@@ -8,13 +8,13 @@ namespace UnitTests.TestSupport;
 /// reported. Thread-safe, since background jobs log from threads of their own.</summary>
 public sealed class RecordingLogger<T> : ILogger<T>
 {
-    public sealed record Entry(LogLevel Level, string Message, Exception Exception);
+    public sealed record Entry(LogLevel Level, string Message, Exception? Exception);
 
     private readonly ConcurrentQueue<Entry> entries = new();
 
     public IReadOnlyCollection<Entry> Entries => entries;
 
-    public IDisposable BeginScope<TState>(TState state)
+    public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull => null;
 
     public bool IsEnabled(LogLevel logLevel) => true;
@@ -23,7 +23,7 @@ public sealed class RecordingLogger<T> : ILogger<T>
         LogLevel logLevel,
         EventId eventId,
         TState state,
-        Exception exception,
-        Func<TState, Exception, string> formatter) =>
+        Exception? exception,
+        Func<TState, Exception?, string> formatter) =>
         entries.Enqueue(new Entry(logLevel, formatter(state, exception), exception));
 }

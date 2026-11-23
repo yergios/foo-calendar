@@ -38,7 +38,7 @@ public sealed class BearerTokenTests : IDisposable
         identityProvider.Dispose();
     }
 
-    private async Task<HttpResponseMessage> GetPeopleAsync(string token)
+    private async Task<HttpResponseMessage> GetPeopleAsync(string? token)
     {
         using var client = app.CreateClient();
         if (token is not null)
@@ -69,7 +69,7 @@ public sealed class BearerTokenTests : IDisposable
         using var response = await client.PostAsJsonAsync(People, new UpdatePersonRequest("Jane", null));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        (await response.Content.ReadFromJsonAsync<PersonDto>()).Username.ShouldBe("jdoe");
+        (await response.Content.ReadFromJsonAsync<PersonDto>()).ShouldNotBeNull().Username.ShouldBe("jdoe");
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class BearerTokenTests : IDisposable
     [InlineData(null)]
     [InlineData("permissions")]
     [InlineData("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")]
-    public async Task WithoutThePermissionClaim_APermissionRouteIsForbidden(string otherType)
+    public async Task WithoutThePermissionClaim_APermissionRouteIsForbidden(string? otherType)
     {
         using var rolesApp = AppReadingPermissionsFromRoles();
         List<Claim> claims = [new Claim("sub", "member"), new Claim("roles", Permissions.PeopleManage)];

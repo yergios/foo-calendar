@@ -17,7 +17,7 @@ public sealed class AuditLogTests : SqliteTestBase
 {
     private static readonly AuthOptions Auth = new();
 
-    private AuditLog CreateSut(string signedInAs = null)
+    private AuditLog CreateSut(string? signedInAs = null)
     {
         var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext() };
 

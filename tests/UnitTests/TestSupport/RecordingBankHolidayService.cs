@@ -23,7 +23,7 @@ public sealed class RecordingBankHolidayService : IBankHolidayService
         // taken from RegionCode, so that tests of what AbsenceService does with these rows
         // check it against the rule rather than against its own helper.
         var expanded = regions
-            .SelectMany(region => new[] { region, region.Split('-')[0] })
+            .SelectMany(region => new string?[] { region, region.Split('-')[0] })
             .ToHashSet(StringComparer.Ordinal);
 
         var matches = Holidays
