@@ -186,13 +186,15 @@ if (apiDocsEnabled)
 services.AddValidation();
 
 // A server error is a bug, not an answer, and its exception's message, type and stack
-// describe the code rather than the request: outside Development the response says only
-// that it happened, and the exception goes to the log. The default writer already leaves
-// them out; this keeps it so whatever else is configured or upgraded. Domain errors are
-// below 500 and keep their message (DomainExceptionHandler).
+// describe the code rather than the request: the response says only that it happened, and
+// the exception goes to the log. Development included: UseExceptionHandler catches the
+// exception before the developer exception page could show it, so a developer reads the
+// log like an operator does. The default writer already leaves them out; this keeps it so
+// whatever else is configured or upgraded. Domain errors are below 500 and keep their
+// message (DomainExceptionHandler).
 services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
 {
-    if (isDevelopment || ctx.ProblemDetails.Status < StatusCodes.Status500InternalServerError)
+    if (ctx.ProblemDetails.Status < StatusCodes.Status500InternalServerError)
         return;
 
     ctx.ProblemDetails.Detail = null;

@@ -109,8 +109,8 @@ Why the order matters:
 - **Domain errors become problem details.** Services throw a `DomainException`:
   `InvalidInputException` (400), `NotOwnerException` (403), `NotFoundException` (404) or
   `ConflictException` (409). `DomainExceptionHandler` answers it with its status and the
-  rule's message. Anything else is a 500 that carries no exception detail outside
-  Development, and is logged.
+  rule's message. Anything else is a 500 that carries no exception detail, in Development
+  too, and is logged.
 
 ## Backend layout
 

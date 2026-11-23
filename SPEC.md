@@ -292,9 +292,9 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   for invalid input, 403 for acting on what the caller does not own, 404 for what does not
   exist, 409 for a conflict with what is stored, each with the rule's own message. Only
   errors the domain raises on purpose map to these. `[test]`
-- **ERR-2** Outside Development, any other failure must be answered 500 with problem details
-  that carry no exception message, type or stack, and must be logged with the exception.
-  (Development shows ASP.NET Core's developer exception page on purpose.) `[test]`
+- **ERR-2** Any other failure must be answered 500 with problem details that carry no
+  exception message, type or stack, and must be logged with the exception. Development
+  answers the same way; the exception is in the log there too. `[test]`
 
 ## UI: Calendar and browser
 

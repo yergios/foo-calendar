@@ -40,12 +40,12 @@ public sealed class ErrorResponseTests
 
     /// <summary>The app as a deployment runs it, plus a route that throws the named
     /// exception. Anonymous, so reaching it takes no token.</summary>
-    private static TestApp Throwing(string kind) => new(
+    private static TestApp Throwing(string kind, string environment = "Production") => new(
         ("Auth:Authority", "https://idp.example.test/"),
         ("Auth:Audience", "foo-calendar"),
         ("Auth:ClientId", "foo-calendar-spa"))
     {
-        Environment = "Production",
+        Environment = environment,
         Endpoints = routes => routes
             .MapGet("/api/test/throw", string () => throw Exception(kind))
             .AllowAnonymous(),
@@ -83,16 +83,19 @@ public sealed class ErrorResponseTests
 
     // The four the handler used to map by type, which framework and library code throw too:
     // none of them is the domain's answer any more than any other exception is.
+    // Development too: the exception handler runs before the developer exception page
+    // could, so a developer finds the exception in the log, as an operator does.
     [Theory]
     [Trait("Spec", "ERR-1")]
     [Trait("Spec", "ERR-2")]
-    [InlineData(nameof(ArgumentException))]
-    [InlineData(nameof(UnauthorizedAccessException))]
-    [InlineData(nameof(KeyNotFoundException))]
-    [InlineData(nameof(InvalidOperationException))]
-    public async Task AnyOtherException_IsA500SayingNothingAboutIt_AndIsLogged(string kind)
+    [InlineData(nameof(ArgumentException), "Production")]
+    [InlineData(nameof(UnauthorizedAccessException), "Production")]
+    [InlineData(nameof(KeyNotFoundException), "Production")]
+    [InlineData(nameof(InvalidOperationException), "Production")]
+    [InlineData(nameof(InvalidOperationException), "Development")]
+    public async Task AnyOtherException_IsA500SayingNothingAboutIt_AndIsLogged(string kind, string environment)
     {
-        using var app = Throwing(kind);
+        using var app = Throwing(kind, environment);
 
         var response = await GetAsync(app);
 
