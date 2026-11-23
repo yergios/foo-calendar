@@ -26,6 +26,72 @@ public sealed class StartupTests
         app.TableNames().ShouldBeEmpty();
     }
 
+    // Each of these used to pass validation and fail only once the database had been
+    // migrated: the addresses when the forwarded headers middleware was built, the URL when
+    // the first sync created its HTTP client.
+    [Theory]
+    [Trait("Spec", "CFG-1")]
+    [InlineData("ReverseProxy:KnownProxies:0", "not-an-ip", "ReverseProxy:KnownProxies")]
+    [InlineData("ReverseProxy:KnownNetworks:0", "10.0.0.0/33", "ReverseProxy:KnownNetworks")]
+    [InlineData("ReverseProxy:KnownNetworks:0", "10.0.0.1", "ReverseProxy:KnownNetworks")]
+    [InlineData("Holidays:Nager:BaseUrl", "date.nager.at/api/v3/", "Holidays:Nager:BaseUrl")]
+    [InlineData("Holidays:Nager:BaseUrl", "ftp://date.nager.at/api/v3/", "Holidays:Nager:BaseUrl")]
+    public void MalformedSetting_StopsStartupNamingIt_WithTheDatabaseUntouched(
+        string key, string value, string named)
+    {
+        using var app = new TestApp(
+            ("ReverseProxy:TrustForwardedHeaders", "true"),
+            ("Holidays:Source", "Nager"),
+            (key, value));
+        File.WriteAllBytes(app.DatabasePath, []);
+
+        StartupFailure(app).Message.ShouldContain(named);
+
+        app.TableNames().ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Spec", "CFG-1")]
+    public void WellFormedProxyAddresses_Start()
+    {
+        using var app = new TestApp(
+            ("ReverseProxy:TrustForwardedHeaders", "true"),
+            ("ReverseProxy:KnownProxies:0", "10.0.0.5"),
+            ("ReverseProxy:KnownProxies:1", "fd00::5"),
+            ("ReverseProxy:KnownNetworks:0", "10.0.0.0/8"));
+
+        Should.NotThrow(() => app.Services);
+    }
+
+    [Fact]
+    [Trait("Spec", "CFG-1")]
+    public void PathBaseWithAShellLackingBaseHref_StopsStartupNamingIt_WithTheDatabaseUntouched()
+    {
+        using var app = new TestApp(("ReverseProxy:PathBase", "/cal"))
+        {
+            Shell = "<!doctype html><html><head><title>x</title></head><body></body></html>",
+        };
+        File.WriteAllBytes(app.DatabasePath, []);
+
+        StartupFailure(app).Message.ShouldContain("ReverseProxy:PathBase");
+
+        app.TableNames().ShouldBeEmpty();
+    }
+
+    // Not a setting anyone can fix, but a broken build, which should still stop the app
+    // before it migrates a database it will never serve.
+    [Fact]
+    [Trait("Spec", "CFG-1")]
+    public void ShellLackingHead_StopsStartup_WithTheDatabaseUntouched()
+    {
+        using var app = new TestApp { Shell = "<!doctype html><html><body></body></html>" };
+        File.WriteAllBytes(app.DatabasePath, []);
+
+        StartupFailure(app).Message.ShouldContain("</head>");
+
+        app.TableNames().ShouldBeEmpty();
+    }
+
     [Theory]
     [Trait("Spec", "HOL-1")]
     [InlineData("Holidays:Source", "Calendarific", "Holidays:Source")]

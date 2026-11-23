@@ -24,7 +24,10 @@ namespace Api.Infrastructure;
 /// </summary>
 public static partial class SpaShell
 {
-    public static void MapSpaFallback(this WebApplication app, string pathBase)
+    /// <summary>The shell to serve, read and rewritten for this deployment, or null when
+    /// there is no frontend build. Separate from <see cref="MapSpaFallback"/> so Program.cs
+    /// can run it, and fail on a broken shell, before the database is migrated.</summary>
+    public static string Prepare(WebApplication app, string pathBase)
     {
         var indexPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
 
@@ -32,7 +35,7 @@ public static partial class SpaShell
         // letting the Vite dev server serve the SPA. That SPA has no shell of ours to read
         // window.__bootstrap out of, which is what the fetch fallback in the frontend's
         // bootstrapConfig.ts is for.
-        if (!File.Exists(indexPath)) return;
+        if (!File.Exists(indexPath)) return null;
 
         var html = File.ReadAllText(indexPath);
 
@@ -62,14 +65,21 @@ public static partial class SpaShell
         var json = app.Services
             .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
             .Value.SerializerOptions;
-        html = InlineBootstrapConfig(html, team, auth, json, indexPath);
+        return InlineBootstrapConfig(html, team, auth, json, indexPath);
+    }
+
+    /// <summary>Serves <paramref name="shell"/> from <see cref="Prepare"/>, or nothing when
+    /// it is null.</summary>
+    public static void MapSpaFallback(this WebApplication app, string shell)
+    {
+        if (shell is null) return;
 
         app.MapFallback((HttpContext http) =>
         {
             // The shell names the hashed asset files, so a cached copy outlives the assets
             // it points at. The assets themselves stay cacheable; only this must not be.
             http.Response.Headers.CacheControl = "no-store";
-            return Results.Content(html, "text/html; charset=utf-8");
+            return Results.Content(shell, "text/html; charset=utf-8");
         })
         // Opting out of the fallback authorization policy: this is the page that has to
         // load *before* anyone can sign in. It is the same public index.html the static

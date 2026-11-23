@@ -55,9 +55,13 @@ services.AddOptions<HolidayOptions>()
             or HolidayOptions.SourceFile
             or HolidayOptions.SourceNone,
         "Holidays:Source must be one of Nager, File, None.")
+    // Checked in full here because the URL is otherwise first parsed when the sync creates
+    // its HTTP client, long after startup and inside a background job.
     .Validate(
-        o => o.Source != HolidayOptions.SourceNager || !string.IsNullOrWhiteSpace(o.Nager.BaseUrl),
-        "Holidays:Nager:BaseUrl must be configured.")
+        o => o.Source != HolidayOptions.SourceNager
+            || (Uri.TryCreate(o.Nager.BaseUrl, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)),
+        "Holidays:Nager:BaseUrl must be an absolute http or https URL, e.g. \"https://date.nager.at/api/v3/\".")
     .Validate(
         o => o.Source != HolidayOptions.SourceFile || !string.IsNullOrWhiteSpace(o.File.Path),
         "Holidays:File:Path must be configured when Holidays:Source=File.")
@@ -82,6 +86,12 @@ services.AddOptions<ReverseProxyOptions>()
         "ReverseProxy:PathBase must start with '/', e.g. \"/calendar\".")
     .Validate(o => o.PathBase.Length == 0 || !o.PathBase.EndsWith('/'),
         "ReverseProxy:PathBase must not end with '/'.")
+    // Parsed for real only when the forwarded headers middleware is built, which is after
+    // the database has been migrated, and the parser's own error names no setting.
+    .Validate(o => o.KnownProxies.All(p => IPAddress.TryParse(p, out _)),
+        "ReverseProxy:KnownProxies must list IP addresses, e.g. \"10.0.0.5\".")
+    .Validate(o => o.KnownNetworks.All(n => System.Net.IPNetwork.TryParse(n, out _)),
+        "ReverseProxy:KnownNetworks must list CIDR ranges, e.g. \"10.0.0.0/8\".")
     .ValidateOnStart();
 
 // ---- Database -------------------------------------------------------------
@@ -408,6 +418,10 @@ if (authConfig.Provider == AuthOptions.ProviderNone)
 // database already migrated. Running them first leaves the database untouched.
 app.Services.GetRequiredService<IStartupValidator>().Validate();
 
+// Prepared here rather than where it is mapped, below, for the same reason: a shell that
+// can't be prepared stops the app, and it should do so before the migration too.
+var shell = SpaShell.Prepare(app, proxyConfig.PathBase);
+
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -539,6 +553,6 @@ if (apiDocsEnabled)
         .AllowAnonymous();
 }
 
-app.MapSpaFallback(proxyConfig.PathBase);
+app.MapSpaFallback(shell);
 
 await app.RunAsync();

@@ -18,7 +18,7 @@ HOL-2    needs tests of BankHolidaySyncBackgroundService (startup run, interval,
 HOL-11   needs endpoint tests of the hand-triggered sync: all regions, one region, an untracked region (400), and its audit entry
 HOL-12   needs BankHolidayService tests asserting the audit entries of adding, editing and deleting a manual holiday
 PRIV-3   needs a RetentionBackgroundService test with a failing sweep, asserting it logs and runs again on the next tick
-CFG-5    needs tests of the served shell against a built index.html: base href rewrite, inlined config, startup failure without a base href, no-store and immutable headers
+CFG-5    needs tests of the served shell: base href rewrite, inlined config, no-store and immutable headers (the startup failure without a base href is tested under CFG-1)
 CFG-6    needs a test inlining a configuration value containing </script> and asserting it comes out escaped
 CFG-7    needs route tests of /.well-known/security.txt: contact, fallback to Team:SupportUrl, Expires, and 404 with neither set
 CFG-8    needs route tests of /healthchecks returning only the status and of /healthchecks/detail requiring AuditRead

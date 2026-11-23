@@ -32,6 +32,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public string DatabasePath => Path.Combine(directory, "foo-calendar.db");
 
+    /// <summary>When set, the app runs from a content root of its own whose
+    /// wwwroot/index.html holds this, as if it were the frontend build. Left unset, the
+    /// content root is the Api project, whose wwwroot exists only after a frontend build, so
+    /// a test that needs a shell must not depend on one being there.</summary>
+    public string Shell { get; init; }
+
     /// <summary>The names of the tables in the database file, read without going through
     /// the app, so it also answers when the app failed to start.</summary>
     public List<string> TableNames()
@@ -53,6 +59,20 @@ public sealed class TestApp : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+
+        if (Shell is not null)
+        {
+            var contentRoot = Path.Combine(directory, "content");
+            Directory.CreateDirectory(Path.Combine(contentRoot, "wwwroot"));
+            File.WriteAllText(Path.Combine(contentRoot, "wwwroot", "index.html"), Shell);
+
+            // appsettings.json is read from the content root, and the app does not start
+            // without the defaults it carries. The build copies both files next to the tests.
+            foreach (var file in Directory.GetFiles(AppContext.BaseDirectory, "appsettings*.json"))
+                File.Copy(file, Path.Combine(contentRoot, Path.GetFileName(file)));
+
+            builder.UseContentRoot(contentRoot);
+        }
 
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);

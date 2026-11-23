@@ -53,19 +53,22 @@ those arrows ([0007](decisions/0007-no-special-category-data.md)).
    (Nager, File, or None), and the sync job is only registered when there is a source.
 3. **The dev bypass announces itself**: with `Auth:Provider=None` a warning is logged.
 4. **Every option is validated**, by running the checks `ValidateOnStart` registered
-   rather than waiting for the host to run them when it starts.
-5. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
-6. **The pipeline is assembled and the SPA shell prepared once**, when a frontend build is
-   present: `index.html` is read, its `<base href>` rewritten for a sub-path deployment,
-   and the bootstrap config inlined as `window.__bootstrap`
-   ([0004](decisions/0004-runtime-configuration.md)).
-7. **The host starts** the background services. The holiday sync runs immediately and
+   rather than waiting for the host to run them when it starts. That includes the values
+   parsed only later, such as the proxy addresses and the holiday source URL.
+5. **The SPA shell is prepared once**, when a frontend build is present: `index.html` is
+   read, its `<base href>` rewritten for a sub-path deployment, and the bootstrap config
+   inlined as `window.__bootstrap`
+   ([0004](decisions/0004-runtime-configuration.md)). A shell with no `</head>`, or with
+   no `<base href>` while `ReverseProxy:PathBase` is set, stops the process here.
+6. **Migrations are applied** to the SQLite file, so upgrading is pulling a newer image.
+7. **The pipeline is assembled**, and the prepared shell mapped as the fallback route.
+8. **The host starts** the background services. The holiday sync runs immediately and
    then every `Holidays:SyncInterval`; the retention sweep runs immediately and then every
    `Retention:SweepInterval` (daily).
 
-So a missing identity provider setting, a permission with no claim values, or
-`Auth:Provider=None` outside Development stops the process with a message saying what to
-set, before it has touched the database or served a request.
+So a missing identity provider setting, a permission with no claim values, a malformed
+proxy address, or `Auth:Provider=None` outside Development stops the process with a message
+saying what to set, before it has touched the database or served a request.
 
 ## A request through the pipeline
 
