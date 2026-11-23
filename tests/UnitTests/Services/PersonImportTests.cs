@@ -73,6 +73,19 @@ public sealed class PersonImportTests : SqliteTestBase
         Db.People.Count(p => p.Username == "jdoe").ShouldBe(1);
     }
 
+    // One entry for the whole file, saying how much of it landed.
+    [Fact]
+    [Trait("Spec", "AUD-1")]
+    public async Task ImportAsync_LogsOneEntryForTheFile()
+    {
+        AddPerson("jdoe");
+
+        await CreateService().ImportAsync("username\njdoe\nasmith\nbwayne", Actor);
+
+        audit.Entries.ShouldHaveSingleItem().ShouldBe(new RecordingAuditLog.Entry(
+            AuditActions.PeopleImported, "2 person(s) imported", "2 created, 1 skipped, 0 failed"));
+    }
+
     [Fact]
     [Trait("Spec", "PPL-11")]
     public async Task ImportAsync_SkipsARepeatedRowWithinTheSameFile()

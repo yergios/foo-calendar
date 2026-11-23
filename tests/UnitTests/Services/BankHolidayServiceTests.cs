@@ -210,6 +210,51 @@ public sealed class BankHolidayServiceTests : SqliteTestBase
     }
 
     [Fact]
+    [Trait("Spec", "HOL-12")]
+    [Trait("Spec", "AUD-1")]
+    public async Task AddManualAsync_LogsWhatWasAdded()
+    {
+        var sut = CreateService();
+
+        await sut.AddManualAsync(new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 1), "Custom Day"), Actor, Tracked);
+
+        audit.Entries.ShouldHaveSingleItem().ShouldBe(new RecordingAuditLog.Entry(
+            AuditActions.BankHolidayCreated, "Custom Day", "CH-ZH, 2026-05-01"));
+    }
+
+    [Fact]
+    [Trait("Spec", "HOL-12")]
+    [Trait("Spec", "AUD-1")]
+    public async Task UpdateManualAsync_LogsWhatItWasAndWhatItBecame()
+    {
+        var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Old", Source = HolidaySource.Manual, CreatedBy = Actor };
+        Db.BankHolidays.Add(holiday);
+        Db.SaveChanges();
+        var sut = CreateService();
+
+        await sut.UpdateManualAsync(holiday.Id, new AddManualHolidayRequest("CH-ZH", new DateOnly(2026, 5, 2), "New", IsRecurringAnnually: true), Actor, Tracked);
+
+        audit.Entries.ShouldHaveSingleItem().ShouldBe(new RecordingAuditLog.Entry(
+            AuditActions.BankHolidayUpdated, "New", "Old (CH, 2026-05-01) → New (CH-ZH, 2026-05-02, every year)"));
+    }
+
+    [Fact]
+    [Trait("Spec", "HOL-12")]
+    [Trait("Spec", "AUD-1")]
+    public async Task DeleteManualAsync_LogsWhatWasDeleted()
+    {
+        var holiday = new BankHoliday { Region = "CH", Date = new DateOnly(2026, 5, 1), Name = "Custom", Source = HolidaySource.Manual, CreatedBy = Actor };
+        Db.BankHolidays.Add(holiday);
+        Db.SaveChanges();
+        var sut = CreateService();
+
+        await sut.DeleteManualAsync(holiday.Id);
+
+        audit.Entries.ShouldHaveSingleItem().ShouldBe(new RecordingAuditLog.Entry(
+            AuditActions.BankHolidayDeleted, "Custom", "CH, 2026-05-01"));
+    }
+
+    [Fact]
     [Trait("Spec", "HOL-3")]
     public async Task SyncRegionsAsync_AddsNationwideAndRegionalHolidaysFromTheSource()
     {

@@ -163,6 +163,16 @@ public sealed class PersonServiceTests : SqliteTestBase
 
     [Fact]
     [Trait("Spec", "AUD-1")]
+    public async Task CreateAsync_LogsWhoWasAdded()
+    {
+        await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "admin");
+
+        audit.Entries.ShouldHaveSingleItem().ShouldBe(new RecordingAuditLog.Entry(
+            AuditActions.PersonCreated, "Jane D.", "jdoe, ES-MD"));
+    }
+
+    [Fact]
+    [Trait("Spec", "AUD-1")]
     public async Task UpdateAsync_LogsWhatMoved()
     {
         var person = await sut.CreateAsync(CreateRequestIn("jdoe", "ES-MD"), "jdoe");

@@ -393,6 +393,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     [Trait("Spec", "ABS-12")]
     [Trait("Spec", "AUD-2")]
+    [Trait("Spec", "AUD-1")]
     public async Task CreateAsync_LogsWhatWasFiledWithoutTheNote()
     {
         var person = CreatePerson();
@@ -408,6 +409,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     [Trait("Spec", "ABS-12")]
     [Trait("Spec", "AUD-2")]
+    [Trait("Spec", "AUD-1")]
     public async Task UpdateAsync_LogsWhatChangedWithoutTheNote()
     {
         var person = CreatePerson();
@@ -470,6 +472,7 @@ public sealed class AbsenceServiceTests : SqliteTestBase
     [Fact]
     [Trait("Spec", "ABS-12")]
     [Trait("Spec", "AUD-2")]
+    [Trait("Spec", "AUD-1")]
     public async Task DeleteAsync_LogsWhatWentWithoutTheNote()
     {
         var person = CreatePerson();
