@@ -43,6 +43,12 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// deployment does.</summary>
     public string Environment { get; init; } = "Development";
 
+    /// <summary>When set, the dev identity is a member holding exactly these permissions
+    /// rather than all of them; empty is a member with none. Each is granted by the claim
+    /// value appsettings.json maps it to by default, which is the permission's own name.
+    /// </summary>
+    public IReadOnlyCollection<string> Permissions { get; init; }
+
     /// <summary>Everything the app logged, startup included.</summary>
     public RecordingLoggerProvider Logs { get; } = new();
 
@@ -85,6 +91,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);
+
+        if (Permissions is not null)
+        {
+            builder.UseSetting("Auth:DevUser:GrantAllPermissions", "false");
+            foreach (var (permission, index) in Permissions.Select((p, i) => (p, i)))
+                builder.UseSetting($"Auth:DevUser:Permissions:{index}", permission);
+        }
     }
 
     protected override void Dispose(bool disposing)
