@@ -1,3 +1,5 @@
+using Api.Data;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -60,6 +62,32 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>Everything the app logged, startup included.</summary>
     public RecordingLoggerProvider Logs { get; } = new();
 
+    /// <summary>Files under wwwroot besides the shell, keyed by their path in it, e.g.
+    /// "assets/app.js". Only written when <see cref="Shell"/> is set.</summary>
+    public IReadOnlyDictionary<string, string> WebRootFiles { get; init; }
+
+    /// <summary>Changes to the app's services, applied after Program.cs registered its own:
+    /// a stand-in for something outside the process, or a hosted service taken out.</summary>
+    public Action<IServiceCollection> ServiceOverrides { get; init; }
+
+    /// <summary>Writes straight to the app's database, for what no route lets the test
+    /// identity do itself, such as adding other people. Starts the app if it hasn't.
+    /// </summary>
+    public void Seed(Action<AppDbContext> seed)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        seed(db);
+        db.SaveChanges();
+    }
+
+    /// <summary>Reads the app's database directly, for what no response shows.</summary>
+    public T Query<T>(Func<AppDbContext, T> query)
+    {
+        using var scope = Services.CreateScope();
+        return query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+    }
+
     /// <summary>The names of the tables in the database file, read without going through
     /// the app, so it also answers when the app failed to start.</summary>
     public List<string> TableNames()
@@ -89,6 +117,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
             Directory.CreateDirectory(Path.Combine(contentRoot, "wwwroot"));
             File.WriteAllText(Path.Combine(contentRoot, "wwwroot", "index.html"), Shell);
 
+            foreach (var (path, content) in WebRootFiles ?? new Dictionary<string, string>())
+            {
+                var file = Path.Combine(contentRoot, "wwwroot", path);
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                File.WriteAllText(file, content);
+            }
+
             // appsettings.json is read from the content root, and the app does not start
             // without the defaults it carries. The build copies both files next to the tests.
             foreach (var file in Directory.GetFiles(AppContext.BaseDirectory, "appsettings*.json"))
@@ -114,6 +149,9 @@ public sealed class TestApp : WebApplicationFactory<Program>
                 JwtBearerDefaults.AuthenticationScheme,
                 o => o.Configuration = IdentityProvider.Configuration));
         }
+
+        if (ServiceOverrides is not null)
+            builder.ConfigureTestServices(ServiceOverrides);
 
         if (Permissions is not null)
         {

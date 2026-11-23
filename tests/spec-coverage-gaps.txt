@@ -9,11 +9,7 @@
 # Most need the route-level integration tests of the next roadmap step, which
 # tests/IntegrationTests (TestApp) is the place for.
 
-PPL-1    needs endpoint tests of a member reading the calendar without a profile and creating their own once, names from claims
-PPL-5    needs endpoint tests of the PeopleManage create, update and delete routes acting on someone else's profile
-PPL-8    needs an endpoint test sorting the people page by an absence total without ReportsRead (403) and with it
 ABS-6    needs a concurrency test racing two overlapping creates for one person and asserting exactly one succeeds
-ABS-11   needs endpoint tests of a member reading their own totals and of everyone's totals requiring ReportsRead
 HOL-2    needs tests of BankHolidaySyncBackgroundService (startup run, interval, this year and next) and of the hand-triggered sync answering 409 with Holidays:Source=None
 HOL-11   needs endpoint tests of the hand-triggered sync: all regions, one region, an untracked region (400), and its audit entry, which is also the one AUD-1 clause no test covers yet
 PRIV-3   needs a RetentionBackgroundService test with a failing sweep, asserting it logs and runs again on the next tick
