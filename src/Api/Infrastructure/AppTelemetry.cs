@@ -38,6 +38,16 @@ public static class AppTelemetry
     public const string OutcomeSynced = "synced";
     public const string OutcomeFailed = "failed";
 
+    /// <summary>Stopped by the host shutting down, or by the request that asked for it going
+    /// away: neither the source's fault nor the country's, so not counted as a failure.
+    /// </summary>
+    public const string OutcomeCancelled = "cancelled";
+
+    /// <summary>The exception's type on a failed span, the OpenTelemetry convention. Never
+    /// its message, which is the source's or the database's text and could carry anything
+    /// (OBS-3).</summary>
+    public const string ErrorTypeAttribute = "error.type";
+
     public static readonly Counter<long> HolidaySyncRuns = Meter.CreateCounter<long>(
         "foo_calendar.holiday_sync.runs", "{run}", "Holiday sync runs, one per year synced.");
 
@@ -45,8 +55,16 @@ public static class AppTelemetry
         "foo_calendar.holiday_sync.failed_countries", "{country}",
         "Countries whose holidays could not be fetched or stored, tagged by country.");
 
-    public static readonly Histogram<double> HolidaySyncDuration = Meter.CreateHistogram<double>(
-        "foo_calendar.holiday_sync.duration", "s", "How long one holiday sync run took.");
+    /// <summary>Bucket boundaries in seconds. The SDK's defaults are made for milliseconds
+    /// (0, 5, 10, 25, ... 10000), which would put every run, from a file source's few
+    /// milliseconds to a slow upstream's minutes, into the first two buckets.</summary>
+    public static readonly IReadOnlyList<double> HolidaySyncDurationBuckets =
+        [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300];
+
+    public static readonly Histogram<double> HolidaySyncDuration = Meter.CreateHistogram(
+        "foo_calendar.holiday_sync.duration", "s", "How long one holiday sync run took.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = HolidaySyncDurationBuckets });
 
     // ---- Retention sweep -------------------------------------------------------------
 
@@ -63,4 +81,8 @@ public static class AppTelemetry
     public static readonly Counter<long> RetentionDeletedRows = Meter.CreateCounter<long>(
         "foo_calendar.retention.deleted_rows", "{row}",
         "Rows the retention sweep deleted, tagged by table.");
+
+    public static readonly Counter<long> RetentionFailedSweeps = Meter.CreateCounter<long>(
+        "foo_calendar.retention.failed_sweeps", "{sweep}",
+        "Retention sweeps that failed, so data was kept past its retention period.");
 }

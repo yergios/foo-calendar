@@ -181,15 +181,16 @@ Besides the ASP.NET Core, HTTP client and runtime instrumentation, the app trace
 
 | Span | Attributes |
 | --- | --- |
-| `holiday_sync`, one per run, i.e. one year (the scheduled sync runs two, this year and next; a hand-triggered sync and a new region on a profile run their own) | `foo_calendar.holiday_sync.year`, `.region_count`, `.failed_country_count` |
-| `holiday_sync.country`, a child of the run per country asked | `foo_calendar.holiday_sync.country`, `.outcome` (`synced` or `failed`); a failed one has an error status and `error.type`, the exception's type |
-| `retention_sweep`, one per sweep | `foo_calendar.retention.audit_entries_deleted`, `.absences_deleted` |
+| `holiday_sync`, one per run, i.e. one year (the scheduled sync runs two, this year and next; a hand-triggered sync and a new region on a profile run their own) | `foo_calendar.holiday_sync.year`, `.region_count`, `.failed_country_count`; `.outcome` `cancelled` on a run stopped by shutdown or by its caller going away |
+| `holiday_sync.country`, a child of the run per country asked | `foo_calendar.holiday_sync.country`, `.outcome` (`synced`, `failed` or `cancelled`); a failed one has an error status and `error.type`, the exception's type. A cancelled one is not an error and not a failed country |
+| `retention_sweep`, one per sweep | `foo_calendar.retention.audit_entries_deleted`, `.absences_deleted`; a failed sweep has an error status and `error.type` instead |
 
 | Metric | Type | Unit | Attributes |
 | --- | --- | --- | --- |
-| `foo_calendar.holiday_sync.runs` | counter | `{run}` | |
+| `foo_calendar.holiday_sync.runs` | counter, completed runs only | `{run}` | |
 | `foo_calendar.holiday_sync.failed_countries` | counter | `{country}` | `foo_calendar.holiday_sync.country` |
-| `foo_calendar.holiday_sync.duration` | histogram | `s` | |
+| `foo_calendar.holiday_sync.duration` | histogram of completed runs, buckets from 0.05 s to 300 s | `s` | |
 | `foo_calendar.retention.deleted_rows` | counter, recorded every sweep, zero included | `{row}` | `foo_calendar.retention.table` (`audit_entries` or `absences`) |
+| `foo_calendar.retention.failed_sweeps` | counter | `{sweep}` | |
 
-Worth an alert: `failed_countries` rising (the holiday source is down or refusing a country; the log has the exception), and `runs` not rising for longer than `Holidays:SyncInterval` (the sync stopped running).
+Worth an alert: `failed_countries` rising (the holiday source is down or refusing a country; the log has the exception), `runs` not rising for longer than `Holidays:SyncInterval` (the sync stopped running), and `failed_sweeps` rising (data is being kept past its retention period; the log has the exception).

@@ -8,6 +8,8 @@ using Api.Services;
 
 using IntegrationTests.TestSupport;
 
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -50,14 +52,44 @@ public sealed class TelemetryTests
             Task.FromResult<IReadOnlyList<string>>([]);
     }
 
-    /// <summary>The app with the source above and no background jobs, so only what a test
-    /// runs is recorded, and nothing deletes or syncs behind its back.</summary>
-    private static TestApp App(params (string Key, string Value)[] settings) =>
+    /// <summary>Syncs any country until it reaches Germany, where whoever asked for the
+    /// sync gives up, the way the host does as it shuts down.</summary>
+    private sealed class CancelledAtGermanySource(CancellationTokenSource caller) : IHolidaySource
+    {
+        public HolidaySource Kind => HolidaySource.File;
+
+        public Task<IReadOnlyList<SourceHoliday>> GetAsync(
+            string countryCode, int year, CancellationToken ct = default)
+        {
+            if (countryCode == "DE")
+            {
+                caller.Cancel();
+                ct.ThrowIfCancellationRequested();
+            }
+
+            return Task.FromResult<IReadOnlyList<SourceHoliday>>(
+                [new SourceHoliday(countryCode, new DateOnly(year, 8, 1), "National Day")]);
+        }
+
+        public Task<IReadOnlyList<string>> GetCountriesAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> GetRegionsAsync(string countryCode, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+    }
+
+    /// <summary>The app with the source above, or <paramref name="source"/>, and no
+    /// background jobs, so only what a test runs is recorded, and nothing deletes or syncs
+    /// behind its back.</summary>
+    private static TestApp App(params (string Key, string Value)[] settings) => App(null, settings);
+
+    private static TestApp App(IHolidaySource? source, params (string Key, string Value)[] settings) =>
         new([("Holidays:Source", "File"), ("Holidays:File:Path", "unused.json"), .. settings])
         {
             ServiceOverrides = services =>
             {
-                services.AddSingleton<IHolidaySource, SpainFailingSource>();
+                if (source is null) services.AddSingleton<IHolidaySource, SpainFailingSource>();
+                else services.AddSingleton(source);
                 foreach (var job in services.Where(d => d.ServiceType == typeof(IHostedService)
                         && (d.ImplementationType == typeof(BankHolidaySyncBackgroundService)
                             || d.ImplementationType == typeof(RetentionBackgroundService))).ToList())
@@ -119,11 +151,18 @@ public sealed class TelemetryTests
     private static Dictionary<string, object?> Tags(Activity span) =>
         span.TagObjects.ToDictionary(t => t.Key, t => t.Value);
 
-    private static async Task<IReadOnlyList<string>> SyncAsync(TestApp app, IReadOnlyCollection<string> regions, int year)
+    private static async Task<IReadOnlyList<string>> SyncAsync(
+        TestApp app, IReadOnlyCollection<string> regions, int year, CancellationToken ct = default)
     {
         await using var scope = app.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IBankHolidayService>()
-            .SyncRegionsAsync(regions, year);
+            .SyncRegionsAsync(regions, year, ct);
+    }
+
+    private static async Task SweepAsync(TestApp app, CancellationToken ct = default)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IRetentionService>().SweepAsync(ct);
     }
 
     [Fact]
@@ -214,11 +253,7 @@ public sealed class TelemetryTests
             db.Absences.Add(Rows.Vacation(person, longAgo.AddDays(10), longAgo.AddDays(12)));
         });
 
-        var (spans, measurements) = await RecordAsync(async () =>
-        {
-            await using var scope = app.Services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<IRetentionService>().SweepAsync();
-        });
+        var (spans, measurements) = await RecordAsync(() => SweepAsync(app));
 
         Tags(spans.Single(s => s.OperationName == AppTelemetry.RetentionSweepSpan)).ShouldBe(
             new Dictionary<string, object?>
@@ -234,5 +269,95 @@ public sealed class TelemetryTests
                 [AppTelemetry.AuditEntriesTable] = 3,
                 [AppTelemetry.AbsencesTable] = 2,
             }, ignoreOrder: true);
+    }
+
+    // Shutdown is not a failing source: nothing is counted as failed, nothing is an error,
+    // and the run is not counted as one that completed.
+    [Fact]
+    [Trait("Spec", "OBS-1")]
+    public async Task ASyncCancelledPartWay_IsCancelled_NotAFailedCountry()
+    {
+        using var caller = new CancellationTokenSource();
+        using var app = App(new CancelledAtGermanySource(caller));
+        _ = app.Services;
+
+        var (spans, measurements) = await RecordAsync(() =>
+            Should.ThrowAsync<OperationCanceledException>(
+                () => SyncAsync(app, ["CH-ZH", "DE-BE", "FR-IDF"], 2026, caller.Token)));
+
+        var run = spans.Single(s => s.OperationName == AppTelemetry.HolidaySyncSpan);
+        Tags(run)[AppTelemetry.OutcomeAttribute].ShouldBe(AppTelemetry.OutcomeCancelled);
+        Tags(run)[AppTelemetry.FailedCountryCountAttribute].ShouldBe(0);
+        run.Status.ShouldBe(ActivityStatusCode.Unset);
+
+        var germany = spans.Single(s => s.OperationName == AppTelemetry.HolidaySyncCountrySpan
+            && Equals(s.GetTagItem(AppTelemetry.CountryAttribute), "DE"));
+        Tags(germany)[AppTelemetry.OutcomeAttribute].ShouldBe(AppTelemetry.OutcomeCancelled);
+        germany.Status.ShouldBe(ActivityStatusCode.Unset);
+        Tags(germany).ShouldNotContainKey(AppTelemetry.ErrorTypeAttribute);
+        // The run stopped there.
+        spans.ShouldNotContain(s => Equals(s.GetTagItem(AppTelemetry.CountryAttribute), "FR"));
+
+        measurements.ShouldNotContain(m => m.Instrument == "foo_calendar.holiday_sync.failed_countries");
+        measurements.ShouldNotContain(m => m.Instrument == "foo_calendar.holiday_sync.runs");
+        measurements.ShouldNotContain(m => m.Instrument == "foo_calendar.holiday_sync.duration");
+    }
+
+    // A run takes anything from milliseconds, for a file, to minutes, for a slow upstream
+    // and many countries. The SDK's default boundaries are for milliseconds and would lump
+    // all of it together.
+    [Fact]
+    [Trait("Spec", "OBS-1")]
+    public void TheSyncDuration_IsBucketedInSeconds()
+    {
+        var buckets = AppTelemetry.HolidaySyncDuration.Advice?.HistogramBucketBoundaries;
+
+        buckets.ShouldNotBeNull();
+        buckets.ShouldBe(AppTelemetry.HolidaySyncDurationBuckets);
+        buckets.ShouldBeInOrder(SortDirection.Ascending);
+        buckets[0].ShouldBeLessThanOrEqualTo(0.1);
+        buckets[^1].ShouldBeGreaterThanOrEqualTo(300);
+        AppTelemetry.HolidaySyncDuration.Unit.ShouldBe("s");
+    }
+
+    [Fact]
+    [Trait("Spec", "OBS-2")]
+    [Trait("Spec", "OBS-3")]
+    public async Task AFailedSweep_IsAnErrorSpan_AndCounted()
+    {
+        using var app = App(("Retention:AuditEntryDays", "30"));
+        // Whatever goes wrong underneath, here a table that is not there.
+        app.Seed(db => db.Database.ExecuteSqlRaw("DROP TABLE AuditEntries"));
+
+        var (spans, measurements) = await RecordAsync(() =>
+            Should.ThrowAsync<SqliteException>(() => SweepAsync(app)));
+
+        var sweep = spans.Single(s => s.OperationName == AppTelemetry.RetentionSweepSpan);
+        sweep.Status.ShouldBe(ActivityStatusCode.Error);
+        sweep.StatusDescription.ShouldBeNull();
+        Tags(sweep).ShouldBe(new Dictionary<string, object?>
+        {
+            [AppTelemetry.ErrorTypeAttribute] = typeof(SqliteException).FullName,
+        });
+
+        measurements.Single(m => m.Instrument == "foo_calendar.retention.failed_sweeps").Value.ShouldBe(1);
+        measurements.ShouldNotContain(m => m.Instrument == "foo_calendar.retention.deleted_rows");
+    }
+
+    [Fact]
+    [Trait("Spec", "OBS-2")]
+    public async Task ASweepStoppedByShutdown_IsNotAFailure()
+    {
+        using var app = App(("Retention:AuditEntryDays", "30"));
+        _ = app.Services;
+        using var shutdown = new CancellationTokenSource();
+        await shutdown.CancelAsync();
+
+        var (spans, measurements) = await RecordAsync(() =>
+            Should.ThrowAsync<OperationCanceledException>(() => SweepAsync(app, shutdown.Token)));
+
+        spans.Single(s => s.OperationName == AppTelemetry.RetentionSweepSpan)
+            .Status.ShouldBe(ActivityStatusCode.Unset);
+        measurements.ShouldNotContain(m => m.Instrument == "foo_calendar.retention.failed_sweeps");
     }
 }

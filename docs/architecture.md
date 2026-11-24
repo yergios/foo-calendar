@@ -215,7 +215,11 @@ the app's own activity source and meter, `FooCalendar` (`Infrastructure/AppTelem
 - spans `holiday_sync` (one per year synced) with a `holiday_sync.country` child per
   country, and `retention_sweep`;
 - metrics `foo_calendar.holiday_sync.runs`, `foo_calendar.holiday_sync.failed_countries`,
-  `foo_calendar.holiday_sync.duration` and `foo_calendar.retention.deleted_rows`.
+  `foo_calendar.holiday_sync.duration` (bucketed in seconds),
+  `foo_calendar.retention.deleted_rows` and `foo_calendar.retention.failed_sweeps`.
+
+A sync stopped by shutdown is marked cancelled rather than failed, so stopping the app never
+reads as the holiday source failing.
 
 Their attributes are region and country codes, years, counts, outcomes and exception types,
 never a username, a name or a note (OBS-3). [Deployment](deployment.md#the-apps-own-spans-and-metrics)

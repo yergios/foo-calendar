@@ -185,6 +185,16 @@ public sealed class BankHolidayService(
                 await SyncCountryAsync(country.Key, [.. country], year, ct);
                 span?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeSynced);
             }
+            // The host shutting down, or the caller giving up: the run stops here, and
+            // nothing about this country failed. An HTTP timeout is also a cancellation, but
+            // not of this token, so it is a failure like any other below.
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                span?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeCancelled);
+                run?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeCancelled);
+                run?.SetTag(AppTelemetry.FailedCountryCountAttribute, failedCountries);
+                throw;
+            }
 #pragma warning disable CA1031 // Catch-all on purpose: a failed country is reported in failedRegions, and must not stop the rest syncing.
             catch (Exception ex)
 #pragma warning restore CA1031
@@ -194,16 +204,17 @@ public sealed class BankHolidayService(
                 failed.AddRange(country);
                 failedCountries++;
 
-                // The exception's type and not its message, which is the source's or the
-                // database's text and could carry anything (OBS-3). The log has the rest.
+                // The exception's type and not its message (OBS-3). The log has the rest.
                 span?.SetTag(AppTelemetry.OutcomeAttribute, AppTelemetry.OutcomeFailed);
-                span?.SetTag("error.type", ex.GetType().FullName);
+                span?.SetTag(AppTelemetry.ErrorTypeAttribute, ex.GetType().FullName);
                 span?.SetStatus(ActivityStatusCode.Error);
                 AppTelemetry.HolidaySyncFailedCountries.Add(
                     1, new KeyValuePair<string, object?>(AppTelemetry.CountryAttribute, country.Key));
             }
         }
 
+        // A cancelled run left above, so these count completed runs only: a run that never
+        // finished has no duration worth comparing.
         run?.SetTag(AppTelemetry.FailedCountryCountAttribute, failedCountries);
         AppTelemetry.HolidaySyncRuns.Add(1);
         AppTelemetry.HolidaySyncDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);

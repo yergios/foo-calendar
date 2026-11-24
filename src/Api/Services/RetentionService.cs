@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Api.Configuration;
 using Api.Data;
 using Api.Infrastructure;
@@ -25,6 +27,25 @@ public sealed class RetentionService(
     {
         using var span = AppTelemetry.ActivitySource.StartActivity(AppTelemetry.RetentionSweepSpan);
 
+        try
+        {
+            return await SweepAsync(span, ct);
+        }
+        // Shutdown stopping a sweep is not the sweep failing.
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+        {
+            // The exception's type and not its message (OBS-3); the caller logs the rest.
+            // Counted as well as marked, since a sweep that keeps failing is data kept past
+            // its retention period, which is worth an alert rather than a trace search.
+            span?.SetStatus(ActivityStatusCode.Error);
+            span?.SetTag(AppTelemetry.ErrorTypeAttribute, ex.GetType().FullName);
+            AppTelemetry.RetentionFailedSweeps.Add(1);
+            throw;
+        }
+    }
+
+    private async Task<RetentionSweepResult> SweepAsync(Activity? span, CancellationToken ct)
+    {
         var config = options.Value;
         var now = DateTime.UtcNow;
 

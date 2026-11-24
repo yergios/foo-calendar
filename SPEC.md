@@ -338,10 +338,12 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 ## OBS: Telemetry
 
 - **OBS-1** The holiday sync must emit a trace span per run and per country, recording the
-  year, the country and the outcome, and metrics for runs, failed countries and duration.
-  `[test]`
+  year, the country and the outcome, and metrics for runs, failed countries and duration,
+  the duration bucketed in seconds. A run cancelled by shutdown or by its caller must be
+  recorded as cancelled, not as a failed country or an error. `[test]`
 - **OBS-2** The retention sweep must emit a trace span per run and a counter of deleted rows
-  per table. `[test]`
+  per table; a failed sweep must mark its span as an error with the exception's type, and
+  be counted. `[test]`
 - **OBS-3** No span, metric or log attribute the app adds may carry a username, a name or an
   absence note; region and country codes, counts and durations are fine. `[review]`
 
