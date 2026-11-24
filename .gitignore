@@ -22,3 +22,6 @@ dist/
 
 # Vite build output
 src/Api/wwwroot
+
+# Claude Code (personal settings; the shared ones are .claude/settings.json)
+.claude/settings.local.json

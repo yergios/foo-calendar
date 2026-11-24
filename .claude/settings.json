@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(dotnet ef migrations has-pending-model-changes *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint:check *)",
+      "Bash(pnpm format:check *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm --dir src/Web typecheck *)",
+      "Bash(pnpm --dir src/Web lint:check *)",
+      "Bash(pnpm --dir src/Web format:check *)",
+      "Bash(pnpm --dir src/Web test *)",
+      "Bash(node scripts/*)",
+      "Bash(scripts/check.sh *)"
+    ],
+    "ask": ["Bash(git diff *--output*)", "Bash(git log *--output*)"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/stop-check.mjs\"",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/commit-privacy.mjs\"",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

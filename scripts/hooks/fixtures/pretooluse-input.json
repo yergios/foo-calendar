@@ -1,0 +1,17 @@
+{
+  "session_id": "3258b089-4007-469c-9b21-ffcf8edfa4d6",
+  "transcript_path": "/home/dev/.claude/projects/-home-dev-foo-calendar/3258b089-4007-469c-9b21-ffcf8edfa4d6.jsonl",
+  "cwd": "/home/dev/foo-calendar",
+  "prompt_id": "7d59c790-ac61-46b0-ba9a-4612bc340af1",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git status",
+    "description": "Show working tree status"
+  },
+  "tool_use_id": "toolu_01QkLzMxkteUHsnNzsJNBFyQ"
+}

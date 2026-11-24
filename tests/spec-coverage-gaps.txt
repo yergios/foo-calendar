@@ -8,5 +8,3 @@
 #
 # Everything left is built by the change spec each line names.
 
-AGT-2    specified 2026-11-24, built by docs/specs/0005: node:test cases driving the Stop hook script with recorded hook input and a stub check
-AGT-3    specified 2026-11-24, built by docs/specs/0005: node:test cases driving the commit hook: touching and non-touching diffs, failed and passed verdicts, missing and matching trailers
