@@ -43,6 +43,7 @@
           type="checkbox"
           class="shrink-0"
           :checked="isSelected(region.code)"
+          data-perf="region"
           @change="toggleValue(region.code)"
         />
         {{ region.label }}

@@ -226,8 +226,8 @@ jobs:
           if-no-files-found: ignore
 
       # The calendar at 1000 synthetic people: under 5,000 DOM nodes after every
-      # interaction (PERF-1), and each interaction's longest main-thread block within three
-      # times tools/perf/baseline.json (PERF-2). Runs whether or not the flows above
+      # interaction (PERF-1), and each interaction's longest main-thread block within the
+      # larger of three times tools/perf/baseline.json and 16 ms (PERF-2). Runs whether or not the flows above
       # passed, as long as the container is up: the two answer different questions. A
       # timing failure can be CI noise, which a rerun tells apart; the DOM budget never is.
       - name: Performance budget

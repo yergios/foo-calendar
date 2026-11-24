@@ -45,7 +45,15 @@
           </kbd>
         </div>
 
-        <IconPopover ref="sortPopover" title="Sort" :active="sortMode !== 'mine'" :min-width="230">
+        <!-- data-perf: the hooks tools/perf/harness.mjs finds these controls by, which
+             stay put when a tooltip or a label is reworded. -->
+        <IconPopover
+          ref="sortPopover"
+          title="Sort"
+          data-perf="sort"
+          :active="sortMode !== 'mine'"
+          :min-width="230"
+        >
           <template #icon>
             <svg
               class="w-5 h-5"
@@ -67,6 +75,7 @@
             v-for="option in SORT_OPTIONS"
             :key="option.value"
             type="button"
+            :data-perf="`sort-${option.value}`"
             class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left text-ink hover:bg-surface"
             :class="sortMode === option.value ? 'font-semibold' : undefined"
             @click="selectSort(option.value)"
@@ -79,6 +88,7 @@
         <IconPopover
           ref="regionPopover"
           title="Filter"
+          data-perf="filter"
           :active="regionFilter.length > 0 || year !== currentYear"
           :min-width="260"
         >

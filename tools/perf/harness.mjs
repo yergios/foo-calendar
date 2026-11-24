@@ -5,7 +5,8 @@
 //   node tools/perf/harness.mjs [people] [--budget]
 //
 //   people = 100 (real data) | 500 | 1000 (synthetic)
-//   --budget: fail unless the run is within PERF-1 and PERF-2 against baseline.json
+//   --budget: fail unless the run is within PERF-1 and PERF-2 against baseline.json, and
+//             measured everything it should have
 //
 // Interactions are bracketed with console.timeStamp('start:<name>') / ('end:<name>')
 // markers in the page; the report is what the main thread did between them.
@@ -110,11 +111,11 @@ const REGIONS = [
 // database. The shape (names, regions, the per-person absence plan) mirrors
 // tools/Seed/Program.cs, which is the source of truth; keep the plan below in step with
 // its AbsencePlan.
+//
+// Absences are generated for whichever year a request asks for, so the calendar always has
+// segments to draw: the year it opens on is the current one, and the year switch moves to
+// the one before. The same people and the same plan each year, from a seed per year.
 function synthetic(n) {
-  let seed = 7;
-  const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
-  const iso = (d) =>
-    `2026-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const people = Array.from({ length: n }, (_, i) => ({
     id: i + 1,
     username: `user${i}`,
@@ -122,8 +123,30 @@ function synthetic(n) {
     homeCity: REGIONS[i % 10],
   }));
   people.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const regionLabels = Object.fromEntries(
+    REGIONS.flatMap((r) => [
+      [r, r + " label"],
+      [r.split("-")[0], r.split("-")[0] + " country"],
+    ]),
+  );
+  const byYear = new Map();
+  return {
+    people: JSON.stringify({ people, regionLabels }),
+    absences: (year) => {
+      if (!byYear.has(year)) byYear.set(year, JSON.stringify({ absences: absencesFor(people, year) }));
+      return byYear.get(year);
+    },
+  };
+}
+
+function absencesFor(people, year) {
+  let seed = 7 + year;
+  const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+  const iso = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const absences = [];
-  let id = 1;
+  // Ids unique across years, as the database's are.
+  let id = 1 + (year % 100) * 1_000_000;
   // The seed's plan (tools/Seed), so a synthetic team draws the same rows a real one does.
   const plan = [
     ["Vacation", 8, 2, 7],
@@ -133,7 +156,7 @@ function synthetic(n) {
   for (const p of people)
     for (const [type, count, minD, maxD] of plan)
       for (let k = 0; k < count; k++) {
-        const start = new Date(2026, 0, 1 + Math.floor(rnd() * 358));
+        const start = new Date(year, 0, 1 + Math.floor(rnd() * 358));
         const len = minD + Math.floor(rnd() * (maxD - minD + 1));
         const end = new Date(start);
         end.setDate(end.getDate() + len - 1);
@@ -145,7 +168,7 @@ function synthetic(n) {
           endDate: iso(end),
           type,
           note: null,
-          createdAt: "2026-09-02T17:10:42.4785229",
+          createdAt: `${year}-01-01T09:00:00`,
           startTime: timed ? "09:00:00" : null,
           endTime: timed ? "10:00:00" : null,
         });
@@ -153,16 +176,7 @@ function synthetic(n) {
   absences.sort(
     (a, b) => a.startDate.localeCompare(b.startDate) || a.id - b.id,
   );
-  const regionLabels = Object.fromEntries(
-    REGIONS.flatMap((r) => [
-      [r, r + " label"],
-      [r.split("-")[0], r.split("-")[0] + " country"],
-    ]),
-  );
-  return {
-    people: JSON.stringify({ people, regionLabels }),
-    absences: JSON.stringify({ absences }),
-  };
+  return absences;
 }
 
 if (PEOPLE !== 100) {
@@ -174,9 +188,10 @@ if (PEOPLE !== 100) {
     ],
   });
   page.on("Fetch.requestPaused", (p) => {
-    const body = p.request.url.endsWith("/api/people")
+    const url = new URL(p.request.url);
+    const body = url.pathname.endsWith("/api/people")
       ? bodies.people
-      : bodies.absences;
+      : bodies.absences(Number(url.searchParams.get("from")?.slice(0, 4)));
     send("Fetch.fulfillRequest", {
       requestId: p.requestId,
       responseCode: 200,
@@ -205,6 +220,25 @@ await send("Tracing.start", {
   },
   transferMode: "ReportEvents",
 });
+
+// What the run found that means a number below would not be measuring what it says:
+// reported, and failing the budget, alongside the budget's own failures.
+const problems = [];
+
+/** The absence segments drawn in the rows in view. */
+const segmentCount = () =>
+  evaluate(`document.querySelectorAll('.calendar-row [role=gridcell]').length`);
+
+/** Clicks the first element matching the selector, failing the run when there is none
+ * rather than measuring a click on nothing. */
+const clickFirst = (selector) =>
+  evaluate(
+    `(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw new Error(${JSON.stringify(`nothing matches ${selector}`)});e.click()})()`,
+  );
+/** Clicks the control a data-perf hook names (see the components). */
+const clickHook = (hook) => clickFirst(`[data-perf="${hook}"]`);
+/** Opens or closes an IconPopover, whose hook sits on its root, around the trigger. */
+const togglePopover = (hook) => clickFirst(`[data-perf="${hook}"] > button`);
 
 // DOM size after each interaction, read once its window has closed so the count is not
 // part of what was measured.
@@ -242,6 +276,10 @@ async function measure(name, action, settleFrames = 6) {
   );
   console.log("DOM:", JSON.stringify(domStats));
   domNodes.set("cold-load", domStats.nodes);
+  // Rows with nothing in them cost next to nothing to render: a grid with no absence drawn
+  // would pass every budget while measuring none of the work the budget is about.
+  if ((await segmentCount()) === 0)
+    problems.push("no absence segment is drawn after the cold load, so nothing real was measured");
 
   // Search: type "liam" one char at a time, then clear with Escape.
   await evaluate(`document.getElementById('personSearch').focus()`);
@@ -271,24 +309,18 @@ async function measure(name, action, settleFrames = 6) {
   });
   await evaluate(`document.getElementById('personSearch').blur()`);
 
-  // Sort modes via the popover.
-  async function sortTo(label) {
-    await evaluate(`document.querySelector('button[data-tooltip="Sort"]').click()`);
+  // Sort modes via the popover, each option found by its hook.
+  async function sortTo(mode) {
+    await togglePopover("sort");
     await frames(2);
-    await evaluate(
-      `[...document.querySelectorAll('button')].find(b => b.textContent.trim().endsWith(${JSON.stringify(label)})).click()`,
-    );
+    await clickHook(`sort-${mode}`);
   }
-  for (const label of [
-    "Region, then name",
-    "Absent today, then name",
-    "Name",
+  for (const [name, mode] of [
+    ["sort-region", "region"],
+    ["sort-absent-today", "absentToday"],
+    ["sort-name", "name"],
   ]) {
-    await measure(
-      `sort-${label.split(",")[0].toLowerCase().replace(/ /g, "-")}`,
-      () => sortTo(label),
-      8,
-    );
+    await measure(name, () => sortTo(mode), 8);
   }
 
   // Hover: sweep the mouse across 40 columns on the 6th row, one move per two frames.
@@ -331,13 +363,13 @@ async function measure(name, action, settleFrames = 6) {
     },
     4,
   );
-  console.log(
-    "hover overlays shown after sweep:",
-    await evaluate(
-      `[...document.querySelectorAll('.calendar-hover')].filter(e => !e.hidden).length`,
-    ),
-    "(expect 2)",
+  const overlays = await evaluate(
+    `[...document.querySelectorAll('.calendar-hover')].filter(e => !e.hidden).length`,
   );
+  console.log("hover overlays shown after sweep:", overlays, "(expect 2)");
+  // The sweeps measure moving these; with them not shown, the pointer missed the grid.
+  if (overlays !== 2)
+    problems.push(`${overlays} hover overlays shown after the sweep, not 2: the hover sweeps hit nothing`);
   // Hover: sweep down 20 rows in one column.
   await measure(
     "hover-sweep-20-rows",
@@ -391,41 +423,36 @@ async function measure(name, action, settleFrames = 6) {
     6,
   );
 
-  // Region filter: pick the first checkbox (shows skeleton, then applies), then unpick.
+  // Region filter: pick the first region (shows skeleton, then applies), then unpick. A
+  // region's own checkbox, not "All", which only ever clears the filter.
   async function toggleFirstRegion() {
-    await evaluate(
-      `document.querySelector('button[data-tooltip="Filter"]').click()`,
-    );
+    await togglePopover("filter");
     await frames(2);
-    await evaluate(`document.querySelector('input[type=checkbox]').click()`);
+    await clickHook("region");
     await frames(2);
-    await evaluate(
-      `document.querySelector('button[data-tooltip="Filter"]').click()`,
-    );
+    const checked = await evaluate(`document.querySelector('[data-perf="region"]').checked`);
+    await togglePopover("filter");
+    return checked;
   }
-  await measure("region-filter-on", toggleFirstRegion, 10);
-  await measure("region-filter-off", toggleFirstRegion, 10);
+  let filtered;
+  await measure("region-filter-on", async () => (filtered = await toggleFirstRegion()), 10);
+  if (filtered !== true) problems.push("the region filter did not turn on");
+  await measure("region-filter-off", async () => (filtered = await toggleFirstRegion()), 10);
+  if (filtered !== false) problems.push("the region filter did not turn off");
 
   // Full grid rebuild: previous year (every row's cells rebuild, cache miss), then back.
-  async function setYear(delta) {
-    await evaluate(
-      `document.querySelector('button[data-tooltip="Filter"]').click()`,
-    );
+  // Not optional: a control that cannot be found fails the run like any other.
+  async function setYear(hook) {
+    await togglePopover("filter");
     await frames(2);
-    await evaluate(
-      `[...document.querySelectorAll('button')].find(b => /${delta < 0 ? "previous|‹|<" : "next|›|>"}/i.test(b.getAttribute('aria-label') ?? b.textContent)).click()`,
-    );
+    await clickHook(hook);
     await frames(2);
-    await evaluate(
-      `document.querySelector('button[data-tooltip="Filter"]').click()`,
-    );
+    await togglePopover("filter");
   }
-  try {
-    await measure("year-switch-prev", () => setYear(-1), 30);
-    await measure("year-switch-next", () => setYear(1), 30);
-  } catch (e) {
-    console.log("year switch skipped:", e.message.slice(0, 120));
-  }
+  await measure("year-switch-prev", () => setYear("year-previous"), 30);
+  if ((await segmentCount()) === 0)
+    problems.push("no absence segment is drawn in the previous year, so its switch measured an empty grid");
+  await measure("year-switch-next", () => setYear("year-next"), 30);
 }
 
 await settle(200);
@@ -517,26 +544,56 @@ browser.close();
 const baseline = JSON.parse(
   readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "baseline.json"), "utf8"),
 );
-// The budgets themselves are SPEC.md's, not measurements.
+// The budgets themselves are SPEC.md's, not measurements. The floor is one frame
+// (docs/decisions/0017): three times a sub-millisecond baseline is a margin CI noise
+// crosses, and a block shorter than a frame never costs one.
 const MAX_DOM_NODES = 5000; // PERF-1
 const SLACK = 3; // PERF-2
+const FLOOR_MS = 16; // PERF-2
+
+// Every interaction the run is meant to measure. One missing means a step was skipped or
+// its markers never reached the trace, and the budget would pass on what was not measured.
+const EXPECTED = [
+  "cold-load",
+  "search-type-'l'",
+  "search-type-'i'",
+  "search-type-'a'",
+  "search-type-'m'",
+  "search-clear-escape",
+  "sort-region",
+  "sort-absent-today",
+  "sort-name",
+  "hover-sweep-40-columns",
+  "hover-synthetic-40-columns",
+  "hover-sweep-20-rows",
+  "scroll-vertical-20-ticks",
+  "scroll-horizontal-20-ticks",
+  "region-filter-on",
+  "region-filter-off",
+  "year-switch-prev",
+  "year-switch-next",
+];
 const budgetOf = (name) =>
   Object.keys(baseline.longestBlockMs)
     .filter((key) => name.startsWith(key))
     .sort((a, b) => b.length - a.length)[0];
 
-const failures = [];
+const failures = [...problems];
+for (const name of EXPECTED)
+  if (!results.some((r) => r.name === name)) failures.push(`${name}: not measured`);
 for (const r of results) {
   if (r.domNodes > MAX_DOM_NODES)
     failures.push(`${r.name}: ${r.domNodes} DOM nodes, over the budget of ${MAX_DOM_NODES}`);
   const key = budgetOf(r.name);
   if (key === undefined) continue;
-  r.budgetMs = baseline.longestBlockMs[key] * SLACK;
+  r.budgetMs = Math.max(baseline.longestBlockMs[key] * SLACK, FLOOR_MS);
   if (r.longest > r.budgetMs)
     failures.push(
-      `${r.name}: longest block ${r.longest.toFixed(1)} ms, over ${SLACK} x its baseline of ${baseline.longestBlockMs[key]} ms`,
+      `${r.name}: longest block ${r.longest.toFixed(1)} ms, over its budget of ${r.budgetMs.toFixed(1)} ms (the larger of ${SLACK} x its baseline of ${baseline.longestBlockMs[key]} ms and ${FLOOR_MS} ms)`,
     );
 }
+
+for (const p of problems) console.log(`warning: ${p}`);
 
 // Machine-readable, for CI to keep whatever the outcome.
 const resultFile =
@@ -550,8 +607,6 @@ console.log(`results written to ${resultFile}`);
 if (BUDGET) {
   if (PEOPLE !== baseline.people)
     failures.push(`the budget is for ${baseline.people} people, not ${PEOPLE}`);
-  // A run that measured nothing has not passed anything.
-  if (results.length === 0) failures.push("no interaction was measured");
   if (failures.length > 0) {
     console.log(`\nbudget FAILED:\n${failures.map((f) => `  ${f}`).join("\n")}`);
     // Annotations on the run's summary page, when run by GitHub Actions.
@@ -560,7 +615,7 @@ if (BUDGET) {
     process.exit(1);
   }
   console.log(
-    `\nbudget OK: every interaction under ${MAX_DOM_NODES} DOM nodes and within ${SLACK} x its baseline`,
+    `\nbudget OK: every interaction under ${MAX_DOM_NODES} DOM nodes and within the larger of ${SLACK} x its baseline and ${FLOOR_MS} ms`,
   );
 }
 process.exit(0);

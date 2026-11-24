@@ -352,8 +352,12 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **PERF-1** With 1000 people, the calendar's DOM must stay under 5,000 nodes through every
   measured interaction ([0010](docs/decisions/0010-windowed-calendar-grid.md)). `[ci]`
 - **PERF-2** With 1000 people, no measured interaction's longest main-thread block may
-  exceed three times its baseline in `tools/perf/README.md`. The slack absorbs CI noise;
-  the check exists to catch a return to work that grows with the team. `[ci]`
+  exceed the larger of three times its baseline and 16 ms (one frame). The baselines are in
+  `tools/perf/baseline.json`, the "after, 1000 people" column of `tools/perf/README.md`.
+  The slack absorbs CI noise, and the floor keeps sub-frame interactions from failing on
+  noise alone; the check exists to catch a return to work that grows with the team
+  ([0017](docs/decisions/0017-csp-and-budget-adjustments.md)). A run that skipped an
+  interaction or drew no absences fails rather than passing. `[ci]`
 
 ## BLD: Build and quality
 

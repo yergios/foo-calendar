@@ -27,6 +27,12 @@ node tools/perf/harness.mjs 500      # 500 people: /api/people and /api/absences
 node tools/perf/harness.mjs 1000     # with synthetic payloads of the seed's shape
 ```
 
+The synthetic absences are generated for whichever year the page asks for, so the
+calendar has something to draw whatever the date: the year it opens on, and the one the
+year switch moves to. The harness finds the controls it drives by their `data-perf`
+attributes (`sort`, `sort-<mode>`, `filter`, `region`, `year-previous`, `year-next`), not
+by their tooltips or labels; keep those attributes when reworking the header.
+
 Each run prints one line per interaction:
 
 - `busy`: main-thread time spent in that window (union of every traced event), in ms.
@@ -55,8 +61,15 @@ fails, after printing the usual report, when at 1000 people
 
 - the DOM holds more than 5,000 nodes after any interaction
   ([PERF-1](../../SPEC.md#perf-performance)), or
-- an interaction's longest block is more than three times its baseline
-  ([PERF-2](../../SPEC.md#perf-performance)).
+- an interaction's longest block exceeds its budget: the larger of three times its baseline
+  and 16 ms, one frame ([PERF-2](../../SPEC.md#perf-performance),
+  [0017](../../docs/decisions/0017-csp-and-budget-adjustments.md)).
+
+It also fails when the run did not measure what it claims to: an expected interaction
+missing from the trace, no absence segment drawn after the cold load or after switching
+to the previous year, the hover overlays not shown after the hover sweep, or the region
+filter not turning on and off. A control the harness cannot find stops the run with an
+error naming its `data-perf` hook. Without `--budget`, these are printed as warnings.
 
 CI runs it against the container on every push, with the `chrome-headless-shell` version
 pinned in `.github/workflows/ci.yml`, and keeps the results file as an artifact either way.
@@ -67,7 +80,10 @@ to `hover`); the year switch has no baseline yet and is held to the DOM budget o
 
 The DOM budget is deterministic. A timing failure can be CI noise, since CI machines are
 slower and busier than the one below; a rerun tells noise from a regression. The threefold
-slack is there to absorb that while still catching work that grows with the team.
+slack is there to absorb that while still catching work that grows with the team. The
+16 ms floor keeps interactions with sub-millisecond baselines, such as hovering, from
+failing on noise alone: a block shorter than a frame never costs one, and the 170 ms a
+full-grid hover used to take would still fail by far.
 
 ### Refreshing the baseline
 
