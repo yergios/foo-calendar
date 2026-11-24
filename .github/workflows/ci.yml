@@ -115,10 +115,11 @@ jobs:
       - name: Check
         run: node scripts/check-spec-trace.mjs
 
-      # The check's own tests, so a change to how it reads tests can't quietly start
-      # counting a skipped or commented-out one.
-      - name: Test the check
-        run: node --test --test-timeout=60000 scripts/check-spec-trace.test.mjs
+      # The scripts' own tests: the trace check's, so a change to how it reads tests can't
+      # quietly start counting a skipped or commented-out one, and the privacy review's
+      # diff hash and touch detection (AGT-4).
+      - name: Test the scripts
+        run: node --test --test-timeout=60000 'scripts/**/*.test.mjs'
 
   image:
     name: Container image and browser checks

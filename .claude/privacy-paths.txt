@@ -1,0 +1,28 @@
+# What "touches absence notes" means, for the commit hook and CI (AGT-3, AGT-5), read by
+# scripts/privacy-review.mjs. A diff touches notes when it changes a file listed below, or
+# when any line it adds or removes under src/, tests/ or tools/ matches the pattern.
+#
+# A path is relative to the repository root and matches exactly; one ending in / matches
+# everything under it. Blank lines and lines starting with # are ignored. Add a file here
+# when it starts deciding who sees a note, or where one goes.
+
+pattern: \bnotes?\b
+
+# The absence entity, its DTO and the projection that drops other people's notes in SQL.
+src/Api/Data/Models/Absence.cs
+src/Api/Dtos/AbsenceDto.cs
+src/Api/Services/AbsenceService.cs
+
+# The audit log, which must never record a note (AUD-2).
+src/Api/Services/AuditLog.cs
+src/Api/Data/Models/AuditEntry.cs
+
+# The SPA's absence types, its API module, and the browser cache that keeps a copy.
+src/Web/src/types/absence.ts
+src/Web/src/api/absences.ts
+src/Web/src/lib/browserCache.ts
+src/Web/src/components/AddAbsenceModal.vue
+
+# What the deployer and the members are told about notes (PRIV-4).
+docs/data-protection.md
+src/Web/src/docs/privacy.md

@@ -20,8 +20,8 @@ const spec = `# Spec
 `;
 
 /** Runs the script on a repository holding SPEC.md above, A-2 on the gap list, and the
- * given test sources: .NET, Vitest and end-to-end. */
-function check({ cs = "", ts = "", e2e = "", gaps = "A-2  needs a test\n" } = {}) {
+ * given test sources: .NET, Vitest, end-to-end and a script's node:test suite. */
+function check({ cs = "", ts = "", e2e = "", scriptTest = "", gaps = "A-2  needs a test\n" } = {}) {
   const repo = mkdtempSync(path.join(tmpdir(), "spec-trace-"));
   try {
     mkdirSync(path.join(repo, "scripts"));
@@ -34,6 +34,8 @@ function check({ cs = "", ts = "", e2e = "", gaps = "A-2  needs a test\n" } = {}
     writeFileSync(path.join(repo, "src", "Web", "src", "tests.spec.ts"), ts);
     mkdirSync(path.join(repo, "tools", "e2e"), { recursive: true });
     writeFileSync(path.join(repo, "tools", "e2e", "flows.test.mjs"), e2e);
+    mkdirSync(path.join(repo, "scripts", "hooks"), { recursive: true });
+    writeFileSync(path.join(repo, "scripts", "hooks", "hook.test.mjs"), scriptTest);
 
     const run = spawnSync(process.execPath, [path.join(repo, "scripts", "check-spec-trace.mjs")], {
       encoding: "utf8",
@@ -139,4 +141,8 @@ test("ignores end-to-end tests skipped or left todo by node:test's options", () 
 
 test("still counts an end-to-end test whose options do not skip it", () => {
   assert.ok(check({ e2e: 'test("[A-1] does it", { timeout: 5000 }, async () => {});' }).ok);
+});
+
+test("reads node:test names under scripts, subdirectories included", () => {
+  assert.ok(check({ scriptTest: 'test("[A-1] the hook blocks", () => {});' }).ok);
 });

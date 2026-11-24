@@ -7,8 +7,8 @@
 // - nothing on the gap list is referenced by a test, so the list can only shrink.
 //
 // A .NET test references a requirement with [Trait("Spec", "ABS-5")]; a Vitest test puts
-// the ID in brackets in its name, e.g. it("[UI-2] clamps to the year", ...), and so does an
-// end-to-end test in tools/e2e (node:test, the same it()/test() shape). None counts when it
+// the ID in brackets in its name, e.g. it("[UI-2] clamps to the year", ...), and so does a
+// node:test test in tools/e2e or under scripts (the same it()/test() shape). None counts when it
 // is commented out or skipped ([Fact(Skip = ...)], it.skip, describe.skip,
 // test(name, { skip: true }, ...), ...): a test that does not run verifies nothing.
 //
@@ -241,10 +241,12 @@ function readReferences() {
     for (const id of vitestReferences(readFileSync(file, "utf8"))) add(id, file);
   }
 
-  const e2e = path.join(root, "tools", "e2e");
-  const e2eFiles = existsSync(e2e) ? filesUnder(e2e, (name) => name.endsWith(".test.mjs")) : [];
-  for (const file of e2eFiles) {
-    for (const id of vitestReferences(readFileSync(file, "utf8"))) add(id, file);
+  // node:test suites: the end-to-end flows, and the tests of the scripts and hooks.
+  for (const dir of [path.join(root, "tools", "e2e"), path.join(root, "scripts")]) {
+    const files = existsSync(dir) ? filesUnder(dir, (name) => name.endsWith(".test.mjs")) : [];
+    for (const file of files) {
+      for (const id of vitestReferences(readFileSync(file, "utf8"))) add(id, file);
+    }
   }
 
   return references;
