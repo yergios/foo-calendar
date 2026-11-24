@@ -1,6 +1,11 @@
 # 0005. Agent tooling: one check, enforced hooks, automatic privacy review
 
-- Status: Ready to build
+- Status: Done (2026-11-24)
+- As built, two flags the commands below lack: git reads the trailer only with
+  `--no-divider` as well, since it otherwise takes the footer's `---` for the start of a
+  patch; and the reviewer's `tools` list includes `StructuredOutput`, without which a
+  headless run answers in prose and gives no verdict. The check measured 57 s; the Stop
+  hook stops it after 120 s and has 180 s.
 - Date: 2026-11-24
 - Decided by the user on 2026-11-23:
   - the Stop hook runs the full check every time a session stops;

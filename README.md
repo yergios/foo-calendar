@@ -17,6 +17,7 @@ How it is built, and why:
 | [Architecture](docs/architecture.md) | The system, startup, the request pipeline, the absence lifecycle, the frontend |
 | [Decision records](docs/decisions/README.md) | Every significant design decision, with what was considered and rejected |
 | [Threat model](docs/threat-model.md) | Trust boundaries, what is exposed, mitigations, and the risks accepted |
+| [Developing with agents](docs/agentic-development.md) | How the repository is built with coding agents: specs, reviews, hooks, the privacy review, and what they caught |
 
 Running and operating it:
 
