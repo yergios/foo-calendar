@@ -374,6 +374,30 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **BLD-6** Nullable reference types must be enabled in every C# project, with no
   suppressions of nullable warnings except at a site that says why. `[ci]`
 
+## AGT: Agent tooling
+
+- **AGT-1** `scripts/check.sh` must run every check CI runs that does not need Docker, the
+  end-to-end suite and the performance budget included, stop at the first failure and name
+  it. It is the definition of done for a change. `[review]`
+- **AGT-2** A Stop hook must run `scripts/check.sh` every time a Claude Code session stops in
+  this repository, and block the stop with the failing step when it fails. `[test]`
+- **AGT-3** A commit whose staged diff touches absence notes (as `.claude/privacy-paths.txt`
+  defines) must not be created by Claude Code until the privacy reviewer has passed that
+  exact diff and the message carries `Privacy-Review: passed sha256:<diff hash>` on the line
+  just above `Co-authored by AI.`. A commit that does not touch notes is not delayed. `[test]`
+- **AGT-4** The diff hash is the SHA-256 of one diff command with fixed options, and is the
+  same for a staged diff and for the commit made from it. `[test]`
+- **AGT-5** CI must fail when a non-merge commit in a push or a pull request touches notes
+  without a trailer whose hash equals its own diff's. `[test]`
+- **AGT-6** The privacy reviewer checks a diff against ABS-9, AUD-2, PRIV-1 and ADR 0007 and
+  answers with a structured verdict citing file and line. `[review]`
+- **AGT-7** `AGENTS.md` must give an agent the commands, the code map, the conventions, the
+  spec and decision workflow, and the privacy workflow with its commit trailer. `[review]`
+- **AGT-8** Shared Claude Code settings must hold the hooks and pre-allow only commands that
+  read or check; nothing that pushes, deletes or writes outside the tree. `[review]`
+- **AGT-9** Project skills must exist for performance measurement, releases and database
+  migrations, each stating its steps and guards. `[review]`
+
 ## TRC: Traceability
 
 - **TRC-1** Every requirement verified by test must be referenced by at least one test, and
@@ -399,4 +423,6 @@ fails when a listed requirement gains a reference, so that list only shrinks.
    what `master` does once pending change specs are done.
 3. A decision with alternatives worth remembering also gets a decision record.
 
-Pending change specs, to be built in this order: none.
+Pending change specs, to be built in this order:
+
+- [0005: Agent tooling](docs/specs/0005-agent-tooling.md)
