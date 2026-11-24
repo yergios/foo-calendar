@@ -117,3 +117,23 @@ pnpm dev
 ```
 
 The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` requests to the .NET API. Configure the target port via `VITE_API_TARGET_URL` in `src/Web/.env.development`.
+
+### Checking a change
+
+```bash
+scripts/check.sh
+```
+
+A change is done when this passes. It runs every check CI runs that does not need Docker, in
+CI's order, and stops at the first failure, naming it: the .NET restore (with its NuGet
+audit), the Release build with zero warnings and the tests; the version agreement between
+the API and the SPA; the SPA's typecheck, lint, format check, tests and dependency audit;
+the spec trace check and the scripts' own tests; and the browser checks, which build the
+SPA, start five local instances of the production build and the stub OIDC provider, and run
+the [end-to-end suite](tools/e2e/README.md) and the [performance budget](tools/perf/README.md#budget)
+against them. Every process it starts is stopped when it ends, whether it passed or not.
+`scripts/check.sh --list` prints the steps.
+
+The browser checks need a `chrome-headless-shell`; without one, that step fails and says
+how to get the release CI pins. The instances listen on ports 18080 to 18084 and the stub on
+19000 and 19001, so the check can run beside a hand-started container on 8080.
