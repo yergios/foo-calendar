@@ -185,6 +185,34 @@ jobs:
           done
           curl --fail --silent --show-error http://localhost:8081/healthchecks | grep -q '"Healthy"'
 
+      # Three instances that sign in through the stub OIDC provider the end-to-end suite
+      # starts on ports 9000 and 9001 (tools/e2e/oidc-stub.mjs): its own-origin tenant, and
+      # its tenant whose token endpoint is on the second origin, without and with that
+      # origin in Auth:ExtraOrigins. On the host's network, so the API and the browser reach
+      # the provider at the same localhost URL, which is also its issuer. Development only
+      # for the stub's http origin, which CFG-2 accepts nowhere else: Auth:Provider=Oidc
+      # turns the dev identity off, and tokens are validated as in production.
+      - name: Start instances that sign in through a provider
+        run: |
+          oidc=(--env ASPNETCORE_ENVIRONMENT=Development --env Holidays__Source=None
+            --env Auth__Provider=Oidc --env Auth__Audience=foo-calendar-e2e
+            --env Auth__ClientId=foo-calendar-e2e-spa)
+          docker run --detach --name app-oidc --network host --env ASPNETCORE_HTTP_PORTS=8082 \
+            "${oidc[@]}" --env Auth__Authority=http://localhost:9000 foo-calendar:ci
+          docker run --detach --name app-oidc-split --network host --env ASPNETCORE_HTTP_PORTS=8083 \
+            "${oidc[@]}" --env Auth__Authority=http://localhost:9000/split foo-calendar:ci
+          docker run --detach --name app-oidc-split-extra --network host --env ASPNETCORE_HTTP_PORTS=8084 \
+            "${oidc[@]}" --env Auth__Authority=http://localhost:9000/split \
+            --env Auth__ExtraOrigins__0=http://localhost:9001 foo-calendar:ci
+
+          for port in 8082 8083 8084; do
+            for _ in $(seq 1 30); do
+              if curl --fail --silent "http://localhost:$port/healthchecks"; then break; fi
+              sleep 1
+            done
+            curl --fail --silent --show-error "http://localhost:$port/healthchecks" | grep -q '"Healthy"'
+          done
+
       # The browser checks (docs/decisions/0016) run on tools/browser, which needs nothing
       # but Node and a chrome-headless-shell. Ubuntu 24.04 keeps unprivileged processes
       # from creating the user namespaces Chromium's sandbox is built on; allowing them
@@ -218,12 +246,16 @@ jobs:
           }
           unzip -q /tmp/chrome-headless-shell.zip -d ~/.cache/chrome-headless-shell
 
-      # The main flows in a real browser, failing on any Content-Security-Policy violation
-      # (SEC-3, SEC-4, UI-4, UI-10, AUTH-8, UI-9).
+      # The main flows in a real browser, signing in through a stub provider among them,
+      # failing on any Content-Security-Policy violation a flow does not expect
+      # (SEC-1, SEC-3, SEC-4, UI-4, UI-10, AUTH-1, AUTH-8, UI-9).
       - name: End-to-end tests
         env:
           APP_URL: http://localhost:8080/
           APP_URL_NO_PERMISSIONS: http://localhost:8081/
+          APP_URL_OIDC: http://localhost:8082/
+          APP_URL_OIDC_SPLIT: http://localhost:8083/
+          APP_URL_OIDC_SPLIT_EXTRA_ORIGIN: http://localhost:8084/
           E2E_OUT: ${{ runner.temp }}/e2e
         # The failing tests and their errors become annotations on the run, so what broke
         # reads on its summary page without opening the log.
@@ -290,4 +322,7 @@ jobs:
         if: failure()
         run: |
           docker logs app
-          docker logs app-no-permissions || true
+          for name in app-no-permissions app-oidc app-oidc-split app-oidc-split-extra; do
+            echo "---- $name"
+            docker logs "$name" || true
+          done

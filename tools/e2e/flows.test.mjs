@@ -1,5 +1,7 @@
 // The app's main flows in a real browser, against the production build in Development
-// (the dev identity, holidays off): `node --test tools/e2e/flows.test.mjs`. See README.md.
+// (holidays off): most of them as the dev identity, and the sign-in flows at the end
+// through a stub OIDC provider this file starts (oidc-stub.mjs).
+// `node --test --test-timeout=120000 tools/e2e/flows.test.mjs`. See README.md.
 //
 // Each test's name carries the requirement IDs it verifies in brackets, which
 // scripts/check-spec-trace.mjs reads like Vitest's. Every flow also fails on any
@@ -16,12 +18,25 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 
 import { launch, settle } from "../browser/driver.mjs";
+import { startOidcStub } from "./oidc-stub.mjs";
 
 /** The app with every permission. */
 const APP_URL = new URL(process.env.APP_URL ?? "http://localhost:8080/");
 /** A second instance whose dev identity holds no permission
  * (Auth:DevUser:GrantAllPermissions=false). */
 const NO_PERMISSIONS_URL = new URL(process.env.APP_URL_NO_PERMISSIONS ?? "http://localhost:8081/");
+/** Instances that sign in through the stub provider (Auth:Provider=Oidc): one whose
+ * Auth:Authority is the stub's own-origin tenant, and two on its split tenant, whose token
+ * endpoint is on a second origin, without and with that origin in Auth:ExtraOrigins. */
+const OIDC_URL = new URL(process.env.APP_URL_OIDC ?? "http://localhost:8082/");
+const OIDC_SPLIT_URL = new URL(process.env.APP_URL_OIDC_SPLIT ?? "http://localhost:8083/");
+const OIDC_SPLIT_EXTRA_URL = new URL(
+  process.env.APP_URL_OIDC_SPLIT_EXTRA_ORIGIN ?? "http://localhost:8084/",
+);
+/** Where the stub provider listens: its issuer's port, and its second origin's. The app
+ * instances above are configured with these. */
+const OIDC_STUB_PORT = Number(process.env.OIDC_STUB_PORT ?? 9000);
+const OIDC_STUB_TOKEN_PORT = Number(process.env.OIDC_STUB_TOKEN_PORT ?? 9001);
 /** Where a failing flow leaves its screenshot, console and violations. */
 const OUT = process.env.E2E_OUT ?? path.join(tmpdir(), "foo-calendar-e2e");
 
@@ -30,13 +45,18 @@ const STORAGE_PREFIX = "foo-calendar:";
 
 let browser;
 let page;
+let stub;
 
 before(async () => {
+  stub = await startOidcStub({ port: OIDC_STUB_PORT, tokenPort: OIDC_STUB_TOKEN_PORT });
   browser = await launch();
   page = browser.page;
 });
 
-after(() => browser?.close());
+after(async () => {
+  browser?.close();
+  await stub?.close();
+});
 
 /** Calls the API directly. The dev identity authenticates every request, so no token. */
 async function api(base, route, init = {}) {
@@ -344,6 +364,163 @@ test(
     assert.equal(await page.evaluate(`typeof window.__bootstrap`), "undefined", "the SPA booted");
     assert.match(await page.evaluate(`document.body.innerText`), /404/);
   }, { expected: [inlineScriptRefused] }),
+);
+
+// ---- Signing in through an OIDC provider ------------------------------------------------
+//
+// These run against instances with a real bearer handler, signing in through the stub
+// provider, which is on another origin than the app as any provider is. The stub's origin
+// is http, which Auth:Authority accepts only in Development (CFG-2), so the instances run
+// in Development with Auth:Provider=Oidc set: the dev identity is off, tokens are validated
+// as in production, and only the scheme rule and RequireHttpsMetadata are Development's.
+
+/** Records the app's API requests while `fn` runs: the URL, its Authorization header, and
+ * the status it was answered with. */
+async function apiRequestsDuring(fn) {
+  const requests = new Map();
+  let recording = true;
+  page.on("Network.requestWillBeSent", ({ requestId, request }) => {
+    if (recording && new URL(request.url).pathname.includes("/api/"))
+      requests.set(requestId, { url: request.url, authorization: request.headers.Authorization });
+  });
+  page.on("Network.responseReceived", ({ requestId, response }) => {
+    const request = requests.get(requestId);
+    if (recording && request) request.status = response.status;
+  });
+  await page.send("Network.enable");
+  try {
+    await fn();
+  } finally {
+    recording = false;
+    await page.send("Network.disable");
+  }
+  return [...requests.values()];
+}
+
+/** Opens the app, which sends the browser through the stub's sign-in and back, and waits
+ * for it to land signed in: the profile setup offered, or the calendar with your row. */
+async function signIn(app) {
+  await page.navigate(app.href);
+  await page.waitFor(
+    `location.origin === ${JSON.stringify(app.origin)} && !location.pathname.endsWith("/callback")
+      && (document.querySelector(".calendar-mine") || [...document.querySelectorAll("header button")]
+        .some((b) => b.textContent.trim() === "Set up profile"))`,
+    { what: `signed in at ${app.origin}`, timeout: 20_000 },
+  );
+}
+
+/** Calls the API as the stub's member, with a token minted as the stub's /token would. */
+function apiAsMember(base, route, init = {}) {
+  return api(base, route, {
+    ...init,
+    headers: { Authorization: `Bearer ${stub.accessToken()}`, ...init.headers },
+  });
+}
+
+/** Whether a violation is the browser refusing a fetch to the stub's second origin. */
+function tokenOriginRefused(v) {
+  const origin = `http://localhost:${OIDC_STUB_TOKEN_PORT}`;
+  if ("report" in v) return v.report.includes(origin) && /Refused to connect|connect-src/.test(v.report);
+  return v.directive === "connect-src" && v.blockedURI.startsWith(origin);
+}
+
+test(
+  "[AUTH-1] [SEC-1] [SEC-3] signing in through the provider, every API call carries its token",
+  flow(async () => {
+    // A rerun against the same database starts from no profile too.
+    await apiAsMember(OIDC_URL, "api/people/me", { method: "DELETE" });
+    const callsBefore = stub.calls.length;
+
+    const requests = await apiRequestsDuring(async () => {
+      await signIn(OIDC_URL);
+      await page.click("header button", { text: "Set up profile" });
+      await page.waitFor(modalOpen, { what: "the onboarding dialog" });
+      await setValue("#displayName", "E2E Provider Member");
+      await page.click("[aria-modal=true] button", { text: "Get started" });
+      await page.waitFor(modalClosed, { what: "the onboarding dialog to close" });
+      await page.waitFor(`document.querySelector(".calendar-mine")`, { what: "your own row" });
+    });
+
+    // Through the provider: its authorize endpoint, then its token endpoint, on its origin.
+    const paths = stub.calls.slice(callsBefore).map((c) => c.path);
+    assert.ok(paths.includes("/authorize"), `the provider's endpoints called: ${paths}`);
+    assert.ok(paths.includes("/token"), `the provider's endpoints called: ${paths}`);
+
+    // Everything but the anonymous bootstrap went with the provider's token, and the API
+    // accepted it: the profile was created and the calendar loaded.
+    const authenticated = requests.filter((r) => !r.url.includes("/api/config/bootstrap"));
+    assert.ok(authenticated.length > 0, "the app made no API call");
+    for (const r of authenticated) {
+      assert.match(r.authorization ?? "", /^Bearer [\w-]+\.[\w-]+\.[\w-]+$/, `${r.url} carried no token`);
+      assert.ok(r.status < 400 || r.status === 404, `${r.url} was answered ${r.status}`);
+    }
+    const me = await apiAsMember(OIDC_URL, "api/people/me");
+    assert.equal(me.body?.displayName, "E2E Provider Member");
+  }),
+);
+
+test(
+  "[AUTH-8] [SEC-3] signing out ends the session at the provider's end-session endpoint",
+  flow(async () => {
+    await signIn(OIDC_URL);
+    const idToken = await page.evaluate(`(() => {
+      const key = Object.keys(sessionStorage).find((k) => k.startsWith(${JSON.stringify(`${STORAGE_PREFIX}oidc.user:`)}));
+      return key && JSON.parse(sessionStorage.getItem(key)).id_token;
+    })()`);
+    assert.ok(idToken, "no session stored after signing in");
+    const callsBefore = stub.calls.length;
+
+    await page.click("header button", { text: "Sign out" });
+    await until(
+      () => stub.calls.slice(callsBefore).some((c) => c.path === "/end-session"),
+      "the end-session endpoint to be called",
+      10_000,
+    );
+
+    const endSession = stub.calls.slice(callsBefore).find((c) => c.path === "/end-session");
+    assert.equal(endSession.query.id_token_hint, idToken);
+    assert.equal(endSession.query.post_logout_redirect_uri, OIDC_URL.href);
+    // Back at the app, which the stub, holding no session, signs straight in again.
+    await page.waitFor(`location.origin === ${JSON.stringify(OIDC_URL.origin)}`, {
+      what: "the browser back at the app",
+    });
+  }),
+);
+
+test(
+  "[SEC-1] a token endpoint on another origin is refused unless Auth:ExtraOrigins names it",
+  flow(
+    async () => {
+      const callsBefore = stub.calls.length;
+      await page.navigate(OIDC_SPLIT_URL.href);
+      // The authorize step is a navigation, which the policy does not govern; exchanging
+      // the code is a fetch to the second origin, which it refuses.
+      await until(() => page.violations.some(tokenOriginRefused), "the token request to be refused", 20_000);
+      await page.waitFor(`location.pathname.endsWith("/500")`, { what: "the sign-in to fail" });
+      const reached = stub.calls.slice(callsBefore);
+      assert.ok(reached.some((c) => c.path === "/split/authorize"), "the sign-in never started");
+      assert.ok(!reached.some((c) => c.path === "/split/token"), "the token request got through");
+    },
+    { expected: [tokenOriginRefused] },
+  ),
+);
+
+test(
+  "[SEC-1] [SEC-3] with the token endpoint's origin in Auth:ExtraOrigins, signing in passes",
+  flow(async () => {
+    const callsBefore = stub.calls.length;
+
+    const requests = await apiRequestsDuring(() => signIn(OIDC_SPLIT_EXTRA_URL));
+
+    const tokenCall = stub.calls
+      .slice(callsBefore)
+      .find((c) => c.path === "/split/token" && c.origin === `http://localhost:${OIDC_STUB_TOKEN_PORT}`);
+    assert.ok(tokenCall, "the code was not exchanged at the second origin");
+    const authenticated = requests.filter((r) => !r.url.includes("/api/config/bootstrap"));
+    assert.ok(authenticated.length > 0, "the app made no API call");
+    for (const r of authenticated)
+      assert.ok(r.status !== 401 && r.authorization, `${r.url} was not authenticated`);
+  }),
 );
 
 // Every flow above already fails on a violation it did not expect. This is the summary for
