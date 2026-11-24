@@ -3,6 +3,9 @@
 // browser, holds one websocket session to its first tab, and records what the page says:
 // console messages, uncaught exceptions and Content-Security-Policy violations.
 //
+// Every wait is bounded: a command with no reply and a navigation with no load event fail
+// after COMMAND_TIMEOUT_MS and NAVIGATION_TIMEOUT_MS, naming what they were waiting for.
+//
 // Node 22+ (global WebSocket and fetch). See docs/decisions/0016 for why this exists
 // rather than Playwright.
 import { spawn } from "node:child_process";
@@ -17,6 +20,21 @@ export const DEFAULT_BROWSER = path.join(
 );
 
 export const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** How long a DevTools command may go unanswered, and a navigation without its load event,
+ * before the run fails saying which. A browser that hangs would otherwise hold the run
+ * until CI's own job timeout, with nothing in the log to say where it stopped. */
+export const COMMAND_TIMEOUT_MS = 30_000;
+export const NAVIGATION_TIMEOUT_MS = 30_000;
+
+/** The promise's outcome, or an error saying `what` did not happen within `ms`. */
+export function withTimeout(promise, ms, what) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms: ${what}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /** One websocket to one DevTools target: commands with replies, and events by name. */
 class Session {
@@ -38,18 +56,34 @@ class Session {
       const msg = JSON.parse(m.data);
       if (msg.id !== undefined) {
         const p = session.pending.get(msg.id);
+        // Already given up on, by its timeout.
+        if (!p) return;
         session.pending.delete(msg.id);
         if (msg.error) p.rej(new Error(`${msg.error.message} ${msg.error.data ?? ""}`));
         else p.res(msg.result);
       } else for (const l of session.listeners.get(msg.method) ?? []) l(msg.params);
     };
+    // A browser that crashed or was killed answers nothing more: fail what is waiting now
+    // rather than each at its timeout.
+    ws.onclose = () => {
+      for (const [id, p] of session.pending) {
+        session.pending.delete(id);
+        p.rej(new Error(`the browser closed the DevTools connection before answering ${p.method}`));
+      }
+    };
     return session;
   }
 
-  send(method, params = {}) {
+  /** Sends a command and resolves to its result, or fails after `timeout` ms with no
+   * reply. */
+  send(method, params = {}, timeout = COMMAND_TIMEOUT_MS) {
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params }));
-    return new Promise((res, rej) => this.pending.set(id, { res, rej }));
+    const reply = new Promise((res, rej) => this.pending.set(id, { res, rej, method }));
+    return withTimeout(reply, timeout, `no reply to DevTools ${method}`).catch((error) => {
+      this.pending.delete(id);
+      throw error;
+    });
   }
 
   on(method, fn) {
@@ -131,8 +165,8 @@ class Page {
     await this.send("Page.addScriptToEvaluateOnNewDocument", { source: VIOLATION_LISTENER });
   }
 
-  send(method, params) {
-    return this.session.send(method, params);
+  send(method, params, timeout) {
+    return this.session.send(method, params, timeout);
   }
 
   on(method, fn) {
@@ -162,12 +196,13 @@ class Page {
     );
   }
 
-  /** Navigates and waits for the load event. */
-  async navigate(url) {
+  /** Navigates and waits for the load event, failing after `timeout` ms without one. */
+  async navigate(url, { timeout = NAVIGATION_TIMEOUT_MS } = {}) {
     const loaded = this.once("Page.loadEventFired");
-    const r = await this.send("Page.navigate", { url });
+    // Page.navigate itself answers only once the response starts, so it is bounded too.
+    const r = await this.send("Page.navigate", { url }, timeout);
     if (r.errorText) throw new Error(`navigating to ${url}: ${r.errorText}`);
-    await loaded;
+    await withTimeout(loaded, timeout, `no load event navigating to ${url}`);
   }
 
   /** Polls the expression until it is truthy, and returns its value. A page that is

@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { launch, settle } from "../browser/driver.mjs";
+import { launch, settle, withTimeout } from "../browser/driver.mjs";
 
 const args = process.argv.slice(2);
 const PEOPLE = Number(args.find((a) => !a.startsWith("--")) ?? 100);
@@ -259,10 +259,11 @@ async function measure(name, action, settleFrames = 6) {
   const navStart = Date.now();
   await mark("start:cold-load");
   await send("Page.navigate", { url: APP_URL });
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; ; i++) {
     // Only the rows in view exist, so "ready" is any row at all.
     if (await evaluate(`document.querySelectorAll('.calendar-row').length > 0`))
       break;
+    if (i === 600) throw new Error(`the grid showed no row within 30 s of opening ${APP_URL}`);
     await settle(50);
   }
   await frames(3);
@@ -458,7 +459,7 @@ async function measure(name, action, settleFrames = 6) {
 await settle(200);
 const done = tracingComplete();
 await send("Tracing.end");
-await done;
+await withTimeout(done, 60_000, "the browser to hand over the trace");
 
 // ---- analysis ----
 const stamps = traceChunks.filter(
