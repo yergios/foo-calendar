@@ -18,7 +18,8 @@ and `scripts/check-spec-trace.mjs` reads them (TRC-2).
 ## Run
 
 1. A `chrome-headless-shell`, as for the [performance harness](../perf/README.md#setup).
-   CI pins the version in `.github/workflows/ci.yml`.
+   CI pins the version, and the SHA-256 of its zip, in `.github/workflows/ci.yml`, which
+   says how to move both to a new release.
 2. Two instances of the production build in Development, with holidays off: one as it
    starts, one whose dev identity holds no permission. The container is what CI tests:
 
@@ -30,7 +31,8 @@ and `scripts/check-spec-trace.mjs` reads them (TRC-2).
      -e Holidays__Source=None -e Auth__DevUser__GrantAllPermissions=false foo-calendar:local
    ```
 
-3. `node --test tools/e2e/flows.test.mjs`
+3. `node --test --test-timeout=120000 tools/e2e/flows.test.mjs`. The timeout is per flow,
+   as in CI, so a flow that hangs fails rather than holding the run.
 
 `APP_URL` and `APP_URL_NO_PERMISSIONS` override `http://localhost:8080/` and
 `http://localhost:8081/`. The flows run in order and build on each other (onboarding creates

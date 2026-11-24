@@ -17,9 +17,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every job has a timeout of a few times its usual run, so a hang (a test waiting on
+  # something that never comes, a browser that stops answering) fails in minutes rather
+  # than holding a runner for GitHub's six-hour default.
   api:
     name: API
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -55,6 +59,7 @@ jobs:
   web:
     name: Web
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: src/Web
@@ -96,6 +101,7 @@ jobs:
   trace:
     name: Spec traceability
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -112,13 +118,22 @@ jobs:
       # The check's own tests, so a change to how it reads tests can't quietly start
       # counting a skipped or commented-out one.
       - name: Test the check
-        run: node --test scripts/check-spec-trace.test.mjs
+        run: node --test --test-timeout=60000 scripts/check-spec-trace.test.mjs
 
   image:
     name: Container image and browser checks
     runs-on: ubuntu-latest
+    # An uncached image build is most of this; the browser checks take under a minute.
+    timeout-minutes: 25
     env:
+      # One Chrome for Testing release, and the SHA-256 of its linux64 zip, checked before
+      # the browser is unpacked. To move to another release, change both together: take the
+      # version from https://googlechromelabs.github.io/chrome-for-testing/, download
+      #   https://storage.googleapis.com/chrome-for-testing-public/<version>/linux64/chrome-headless-shell-linux64.zip
+      # and put the output of `sha256sum` on it here. The cache key carries both, so the new
+      # zip is downloaded and checked rather than an old cache restored.
       CHROME_HEADLESS_SHELL_VERSION: 152.0.7977.75
+      CHROME_HEADLESS_SHELL_SHA256: 66ffefd34dc6af6c7d8e6933546c40ed5278fa3d495c3e836895241ba3a3a19f
     steps:
       - uses: actions/checkout@v7
 
@@ -188,7 +203,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/chrome-headless-shell
-          key: chrome-headless-shell-${{ env.CHROME_HEADLESS_SHELL_VERSION }}
+          key: chrome-headless-shell-${{ env.CHROME_HEADLESS_SHELL_VERSION }}-${{ env.CHROME_HEADLESS_SHELL_SHA256 }}
 
       - name: Download chrome-headless-shell
         if: steps.chrome.outputs.cache-hit != 'true'
@@ -196,6 +211,11 @@ jobs:
           mkdir --parents ~/.cache/chrome-headless-shell
           curl --fail --silent --show-error --location --output /tmp/chrome-headless-shell.zip \
             "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_HEADLESS_SHELL_VERSION}/linux64/chrome-headless-shell-linux64.zip"
+          # Nothing is unpacked, let alone run, unless it is the zip pinned above.
+          echo "${CHROME_HEADLESS_SHELL_SHA256}  /tmp/chrome-headless-shell.zip" | sha256sum --check --strict || {
+            echo "::error title=chrome-headless-shell::the download does not match CHROME_HEADLESS_SHELL_SHA256"
+            exit 1
+          }
           unzip -q /tmp/chrome-headless-shell.zip -d ~/.cache/chrome-headless-shell
 
       # The main flows in a real browser, failing on any Content-Security-Policy violation
@@ -210,7 +230,8 @@ jobs:
         run: |
           mkdir --parents "$E2E_OUT"
           set -o pipefail
-          node --test --test-reporter=spec tools/e2e/flows.test.mjs 2>&1 | tee "$E2E_OUT/output.txt" || {
+          # A flow that hangs fails on its own after two minutes, rather than the job's.
+          node --test --test-timeout=120000 --test-reporter=spec tools/e2e/flows.test.mjs 2>&1 | tee "$E2E_OUT/output.txt" || {
             grep -E '^\s*(✖|\w*Error)' "$E2E_OUT/output.txt" | head -n 20 |
               while IFS= read -r line; do echo "::error title=End-to-end::$line"; done
             exit 1
