@@ -89,10 +89,16 @@ Longest main-thread block in ms, before and after the windowed grid rewrite.
 | search keystroke            |        226 |       2,156 |        23 |         31 |
 | clear search                |        458 |       4,559 |        17 |         16 |
 | sort                        |        369 |       3,112 |        14 |         17 |
-| region filter               |        448 |       4,845 |         6 |          6 |
+| region filter               |        448 |       4,845 |       n/a |       21 \* |
 | hover, one column crossing  |         28 |         170 |       1.3 |        1.7 |
 | scroll, one wheel tick      |         44 |         459 |        12 |         13 |
 | DOM nodes                   |     47,616 |     455,611 |     3,366 |      3,304 |
+
+\* Re-measured on 2026-11-24, same machine and browser, as the typical `longest` of four
+runs (20.2 to 21.3 ms per toggle). The 6 ms first recorded here measured a click on the
+filter's "All" box, which with no filter set changes nothing; the harness now picks a
+region and checks that the filter turned on and off. The 100-person figure was not
+re-measured.
 
 `baseline.json` holds the "after 1000" column; it is what the budget above reads.
 

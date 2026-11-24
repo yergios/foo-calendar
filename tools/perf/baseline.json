@@ -1,13 +1,13 @@
 {
   "people": 1000,
-  "measured": "Ryzen 7 5800X, chrome-headless-shell 152, 2026-09-02: the after, 1000 people column of README.md",
+  "measured": "Ryzen 7 5800X, chrome-headless-shell 152, 2026-09-02 (region-filter: 2026-11-24): the after, 1000 people column of README.md",
   "domNodes": 3304,
   "longestBlockMs": {
     "cold-load": 67,
     "search-type": 31,
     "search-clear": 16,
     "sort": 17,
-    "region-filter": 6,
+    "region-filter": 21,
     "hover": 1.7,
     "scroll": 13
   }
