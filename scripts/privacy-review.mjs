@@ -8,6 +8,9 @@
 // - `node scripts/privacy-review.mjs review [--amend]`: runs the privacy reviewer on the
 //   staged diff and, on a pass, prints the trailer line to put directly above "Co-authored
 //   by AI." (or at the end of the message). What a person committing by hand runs.
+// - `node scripts/privacy-review.mjs verify <from> <to>`: the CI step (AGT-5). Every
+//   non-merge commit in from..to that touches notes must carry a trailer whose hash equals
+//   its own diff's.
 //
 // Its tests: `node --test scripts/privacy-review.test.mjs`. No dependencies: Node and git.
 import { spawnSync } from "node:child_process";
@@ -48,6 +51,8 @@ export const VERDICT_SCHEMA = {
   },
   required: ["verdict", "summary", "findings"],
 };
+
+const ZERO_SHA = /^0+$/;
 
 /** Runs git in `repo` and returns stdout as a Buffer, or throws with git's stderr. The
  * user's and the system's git configuration are ignored: a personal diff.algorithm,
@@ -239,14 +244,21 @@ export function trailerLine(hash) {
   return `Privacy-Review: passed sha256:${hash}`;
 }
 
-/** The hashes of the Privacy-Review trailers git reads in a commit message. Git only
- * treats a paragraph as trailers when enough of it is, or one of them is configured; the
- * key is configured so the trailer is read even beside "Co-authored by AI.", which is not
- * a trailer. */
+/** The hashes of the Privacy-Review trailers git reads in a commit message. Two settings
+ * make git read the trailer where this repository puts it, on the line above "Co-authored
+ * by AI.": --no-divider, because git otherwise takes the footer's "---" line for the start
+ * of a patch and reads nothing after it; and the key configured, because git only reads a
+ * paragraph that is not all trailers when one of them is a configured one. */
 export function trailerHashes(repo, message) {
   const parsed = gitText(
     repo,
-    ["-c", "trailer.privacy-review.key=Privacy-Review", "interpret-trailers", "--parse"],
+    [
+      "-c",
+      "trailer.privacy-review.key=Privacy-Review",
+      "interpret-trailers",
+      "--parse",
+      "--no-divider",
+    ],
     { input: message },
   );
   return parsed
@@ -341,6 +353,81 @@ export function formatFindings(verdict) {
   return [verdict.summary, ...lines].filter(Boolean).join("\n");
 }
 
+/** The commit that added this script, the first one `verify` holds to it; commits before
+ * it predate the review and are exempt. Null when `to` does not contain it. */
+function introducingCommit(repo, to) {
+  const added = gitText(repo, [
+    "log",
+    "--diff-filter=A",
+    "--format=%H",
+    "--reverse",
+    to,
+    "--",
+    "scripts/privacy-review.mjs",
+  ]);
+  return added.split("\n").filter(Boolean)[0] ?? null;
+}
+
+/**
+ * Checks every commit in from..to (CI, AGT-5): one that touches notes must carry a trailer
+ * whose hash is its own diff's. Merge commits are skipped: what they bring in was reviewed
+ * in the commits they merge. Returns { problems, checked, skipped, notes }.
+ */
+export function verify(repo, from, to) {
+  const rules = readRules(repo);
+  const notes = [];
+  const head = commitOrNull(repo, to);
+  if (!head) throw new Error(`${to} is not a commit in this repository`);
+
+  // A push that creates a branch reports `from` as all zeros, and after a force push it can
+  // name a commit this clone does not have: either way, the pushed commit alone.
+  const known = from && !ZERO_SHA.test(from) ? commitOrNull(repo, from) : null;
+  if (!known) notes.push(`no earlier commit to start from; checking ${head.slice(0, 12)} alone`);
+  const range = known
+    ? [`${known}..${head}`]
+    : commitOrNull(repo, `${head}^1`)
+      ? [`${head}^!`]
+      : [head];
+
+  const intro = introducingCommit(repo, head);
+  if (!intro)
+    return {
+      problems: [],
+      checked: 0,
+      skipped: 0,
+      notes: [...notes, "the review predates every commit here"],
+    };
+  const introParent = commitOrNull(repo, `${intro}^1`);
+  const exempt = introParent ? [`^${introParent}`] : [];
+
+  const commits = gitText(repo, ["rev-list", "--reverse", "--no-merges", ...range, ...exempt])
+    .split("\n")
+    .filter(Boolean);
+  const skipped = Number(gitText(repo, ["rev-list", "--count", "--merges", ...range, ...exempt]));
+
+  const problems = [];
+  for (const commit of commits) {
+    const diff = commitDiff(repo, commit);
+    const reasons = touchesNotes(diff, rules);
+    if (reasons.length === 0) continue;
+
+    const hash = diffHash(diff);
+    const message = git(repo, ["log", "-1", "--format=%B", commit]).toString("utf8");
+    const hashes = trailerHashes(repo, message);
+    const subject = message.split("\n")[0];
+    const name = `${commit.slice(0, 12)} "${subject}"`;
+    if (hashes.includes(hash)) continue;
+
+    problems.push(
+      hashes.length === 0
+        ? `${name} touches absence notes (${reasons[0]}) but carries no Privacy-Review trailer; expected "${trailerLine(hash)}".`
+        : `${name} touches absence notes, but its Privacy-Review trailer is for sha256:${hashes[0]}, not its own diff's sha256:${hash}: the trailer was written for a different change.`,
+    );
+  }
+
+  return { problems, checked: commits.length, skipped, notes };
+}
+
 function main(argv) {
   const repo = repoRoot(process.cwd());
   if (!repo) {
@@ -377,7 +464,25 @@ function main(argv) {
     return 0;
   }
 
-  console.error("usage: privacy-review.mjs hash [--amend] | review [--amend]");
+  if (command === "verify" && args.length === 2) {
+    const { problems, checked, skipped, notes } = verify(repo, args[0], args[1]);
+    for (const note of notes) console.log(note);
+    if (problems.length > 0) {
+      for (const problem of problems) console.error(`error: ${problem}`);
+      console.error(
+        "Each commit that touches absence notes needs the trailer the privacy review gave its own " +
+          "diff (scripts/privacy-review.mjs review). A squash or rebase merge produces commits no " +
+          "review covered: merge with a merge commit instead.",
+      );
+      return 1;
+    }
+    console.log(
+      `Privacy review OK: ${checked} commit(s) checked, ${skipped} merge commit(s) skipped.`,
+    );
+    return 0;
+  }
+
+  console.error("usage: privacy-review.mjs hash [--amend] | review [--amend] | verify <from> <to>");
   return 2;
 }
 

@@ -103,7 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The whole history: the privacy review check below reads every commit of the push or
+      # the pull request, and where the review started.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # Same Node as the web job. The script has no dependencies, so there is no install.
       - uses: actions/setup-node@v7
@@ -120,6 +124,16 @@ jobs:
       # diff hash and touch detection (AGT-4).
       - name: Test the scripts
         run: node --test --test-timeout=60000 'scripts/**/*.test.mjs'
+
+      # Every commit of the push or the pull request that touches absence notes carries the
+      # Privacy-Review trailer of its own diff (AGT-5). For a pull request, its own commits,
+      # never the merge commit GitHub makes to test it. A push that creates the branch
+      # reports an all-zeros "before", and the script then checks the pushed commit alone.
+      - name: Privacy review trailers
+        env:
+          FROM: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          TO: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/privacy-review.mjs verify "$FROM" "$TO"
 
   image:
     name: Container image and browser checks
