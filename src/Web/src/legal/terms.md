@@ -11,7 +11,7 @@ By using this deployment of [%PRODUCT_NAME%](%REPOSITORY_URL%), operated by %ORG
 
 - Use it for its intended purpose: tracking absences for team coordination.
 - Don't enter anyone else's personal data without their knowledge, and keep health details, diagnoses, or other sensitive information out of notes — see our Privacy notice for what's stored and why there's no "sick" type.
-- Don't attempt to disrupt, scan, or gain unauthorized access to this deployment or to other people's accounts on it. If you've found a security issue, please report it responsibly via [%SUPPORT_URL%](%SUPPORT_URL%) instead of exploiting it.
+- Don't attempt to disrupt, scan, or gain unauthorized access to this deployment or to other people's accounts on it. If you've found a security issue, please report it responsibly via [%SUPPORT_LABEL%](%SUPPORT_URL%) instead of exploiting it.
 
 ### Availability
 
@@ -31,4 +31,4 @@ This deployment is provided as-is, without an uptime guarantee, and data on it m
 
 ### Contact
 
-Questions about these terms: [%SUPPORT_URL%](%SUPPORT_URL%).
+Questions about these terms: [%SUPPORT_LABEL%](%SUPPORT_URL%).

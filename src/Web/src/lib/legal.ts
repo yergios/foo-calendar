@@ -1,6 +1,7 @@
 import privacy from "@/legal/privacy.md";
 import terms from "@/legal/terms.md";
 import { bootstrapConfig } from "@/lib/bootstrapConfig";
+import { contactLabel } from "@/lib/contactLabel";
 import { PRODUCT_NAME, REPOSITORY_URL } from "@/lib/productInfo";
 
 // Only the notices a deployment fills in with its own operator and support link are served
@@ -12,6 +13,7 @@ function fillPlaceholders(raw: string): string {
   const values: Record<string, string> = {
     "%ORG_NAME%": orgName || PRODUCT_NAME,
     "%SUPPORT_URL%": supportUrl,
+    "%SUPPORT_LABEL%": contactLabel(supportUrl),
     "%PRODUCT_NAME%": PRODUCT_NAME,
     "%REPOSITORY_URL%": REPOSITORY_URL,
   };

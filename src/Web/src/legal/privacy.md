@@ -12,7 +12,7 @@
 
 ### Who's responsible for your data
 
-%ORG_NAME% is the controller for the data in this deployment — not the authors of the software, who never receive it. For any question or request about your data, reach out via [%SUPPORT_URL%](%SUPPORT_URL%).
+%ORG_NAME% is the controller for the data in this deployment — not the authors of the software, who never receive it. For any question or request about your data, reach out via [%SUPPORT_LABEL%](%SUPPORT_URL%).
 
 ### What's stored
 
@@ -44,8 +44,8 @@ Profile and absence data is kept for as long as you're part of the team, unless 
 
 ### Your rights
 
-Depending on where you are, you may have the right to access, correct, or delete your data, or to ask what's held about you. Contact [%SUPPORT_URL%](%SUPPORT_URL%) to exercise any of these.
+Depending on where you are, you may have the right to access, correct, or delete your data, or to ask what's held about you. Contact [%SUPPORT_LABEL%](%SUPPORT_URL%) to exercise any of these.
 
 ---
 
-Questions about this notice: [%SUPPORT_URL%](%SUPPORT_URL%).
+Questions about this notice: [%SUPPORT_LABEL%](%SUPPORT_URL%).
