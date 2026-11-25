@@ -289,6 +289,22 @@ public sealed class StartupTests
         app.TableNames().ShouldBeEmpty();
     }
 
+    // What a deployment gets when it sets nothing: proves no contact ships in appsettings.json
+    // for it to fall back on (0020).
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    public void NoSupportUrlShipsWithTheApp_SoAProductionStartWithoutOneStops()
+    {
+        using var app = new TestApp(IdentityProvider)
+        {
+            Environment = "Production",
+            SupportUrl = null,
+        };
+
+        StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be configured");
+    }
+
     // "/support" because on Linux a rooted path parses as an absolute file URI, yet links to
     // a page of the app itself like any other relative value. Padding is refused rather than
     // trimmed (0020): Uri.TryCreate trims, but the notices and security.txt show the value as

@@ -15,7 +15,9 @@ namespace IntegrationTests.TestSupport;
 /// <summary>
 /// The real app, Program.cs and all, in memory, against a SQLite file of its own in a fresh
 /// temporary directory. Development with the dev identity, as `dotnet run` would start it
-/// (unless <see cref="Environment"/> says otherwise), with the holiday source off so nothing leaves the machine. Settings passed in are applied
+/// (unless <see cref="Environment"/> says otherwise), with the holiday source off so nothing
+/// leaves the machine. Outside Development it is also given the operator's contact
+/// (<see cref="SupportUrl"/>), which a deployment must set. Settings passed in are applied
 /// on top of appsettings.json, the way environment variables are in a deployment.
 ///
 /// Nothing starts until the first use of <see cref="WebApplicationFactory{T}.Services"/> or
@@ -49,6 +51,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>The hosting environment, Development unless a test needs to see what a
     /// deployment does.</summary>
     public string Environment { get; init; } = "Development";
+
+    /// <summary>The Team:SupportUrl a deployment has to set (CFG-2) and nothing ships for,
+    /// given outside Development so a test about something else starts there. Null leaves
+    /// the app to what ships. A Team:SupportUrl passed in still decides it.</summary>
+    public string? SupportUrl { get; init; } = "mailto:support@example.test";
 
     /// <summary>When set, the dev identity is a member holding exactly these permissions
     /// rather than all of them; empty is a member with none. Each is granted by the claim
@@ -118,12 +125,10 @@ public sealed class TestApp : WebApplicationFactory<Program>
         builder.UseEnvironment(Environment);
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
 
-        // A deployment has to name its contact (CFG-2), and nothing ships for it. Given here
-        // so a test about something else starts outside Development; set before the
-        // overrides, so a test about the contact still decides it. Development is left to
-        // appsettings.Development.json, as `dotnet run` would.
-        if (Environment != "Development")
-            builder.UseSetting("Team:SupportUrl", "mailto:support@example.test");
+        // Set before the overrides, so a test about the contact still decides it. Development
+        // is left to appsettings.Development.json, as `dotnet run` would.
+        if (Environment != "Development" && SupportUrl is not null)
+            builder.UseSetting("Team:SupportUrl", SupportUrl);
 
         if (Shell is not null)
         {
