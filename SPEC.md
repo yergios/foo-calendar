@@ -396,8 +396,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   answers with a structured verdict citing file and line. `[review]`
 - **AGT-7** `AGENTS.md` must give an agent the commands, the code map, the conventions, the
   spec and decision workflow, and the privacy workflow with its commit trailer. `[review]`
-- **AGT-8** Shared Claude Code settings must hold the hooks and pre-allow only commands that
-  read or check; nothing that pushes, deletes or writes outside the tree. `[review]`
+- **AGT-8** Shared Claude Code settings must hold the hooks and pre-allow only exact commands
+  that read or check, with no wildcard: nothing that pushes or deletes, and nothing that
+  writes outside the tree but the build tools' own caches and temporary files (the NuGet and
+  pnpm stores, the check's temporary directory). Anything else asks. `[review]`
 - **AGT-9** Project skills must exist for performance measurement, releases and database
   migrations, each stating its steps and guards. `[review]`
 
