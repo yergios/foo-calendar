@@ -114,6 +114,18 @@ git settings and a prompt injection fed to the reviewer, a headless session tryi
 the allowlist. The fixes are in [ADR 0018](decisions/0018-agent-tooling-adjustments.md) and
 the commits after `01ad000`.
 
+### A spec that asked for too few tests
+
+Change spec 0006 listed UI-11's tests as four cases of the label function, and the build
+wrote exactly those (`0ce891f`). The independent review's mutation probes showed what they
+missed: dropping the `%SUPPORT_LABEL%` fill in `legal.ts`, swapping label and URL, or
+reverting a placeholder in `privacy.md` or `terms.md` left every test green. So did putting
+the old `mailto:support@example.com` back into `appsettings.json` (CFG-2's "no value ships"),
+because the test host gave every start outside Development a contact of its own. No test
+caught it because none was asked for: the spec named how to verify a helper, not the
+requirement, and the builder verified what it was told. The fix tests the notices as members
+read them and a Production start on only what ships (`fc52621`, `88213df`).
+
 ## Hooks and the privacy review
 
 Advice in AGENTS.md is followed most of the time; the two things that must hold every time

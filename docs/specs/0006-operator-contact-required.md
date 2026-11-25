@@ -74,8 +74,8 @@ Each step is its own commit and leaves `scripts/check.sh` passing.
 
 - The app started outside Development with `Team:SupportUrl` empty, or relative, stops with
   a message naming it, and starts with a `mailto:` or `https:` value.
-- `git grep -n "example.com" -- src/Api/appsettings.json .env.example` finds no support
-  contact.
+- `git grep -nE '"SupportUrl": "[^"]|^Team__SupportUrl=.' -- src/Api/appsettings.json .env.example`
+  finds nothing: no support contact value ships.
 - `git grep -n "\[%SUPPORT_URL%\]" -- src/Web/src/legal` finds nothing.
 - `node scripts/check-spec-trace.mjs` passes with UI-11 off the gap list, and
   `scripts/check.sh` passes.
