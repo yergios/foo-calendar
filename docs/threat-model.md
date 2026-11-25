@@ -183,7 +183,4 @@ record when it is.
 
 ## Reporting a vulnerability
 
-Each deployment publishes its own contact at `/.well-known/security.txt` (from
-`Team:SecurityContact`, falling back to `Team:SupportUrl`). Issues in the software itself
-go to the [repository's issue tracker](https://github.com/yergios/foo-calendar/issues);
-leave exploit details out of a public issue and ask there for a private channel first.
+See [SECURITY.md](../SECURITY.md).
