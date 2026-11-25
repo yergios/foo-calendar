@@ -1,6 +1,6 @@
 # 0006. The operator's contact is required
 
-- Status: Pending
+- Status: Done
 - Date: 2026-11-25
 - Requirements added or changed: CFG-2 (`Team:SupportUrl` required outside Development),
   UI-11 (new) (see [SPEC.md](../../SPEC.md))

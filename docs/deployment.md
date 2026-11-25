@@ -35,7 +35,7 @@ The API serves that configuration two ways. Whatever the app needs *before* anyo
 | Setting | Purpose |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | `Team:OrgName` | Your team's name, in the header. Empty falls back to the product's name. |
-| `Team:SupportUrl` | The footer's Contact link, and the contact named in the in-app privacy notice and terms. Any scheme. |
+| `Team:SupportUrl` | Required outside Development, with nothing shipped in its place. The contact the in-app privacy notice and terms name as the operator's, and the footer's Contact link. An absolute URL in any scheme; a `mailto:` contact shows in the notices as its address. |
 | `Team:IssueUrl` | The "Raise an issue" link on the error page. |
 | `Team:SecurityContact` | Served as `Contact` in `/.well-known/security.txt`. Optional: falls back to `Team:SupportUrl`. |
 | `Team:HomeTimeZone` | Required. IANA timezone id, e.g. `Europe/Zurich`. Every time-based absence's times are wall-clock time in this one zone, for every viewer, and are labeled with it. |
