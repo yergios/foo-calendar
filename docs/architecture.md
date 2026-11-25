@@ -227,29 +227,16 @@ lists every attribute.
 
 ## Checks
 
-Every push to `master` and every pull request runs `.github/workflows/ci.yml`; none of its
-steps is advisory.
-
-| Job | What fails it |
-| --- | --- |
-| API | A build warning (every analyzer on, warnings as errors, NuGet audit included), a unit or integration test, or `Api.csproj` and `package.json` disagreeing on the version |
-| Web | Typecheck, lint warnings, formatting, a Vitest test, or a high or critical `pnpm audit` advisory |
-| Spec traceability | A `[test]` requirement no test references and the gap list does not name, or a reference to an ID that is missing or retired (`scripts/check-spec-trace.mjs`); a test of the scripts or hooks failing; a pushed or pull-request commit, merge commits included, that touches absence notes without the `Privacy-Review` trailer of its own diff (`scripts/privacy-review.mjs verify`) |
-| Container image and browser checks | The image not building, starting, migrating an empty database and serving the shell; an end-to-end flow failing or causing a Content-Security-Policy violation it does not expect, signing in through a stub OIDC provider included (`tools/e2e`); the calendar at 1000 people exceeding 5,000 DOM nodes after an interaction, or an interaction's longest block exceeding the larger of three times its baseline and 16 ms twice in a row, or the run not measuring every interaction against a grid with absences drawn (`tools/perf`) |
-
-`scripts/check.sh` runs every one of these that does not need Docker, in the same order,
-against local instances of the production build; [AGENTS.md](../AGENTS.md) makes it the
-definition of done, and a Claude Code Stop hook runs it.
-
-The browser checks run on a DevTools driver of the repo's own, `tools/browser/driver.mjs`,
-against a pinned `chrome-headless-shell`
-([0016](decisions/0016-own-devtools-driver-for-browser-checks.md)). A failing flow uploads
-its screenshot, console and violations; the performance results are uploaded either way.
+Every push and pull request runs `.github/workflows/ci.yml`, and `scripts/check.sh` runs the
+same checks locally, the end-to-end suite and the performance budget included. What each
+one fails on is in the [developer guide](development.md#checking-a-change).
 
 ## Where to look next
 
 - [Threat model](threat-model.md): trust boundaries, what is exposed, and the accepted gaps.
 - [Data protection](data-protection.md): every personal-data field and where data goes.
+- [Developer guide](development.md): running it, seeding, debugging, the checks and the
+  changes with a set procedure.
 - [Deployment](deployment.md), [Access control](access-control.md),
   [Regions and holidays](regions-and-holidays.md), [Administration](administration.md):
   operating it.

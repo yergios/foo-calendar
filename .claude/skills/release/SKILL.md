@@ -5,34 +5,24 @@ description: Cut a release of Foo Calendar - bump the version in Api.csproj and 
 
 # Release
 
+The procedure is [Cutting a release](../../../docs/development.md#cutting-a-release) in the
+developer guide. Read it and follow it; this skill adds what is specific to an agent.
+
 ## Guards
 
-- The version lives in two places that CI ties together (BLD-5): `<Version>` in
-  `src/Api/Api.csproj` and `"version"` in `src/Web/package.json`. Change both, to the same
-  value, in the same commit.
-- Ask which version, unless the user gave it. Suggest one by semantic versioning from the
-  Unreleased section: a breaking change to configuration or the API is a major bump, an
-  addition a minor one, fixes alone a patch.
-- **Never tag, and never push a tag, without asking first**, even after the commit is pushed.
-  A tag is what deployments pull.
+- Ask which version, unless the user gave it. Suggest one by the guide's rule.
 - Do not release from a tree that has changes unrelated to the release; stop and say so.
+- In `CHANGELOG.md`, do not rewrite the entries. Fix only what is plainly wrong, and say
+  what you changed.
+- A failing `scripts/check.sh` is fixed in its own commit first.
+- Commit with the repository's footer and push `master` as AGENTS.md says:
+  ```
+  chore(release): <version>
 
-## Steps
+  ---
 
-1. `git status` must be clean, on `master`, up to date with its remote.
-2. Set the new version in `src/Api/Api.csproj` and `src/Web/package.json`.
-3. In `CHANGELOG.md`, rename `## Unreleased` to
-   `## <version> (<today, YYYY-MM-DD>)` and put a new, empty `## Unreleased` above it. Do
-   not rewrite the entries; fix only what is plainly wrong, and say what you changed.
-4. Run `scripts/check.sh`. It must pass; a failure is fixed in its own commit first.
-5. Commit, with the repository's footer:
-   ```
-   chore(release): <version>
-
-   ---
-
-   Co-authored by AI.
-   ```
-   and push `master` as AGENTS.md says.
-6. Ask whether to tag. On a yes: `git tag --annotate v<version> --message "Foo Calendar <version>"`,
-   then ask again before `git push origin v<version>`.
+  Co-authored by AI.
+  ```
+- **Never tag, and never push a tag, without asking first**, even after the commit is
+  pushed. A tag is what deployments pull. On a yes, create the tag as the guide says, then
+  ask again before `git push origin v<version>`.

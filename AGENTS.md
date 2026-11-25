@@ -38,22 +38,11 @@ waiting for another session's check is not something to fix.
 
 ## Commands
 
-| What | Command |
-| --- | --- |
-| Everything, in CI's order | `scripts/check.sh` (`--list` prints the steps) |
-| .NET build, 0 warnings | `dotnet build --configuration Release` |
-| .NET tests | `dotnet test --configuration Release` (one test: `--filter "FullyQualifiedName~AbsenceServiceTests"`) |
-| SPA checks | `pnpm --dir src/Web typecheck`, `lint:check`, `format:check`, `test` |
-| Spec trace | `node scripts/check-spec-trace.mjs` |
-| Script and hook tests | `node --test 'scripts/**/*.test.mjs'` |
-| End-to-end flows | `node --test --test-timeout=120000 tools/e2e/flows.test.mjs`, against running instances ([tools/e2e/README.md](tools/e2e/README.md)) |
-| Performance | `node tools/perf/harness.mjs 1000 --budget` against a production build ([tools/perf/README.md](tools/perf/README.md)); the `perf` skill |
-| Seed a dev database | `scripts/seed.sh --people 100` (wipes it first) |
-| Run the app | `dotnet run --project src/Api` and `pnpm --dir src/Web dev` ([README](README.md#quickstart-local-development)) |
-| A new migration | the `migration` skill |
-| A release | the `release` skill |
-
-The browser checks need a `chrome-headless-shell` ([tools/perf/README.md](tools/perf/README.md#setup)).
+The commands for building, testing, seeding, running and measuring the app are in the
+[developer guide](docs/development.md#commands), with how to debug it. Adding a migration
+and cutting a release follow its procedures, through the `migration` and `release` skills.
+The browser checks need a `chrome-headless-shell`
+([tools/perf/README.md](tools/perf/README.md#setup)).
 
 ## The code
 

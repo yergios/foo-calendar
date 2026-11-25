@@ -44,6 +44,4 @@ The API's policies and the SPA's gating read the same map — served to the brow
 
 > Overriding a list through environment variables is index-based: `Auth__ClaimTypes__Permissions__0=roles`, `__1=groups`, `Auth__Permissions__PeopleManage__0=leave-admin`. Indexes you don't set keep whatever `appsettings.json` had at that position, so replacing a longer list with a shorter one means blanking the leftovers (`Auth__Permissions__PeopleManage__1=`). Blank entries are dropped rather than matched.
 
-**Adding an endpoint.** Authorization is closed by default: a fallback policy requires an authenticated user, so a new route is protected without doing anything. A route needing a permission asks for it by name (`.RequireAuthorization(Permissions.PeopleManage)`), and the few genuinely public ones say so explicitly with `.AllowAnonymous()` — currently the SPA shell, `/api/config/bootstrap`, and `/healthchecks`.
-
-**Adding a permission.** Add a constant to `Permissions.All` (`src/Api/Configuration/Permissions.cs`) and the matching name to `src/Web/src/types/permission.ts`. `Program.cs` registers a policy per entry, so nothing else needs touching — but every deployment must then configure it, since a permission nobody can hold fails startup rather than sitting there unreachable.
+Adding an endpoint or a permission is covered in the [developer guide](development.md#an-endpoint).
