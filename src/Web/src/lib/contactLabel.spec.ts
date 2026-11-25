@@ -11,6 +11,10 @@ describe("contactLabel", () => {
     expect(contactLabel("mailto:a@b.example?subject=Hi")).toBe("a@b.example");
   });
 
+  it("[UI-11] recognises the mailto: scheme in any case", () => {
+    expect(contactLabel("MAILTO:A@b.example")).toBe("A@b.example");
+  });
+
   it("[UI-11] shows any other contact as the URL it is", () => {
     expect(contactLabel("https://help.acme.example/calendar?topic=privacy")).toBe(
       "https://help.acme.example/calendar?topic=privacy",

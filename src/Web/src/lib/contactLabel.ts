@@ -3,8 +3,9 @@
  * address alone, any other as the URL it is (UI-11). The link itself keeps the full URL,
  * so a subject the operator put in the query still reaches their mail client.
  *
- * Kept apart from legal.ts, which fills its pages from the bootstrap config as soon as it
- * is imported, so this can be tested on its own.
+ * Kept apart from legal.ts so each case is a plain call: legal.ts fills its pages once,
+ * from the bootstrap config, when it is imported, so a case tested through it would need a
+ * mocked config and a fresh import of its own.
  */
 export function contactLabel(url: string): string {
   if (!/^mailto:/i.test(url)) return url;
