@@ -356,7 +356,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   `tools/perf/baseline.json`, the "after, 1000 people" column of `tools/perf/README.md`.
   The slack absorbs CI noise, and the floor keeps sub-frame interactions from failing on
   noise alone; the check exists to catch a return to work that grows with the team
-  ([0017](docs/decisions/0017-csp-and-budget-adjustments.md)). A run that skipped an
+  ([0017](docs/decisions/0017-csp-and-budget-adjustments.md)). A run whose only failures
+  are timing breaches is measured once more and fails only when the second run breaches
+  too; both runs are kept in the results
+  ([0018](docs/decisions/0018-agent-tooling-adjustments.md)). A run that skipped an
   interaction or drew no absences fails rather than passing. `[ci]`
 
 ## BLD: Build and quality

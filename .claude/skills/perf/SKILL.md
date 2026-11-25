@@ -17,6 +17,8 @@ PERF-1 and PERF-2 in `SPEC.md` are the budgets.
 - Measure a production build, never `pnpm dev`: the dev server's numbers mean nothing here.
 - Timings are noisy. Run each size at least three times and report the typical `longest`,
   not the best. A single slow run is not a regression; a DOM count over budget always is.
+  `--budget` already measures a timing breach a second time and fails only when both runs
+  breach; read both attempts in the results file before calling it noise or a regression.
 
 ## Steps
 

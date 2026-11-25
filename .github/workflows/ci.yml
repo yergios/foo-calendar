@@ -297,7 +297,9 @@ jobs:
       # interaction (PERF-1), and each interaction's longest main-thread block within the
       # larger of three times tools/perf/baseline.json and 16 ms (PERF-2). Runs whether or not the flows above
       # passed, as long as the container is up: the two answer different questions. A
-      # timing failure can be CI noise, which a rerun tells apart; the DOM budget never is.
+      # timing breach is measured once more and fails only when it breaches again; the DOM
+      # budget never is noise. Every interaction's longest block, per attempt, goes to the
+      # job summary.
       - name: Performance budget
         id: perf
         if: ${{ !cancelled() && steps.smoke.outcome == 'success' }}

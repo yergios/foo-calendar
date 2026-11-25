@@ -71,15 +71,25 @@ to the previous year, the hover overlays not shown after the hover sweep, or the
 filter not turning on and off. A control the harness cannot find stops the run with an
 error naming its `data-perf` hook. Without `--budget`, these are printed as warnings.
 
+A run whose only failures are timing breaches is measured once more, in a fresh browser,
+and the budget fails only when that second run fails too
+([0018](../../docs/decisions/0018-agent-tooling-adjustments.md)). A DOM breach, or a run that
+did not measure what it claims, fails at once. The results file keeps every attempt under
+`attempts`, with the last one's numbers and failures at the top; the second run's trace goes
+beside the first, with `.retry` before its extension.
+
 CI runs it against the container on every push, with the `chrome-headless-shell` version
 pinned in `.github/workflows/ci.yml`, and keeps the results file as an artifact either way.
+It also writes every interaction's longest block, per attempt, to the job's summary page,
+so the spread of CI timings can be read without downloading anything.
 The baselines it reads are in [`baseline.json`](baseline.json): the "after, 1000 people"
 column of the table below. Each interaction is held to the baseline whose key its name
 starts with (every keystroke to `search-type`, every sort mode to `sort`, every hover sweep
 to `hover`); the year switch has no baseline yet and is held to the DOM budget only.
 
 The DOM budget is deterministic. A timing failure can be CI noise, since CI machines are
-slower and busier than the one below; a rerun tells noise from a regression. The threefold
+slower and busier than the one below; the second measurement tells noise from a regression,
+which breaches both. The threefold
 slack is there to absorb that while still catching work that grows with the team. The
 16 ms floor keeps interactions with sub-millisecond baselines, such as hovering, from
 failing on noise alone: a block shorter than a frame never costs one, and the 170 ms a
