@@ -23,8 +23,10 @@
         <RouterLink v-for="link in legalLinks" :key="link.label" :class="linkClass" :to="link.to">
           {{ link.label }}
         </RouterLink>
-        <a :class="linkClass" :href="licenseUrl" target="_blank">License</a>
-        <a v-if="supportUrl" :class="linkClass" :href="supportUrl" target="_blank">Contact</a>
+        <a :class="linkClass" :href="licenseUrl" target="_blank" rel="noopener">License</a>
+        <a v-if="supportUrl" :class="linkClass" :href="supportUrl" target="_blank" rel="noopener">
+          Contact
+        </a>
         <a :class="linkClass" :href="changelogUrl" target="_blank" rel="noopener">
           v{{ version }}
         </a>
