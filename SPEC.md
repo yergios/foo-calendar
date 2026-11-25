@@ -273,7 +273,8 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   IANA id), `ConnectionStrings:FooCalendarDb`, and outside Development `Auth:Authority`,
   `Auth:Audience`, `Auth:ClientId` and `Team:SupportUrl`. `Auth:Authority` must be an
   absolute `https` URL; `http` is accepted only in Development. `Team:SupportUrl`, when set,
-  must be an absolute URL in any scheme; no value for it ships with the app
+  must be an absolute URL in any scheme, with something after the scheme and no surrounding
+  whitespace; no value for it ships with the app
   ([0020](docs/decisions/0020-operator-contact-required.md)). `[test]`
 - **CFG-3** Settings of features that no longer exist must stop the app when they ask for
   that feature, rather than being silently ignored: `AbsenceApprovals:Enabled` with any value
