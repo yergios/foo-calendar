@@ -2,6 +2,29 @@
 
 Running Foo Calendar for a team: what to configure, how to deploy the container, and what to know when it sits behind a proxy or needs watching.
 
+## Quickstart
+
+Foo Calendar is one container running one process on one port, with its state in one SQLite
+file. With Docker and Docker Compose:
+
+1. Clone the repository and copy `.env.example` to `.env`. Every setting is described there.
+2. Fill in what has no workable default:
+   - `Team__HomeRegion` and `Team__HomeTimeZone`: which public holidays always sync, and
+     the time zone every absence's times are shown in ([Regions and holidays](regions-and-holidays.md)).
+   - `Auth__Authority`, `Auth__Audience` and `Auth__ClientId`: your OIDC provider (Auth0,
+     Okta, Keycloak, Entra ID and similar all work).
+   - `Auth__Permissions__*`: the claim values that grant each admin permission
+     ([Access control](access-control.md)).
+   - `Team__SupportUrl`, `Team__IssueUrl` and, optionally, `Team__SecurityContact`: where
+     your users, bug reports and security researchers reach you. They fill in the footer's
+     Contact link, the in-app privacy notice and terms, and `/.well-known/security.txt`.
+3. `docker compose up -d`. The app is on `http://localhost:8080`, and the
+   `foo-calendar-data` volume holds everything it stores: back that volume up.
+
+Before you put personal data in it, read [Data protection](data-protection.md), and fill in
+the governing-law section of the in-app terms (`src/Web/src/legal/terms.md`). To try the app
+without an identity provider first, see [Deploying](#deploying).
+
 ## Configuring a deployment
 
 Everything that differs between one company's deployment and another's is API configuration, read at startup. **The frontend bundle contains no environment-specific values**, so a single build artifact can be deployed anywhere: rebranding it or pointing it at a different identity provider never requires rebuilding the SPA.
@@ -11,7 +34,7 @@ The API serves that configuration two ways. Whatever the app needs *before* anyo
 | Setting | Purpose |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | `Team:OrgName` | Your team's name, in the header. Empty falls back to the product's name. |
-| `Team:SupportUrl` | "Contact support" links, including inside the help doc. Any scheme. |
+| `Team:SupportUrl` | The footer's Contact link, and the contact named in the in-app privacy notice and terms. Any scheme. |
 | `Team:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
 | `Team:SecurityContact` | Served as `Contact` in `/.well-known/security.txt`. Optional: falls back to `Team:SupportUrl`. |
 | `Team:HomeTimeZone` | Required. IANA timezone id, e.g. `Europe/Zurich`. Every time-based absence's times are wall-clock time in this one zone, for every viewer, and are labeled with it. |
@@ -46,14 +69,7 @@ What is *neither* is the product's own name and mark. Those are constants in `Pr
 
 ## Deploying
 
-The `Dockerfile` builds the whole thing — Vite compiles the SPA, `dotnet publish` packages the API, and the result is one image running one process on one port. There is no separate web server to deploy or configure.
-
-```bash
-cp .env.example .env    # fill in at least the Auth__* values
-docker compose up -d
-```
-
-That serves the app on `http://localhost:8080` and keeps the SQLite database in the `foo-calendar-data` volume. **That volume is the entire application state** — back it up and you have backed up everything.
+The `Dockerfile` builds the whole thing — Vite compiles the SPA, `dotnet publish` packages the API, and the result is one image running one process on one port. There is no separate web server to deploy or configure. `compose.yaml` runs that image, as in the [Quickstart](#quickstart), and keeps the SQLite database in the `foo-calendar-data` volume. **That volume is the entire application state** — back it up and you have backed up everything.
 
 To try the app before setting up an identity provider, run it in the Development environment, where authentication is off (`Auth:Provider=None`) and you are signed in as the `Auth:DevUser` identity, holding every permission:
 
