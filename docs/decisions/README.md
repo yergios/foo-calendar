@@ -24,5 +24,6 @@ format and conventions are in [0001](0001-record-architecture-decisions.md).
 | [17](0017-csp-and-budget-adjustments.md) | Adjust the CSP for real providers, and floor the timing budget at a frame | 2026-11-23 | Accepted, amended by 18 |
 | [18](0018-agent-tooling-adjustments.md) | Agent tooling adjustments after review | 2026-11-25 | Accepted |
 | [19](0019-documentation-in-the-repository.md) | Documentation lives in the repository; the app serves only the deployment's notices | 2026-11-25 | Accepted |
+| [20](0020-operator-contact-required.md) | The operator's contact is required, and nothing ships in its place | 2026-11-25 | Accepted |
 
 To add one, copy the shape of an existing record, take the next number, and add a row here.

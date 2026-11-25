@@ -18,3 +18,4 @@ verified. It is written before the code and is what a build session works from.
 | [0003](0003-nullable-types-and-domain-errors.md) | Nullable types and domain errors | Done |
 | [0004](0004-headers-telemetry-performance-e2e.md) | Headers, telemetry, performance and end-to-end checks | Done |
 | [0005](0005-agent-tooling.md) | Agent tooling: one check, enforced hooks, automatic privacy review | Done |
+| [0006](0006-operator-contact-required.md) | The operator's contact is required | Pending |

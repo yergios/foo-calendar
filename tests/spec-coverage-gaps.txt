@@ -8,3 +8,4 @@
 #
 # Everything left is built by the change spec each line names.
 
+UI-11    specified 2026-11-25, built by docs/specs/0006: Vitest cases for the notices' contact label, mailto: and otherwise

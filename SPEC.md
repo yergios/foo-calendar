@@ -271,8 +271,10 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   database untouched. `[test]`
 - **CFG-2** Required settings: `Team:HomeRegion` (a region code), `Team:HomeTimeZone` (an
   IANA id), `ConnectionStrings:FooCalendarDb`, and outside Development `Auth:Authority`,
-  `Auth:Audience` and `Auth:ClientId`. `Auth:Authority` must be an absolute `https` URL;
-  `http` is accepted only in Development. `[test]`
+  `Auth:Audience`, `Auth:ClientId` and `Team:SupportUrl`. `Auth:Authority` must be an
+  absolute `https` URL; `http` is accepted only in Development. `Team:SupportUrl`, when set,
+  must be an absolute URL in any scheme; no value for it ships with the app
+  ([0020](docs/decisions/0020-operator-contact-required.md)). `[test]`
 - **CFG-3** Settings of features that no longer exist must stop the app when they ask for
   that feature, rather than being silently ignored: `AbsenceApprovals:Enabled` with any value
   but `false`, and any value under `Auth:Permissions:AbsencesApprove`. The message must say
@@ -334,6 +336,9 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **UI-10** Admin sections must be reachable only with their permission: People
   (`PeopleManage` or `ReportsRead`), Bank holidays (`HolidaysSync`), Audit log
   (`AuditRead`). A member with none of them sees no admin entry point. `[test]`
+- **UI-11** The privacy notice and the terms must name `Team:SupportUrl` as the operator's
+  contact, linked, and show a `mailto:` contact as its address alone, without the scheme or
+  a query. `[test]`
 
 ## OBS: Telemetry
 
@@ -442,4 +447,6 @@ fails when a listed requirement gains a reference, so that list only shrinks.
    what `master` does once pending change specs are done.
 3. A decision with alternatives worth remembering also gets a decision record.
 
-Pending change specs, to be built in this order: none.
+Pending change specs, to be built in this order:
+
+- [0006: The operator's contact is required](docs/specs/0006-operator-contact-required.md)
