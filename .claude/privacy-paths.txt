@@ -32,9 +32,11 @@ src/Web/src/lib/browserCache.ts
 src/Web/src/components/AddAbsenceModal.vue
 
 # What the deployer and the members are told about notes (PRIV-4), and the threat model's
-# note rows the reviewer checks against.
+# note rows the reviewer checks against. The user guide left src/ with ADR 0019, so the
+# pattern no longer catches its promise that a note reaches its author only.
 docs/data-protection.md
 docs/threat-model.md
+docs/user-guide.md
 src/Web/src/legal/privacy.md
 
 # The review itself (ADR 0018): these rules, the reviewer's prompt, the script that hashes,

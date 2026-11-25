@@ -17,7 +17,8 @@ file. With Docker and Docker Compose:
      ([Access control](access-control.md)).
    - `Team__SupportUrl`, `Team__IssueUrl` and, optionally, `Team__SecurityContact`: where
      your users, bug reports and security researchers reach you. They fill in the footer's
-     Contact link, the in-app privacy notice and terms, and `/.well-known/security.txt`.
+     Contact link, the in-app privacy notice and terms, the error page's "Raise an issue"
+     link and `/.well-known/security.txt`.
 3. `docker compose up -d`. The app is on `http://localhost:8080`, and the
    `foo-calendar-data` volume holds everything it stores: back that volume up.
 
@@ -35,7 +36,7 @@ The API serves that configuration two ways. Whatever the app needs *before* anyo
 | ------------------------------ | ------------------------------------------------------------------------- |
 | `Team:OrgName` | Your team's name, in the header. Empty falls back to the product's name. |
 | `Team:SupportUrl` | The footer's Contact link, and the contact named in the in-app privacy notice and terms. Any scheme. |
-| `Team:IssueUrl` | "Raise an issue" links on the error page and in the footer. |
+| `Team:IssueUrl` | The "Raise an issue" link on the error page. |
 | `Team:SecurityContact` | Served as `Contact` in `/.well-known/security.txt`. Optional: falls back to `Team:SupportUrl`. |
 | `Team:HomeTimeZone` | Required. IANA timezone id, e.g. `Europe/Zurich`. Every time-based absence's times are wall-clock time in this one zone, for every viewer, and are labeled with it. |
 | `Auth:Authority` | OIDC issuer. Used by the API to validate tokens and by the SPA to log in. An absolute `https` URL; `http` is accepted only in Development. |
