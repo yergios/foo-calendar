@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import {
   commitDiff,
   diffHash,
-  readRules,
+  rulesAt,
   stagedDiff,
   touchesNotes,
   trailerLine,
@@ -33,6 +33,7 @@ Object.assign(process.env, {
 const RULES = `pattern: \\bnotes?\\b
 src/Api/Dtos/AbsenceDto.cs
 docs/data-protection.md
+.claude/privacy-paths.txt
 `;
 
 const repos = [];
@@ -66,7 +67,7 @@ function commit(repo, message) {
   return git(repo, "rev-parse", "HEAD").trim();
 }
 
-const touches = (repo, diff) => touchesNotes(diff, readRules(repo));
+const touches = (repo, diff) => touchesNotes(diff, rulesAt(repo, ["HEAD"]));
 
 test("[AGT-4] a staged diff and the commit made from it hash the same", () => {
   const repo = fixture();
@@ -195,6 +196,40 @@ test("an unrelated change does not touch notes", () => {
   write(repo, "src/Api/Services/PersonService.cs", "class PersonService {}\n");
   git(repo, "add", "--all");
   assert.deepEqual(touches(repo, stagedDiff(repo)), []);
+});
+
+test("the rules are read as committed: an unstaged edit to them changes nothing", () => {
+  const repo = fixture();
+  write(repo, "src/A.cs", "var x = absence.Note;\n");
+  git(repo, "add", "src/A.cs");
+  // Weakened in the working tree only: no pattern that matches, no listed paths.
+  write(repo, ".claude/privacy-paths.txt", "pattern: ZZZ_never\n");
+  const run = spawnSync(process.execPath, [script, "hash"], { cwd: repo, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /touches absence notes/);
+  assert.match(run.stdout, /src\/A\.cs adds or removes a line/);
+});
+
+test("a staged edit to the rules file is itself note-touching", () => {
+  const repo = fixture();
+  write(repo, ".claude/privacy-paths.txt", RULES.replace("src/Api/Dtos/AbsenceDto.cs\n", ""));
+  git(repo, "add", "--all");
+  assert.match(touches(repo, stagedDiff(repo)).join(), /privacy-paths\.txt is listed/);
+});
+
+test("the rules of several revisions are merged, never narrowed", () => {
+  const repo = fixture();
+  const first = git(repo, "rev-parse", "HEAD").trim();
+  write(repo, ".claude/privacy-paths.txt", "pattern: \\bmemo\\b\nsrc/Other.cs\n");
+  const second = commit(repo, "replace the rules");
+  const rules = rulesAt(repo, [first, second]);
+  assert.deepEqual(
+    rules.patterns.map((p) => p.source),
+    ["\\bnotes?\\b", "\\bmemo\\b"],
+  );
+  assert.ok(rules.paths.includes("src/Api/Dtos/AbsenceDto.cs"));
+  assert.ok(rules.paths.includes("src/Other.cs"));
+  assert.equal(rulesAt(repo, ["HEAD:does-not-exist"]), null);
 });
 
 // The CI check (AGT-5). Each history starts with a commit that touches notes unreviewed,
@@ -337,6 +372,34 @@ test("[AGT-5] a pull request checks base..head, its own commits only", () => {
   assert.equal(checked, 2);
   assert.equal(problems.length, 1);
   assert.match(problems[0], /unreviewed in the pull request/);
+});
+
+test("[AGT-5] a pull request cannot weaken the rules that judge it", () => {
+  const { repo } = history();
+  const base = git(repo, "rev-parse", "HEAD").trim();
+  git(repo, "switch", "--quiet", "--create", "pr");
+  // The pull request drops the DTO from the list, in a commit that is itself reviewed...
+  write(repo, ".claude/privacy-paths.txt", RULES.replace("src/Api/Dtos/AbsenceDto.cs\n", ""));
+  commitReviewed(repo, "stop listing the DTO");
+  // ...then changes the DTO without a review.
+  write(repo, "src/Api/Dtos/AbsenceDto.cs", "public sealed record AbsenceDto(string Text);\n");
+  const head = commitWith(repo, "change the DTO");
+
+  const { problems } = verify(repo, base, head);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /"change the DTO".*AbsenceDto\.cs is listed/);
+});
+
+test("[AGT-5] a rule added earlier in the range applies to the commits after it", () => {
+  const { repo, intro } = history();
+  write(repo, ".claude/privacy-paths.txt", RULES + "src/Api/Services/PersonService.cs\n");
+  commitReviewed(repo, "list the people service");
+  write(repo, "src/Api/Services/PersonService.cs", "class PersonService {}\n");
+  const head = commitWith(repo, "change the people service");
+
+  const { problems } = verify(repo, intro, head);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /"change the people service"/);
 });
 
 test("[AGT-5] the command fails on a problem and says squash merging bypasses the review", () => {

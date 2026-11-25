@@ -128,21 +128,54 @@ export function diffHash(diff) {
   return createHash("sha256").update(diff).digest("hex");
 }
 
-/** The note pattern and the listed paths, from `.claude/privacy-paths.txt`. */
-export function readRules(repo) {
-  const file = path.join(repo, RULES_FILE);
-  if (!existsSync(file)) throw new Error(`${RULES_FILE} is missing`);
-  let pattern = null;
+/** The note patterns and the listed paths a rules file's text defines. */
+export function parseRules(text) {
+  const patterns = [];
   const paths = [];
-  for (const raw of readFileSync(file, "utf8").split("\n")) {
+  for (const raw of text.split("\n")) {
     const line = raw.trim();
     if (line === "" || line.startsWith("#")) continue;
     const match = /^pattern:\s*(.+)$/.exec(line);
-    if (match) pattern = new RegExp(match[1], "i");
+    if (match) patterns.push(new RegExp(match[1], "i"));
     else paths.push(line);
   }
-  if (!pattern) throw new Error(`${RULES_FILE} defines no "pattern:" line`);
-  return { pattern, paths };
+  if (patterns.length === 0) throw new Error(`${RULES_FILE} defines no "pattern:" line`);
+  return { patterns, paths };
+}
+
+/**
+ * The rules as committed in `revs`, merged: every pattern and every path any of them lists,
+ * so adding a rev never narrows what touches notes. Null when none of them holds the file.
+ *
+ * Never the working tree's copy: a change is judged by rules already committed before it
+ * (HEAD in the hook, the range's base and each commit's parent in CI), so an edit to the
+ * rules, staged or not, cannot weaken the rules that judge it. Such an edit is itself
+ * reviewed, because the rules file lists itself.
+ */
+export function rulesAt(repo, revs) {
+  const merged = { patterns: [], paths: [] };
+  let found = false;
+  for (const rev of revs) {
+    if (!rev) continue;
+    const blob = git(repo, ["rev-parse", "--verify", "--quiet", `${rev}:${RULES_FILE}`], {
+      okCodes: [0, 1],
+    })
+      .toString()
+      .trim();
+    if (!blob) continue;
+    const rules = parseRules(git(repo, ["cat-file", "blob", blob]).toString("utf8"));
+    found = true;
+    for (const pattern of rules.patterns)
+      if (!merged.patterns.some((p) => p.source === pattern.source)) merged.patterns.push(pattern);
+    for (const file of rules.paths) if (!merged.paths.includes(file)) merged.paths.push(file);
+  }
+  return found ? merged : null;
+}
+
+/** The rules that judge a commit about to be made on HEAD: HEAD's, and with `amend` also
+ * those of HEAD's first parent, which the amended commit will sit on. */
+export function rulesForStaged(repo, { amend = false } = {}) {
+  return rulesAt(repo, amend ? ["HEAD", commitOrNull(repo, "HEAD^1")] : ["HEAD"]);
 }
 
 /** A path as git prints it in a diff header: C-quoted, with octal escapes for bytes
@@ -176,10 +209,10 @@ function headerPath(text) {
 /**
  * Why a diff touches notes, one reason per file, or [] when it does not: it changes a path
  * listed in the rules, or adds or removes a line under src/, tests/ or tools/ that matches
- * the pattern.
+ * one of the patterns.
  *
  * @param {Buffer | string} diff
- * @param {{ pattern: RegExp, paths: string[] }} rules
+ * @param {{ patterns: RegExp[], paths: string[] }} rules
  */
 export function touchesNotes(diff, rules) {
   const reasons = new Map();
@@ -225,13 +258,15 @@ export function touchesNotes(diff, rules) {
       continue;
     }
     if (line.startsWith("@@")) continue;
-    if ((line.startsWith("+") || line.startsWith("-")) && rules.pattern.test(line.slice(1))) {
+    if (!line.startsWith("+") && !line.startsWith("-")) continue;
+    const pattern = rules.patterns.find((p) => p.test(line.slice(1)));
+    if (pattern) {
       const roots = files.filter(underPatternRoots);
       for (const file of roots)
         if (!reasons.has(file))
           reasons.set(
             file,
-            `${file} adds or removes a line matching ${rules.pattern}: ${line.trim().slice(0, 120)}`,
+            `${file} adds or removes a line matching ${pattern}: ${line.trim().slice(0, 120)}`,
           );
     }
   }
@@ -374,7 +409,6 @@ function introducingCommit(repo, to) {
  * in the commits they merge. Returns { problems, checked, skipped, notes }.
  */
 export function verify(repo, from, to) {
-  const rules = readRules(repo);
   const notes = [];
   const head = commitOrNull(repo, to);
   if (!head) throw new Error(`${to} is not a commit in this repository`);
@@ -405,8 +439,13 @@ export function verify(repo, from, to) {
     .filter(Boolean);
   const skipped = Number(gitText(repo, ["rev-list", "--count", "--merges", ...range, ...exempt]));
 
+  // Each commit is judged by the rules at the range's base, which nothing in the push or the
+  // pull request can change, together with those at its own parent, so a rule added earlier
+  // in the range already applies to the commits after it.
   const problems = [];
   for (const commit of commits) {
+    const rules = rulesAt(repo, [known, commitOrNull(repo, `${commit}^1`)]);
+    if (!rules) continue;
     const diff = commitDiff(repo, commit);
     const reasons = touchesNotes(diff, rules);
     if (reasons.length === 0) continue;
@@ -439,7 +478,8 @@ function main(argv) {
   if (command === "hash" || command === "review") {
     const diff = stagedDiff(repo, { amend: args.includes("--amend") });
     const hash = diffHash(diff);
-    const reasons = touchesNotes(diff, readRules(repo));
+    const rules = rulesForStaged(repo, { amend: args.includes("--amend") });
+    const reasons = rules ? touchesNotes(diff, rules) : [];
     if (reasons.length === 0) {
       console.log(
         `The staged diff (sha256:${hash}) does not touch absence notes; no review needed.`,

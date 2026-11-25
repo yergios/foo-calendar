@@ -25,8 +25,8 @@ import {
   cachedVerdict,
   diffHash,
   formatFindings,
-  readRules,
   repoRoot,
+  rulesForStaged,
   runReviewer,
   stagedDiff,
   touchesNotes,
@@ -45,7 +45,7 @@ const commitCall =
 if (input.tool_name !== "Bash" || !commitCall.test(command)) process.exit(0);
 
 const repo = repoRoot(input.cwd ?? process.cwd());
-if (!repo || !existsSync(path.join(repo, ".claude", "privacy-paths.txt"))) process.exit(0);
+if (!repo) process.exit(0);
 
 function deny(reason) {
   console.log(
@@ -60,12 +60,16 @@ function deny(reason) {
   process.exit(0);
 }
 
-const rules = readRules(repo);
-
 // What follows "commit", up to the next command: its options.
 const commitArgs = command.slice(command.search(commitCall)).split(/&&|\|\||;|\|/)[0];
 // Its options, with quoted text such as the message taken out so it cannot read as one.
 const options = commitArgs.replace(/(["']).*?\1/gs, "");
+const amend = /\s--amend(?=\s|$)/.test(options);
+
+// The rules as committed at HEAD, never the working tree's copy, which the commit may not
+// even include (see rulesAt). None there means the review does not exist yet at HEAD.
+const rules = rulesForStaged(repo, { amend });
+if (!rules) process.exit(0);
 const stagesToo = /(?:^|[\s;&|(])git\s+(?:add|rm|mv|reset|restore|stash|apply)\b/.test(command);
 const commitsUnstaged = /\s(?:-[a-zA-Z]*[aio][a-zA-Z]*|--all|--include|--only)(?=\s|$)/.test(
   options,
@@ -82,7 +86,6 @@ if (stagesToo || commitsUnstaged) {
   );
 }
 
-const amend = /\s--amend(?=\s|$)/.test(options);
 const diff = stagedDiff(repo, { amend });
 const reasons = touchesNotes(diff, rules);
 if (reasons.length === 0) process.exit(0);

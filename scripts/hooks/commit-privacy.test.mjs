@@ -257,3 +257,11 @@ test("[AGT-3] --amend reviews the diff the amended commit will have", () => {
   assert.equal(decision, "deny");
   assert.match(reason, /Privacy-Review: passed sha256:/);
 });
+
+test("[AGT-3] the rules are HEAD's: an unstaged edit to them does not change the verdict", () => {
+  const f = fixture({ verdict: failed });
+  stageNoteChange(f);
+  writeFileSync(path.join(f.repo, ".claude", "privacy-paths.txt"), "pattern: ZZZ_never\n");
+  assert.equal(hook(f, commitCommand()).decision, "deny");
+  assert.equal(reviews(f), 1);
+});

@@ -5,13 +5,21 @@
 # A path is relative to the repository root and matches exactly; one ending in / matches
 # everything under it. Blank lines and lines starting with # are ignored. Add a file here
 # when it starts deciding who sees a note, or where one goes.
+#
+# This file is read as committed, never from the working tree: the hook reads HEAD's copy,
+# CI the copy at the base of the push or pull request and at each commit's parent. An edit
+# here is judged by the rules before it, and since this file lists itself, it is reviewed.
 
 pattern: \bnotes?\b
 
-# The absence entity, its DTO and the projection that drops other people's notes in SQL.
+# The absence entity, its DTO and the projection that drops other people's notes in SQL,
+# the response that carries a list of them, and the people service, which reads absence
+# statistics through AbsenceService and deletes a person's absences with the person.
 src/Api/Data/Models/Absence.cs
 src/Api/Dtos/AbsenceDto.cs
+src/Api/Dtos/AbsencesResponse.cs
 src/Api/Services/AbsenceService.cs
+src/Api/Services/PersonService.cs
 
 # The audit log, which must never record a note (AUD-2).
 src/Api/Services/AuditLog.cs
@@ -23,6 +31,15 @@ src/Web/src/api/absences.ts
 src/Web/src/lib/browserCache.ts
 src/Web/src/components/AddAbsenceModal.vue
 
-# What the deployer and the members are told about notes (PRIV-4).
+# What the deployer and the members are told about notes (PRIV-4), and the threat model's
+# note rows the reviewer checks against.
 docs/data-protection.md
+docs/threat-model.md
 src/Web/src/docs/privacy.md
+
+# The review itself (ADR 0018): these rules, the reviewer's prompt, the script that hashes,
+# detects and verifies, and the commit hook. Weakening any of them is itself reviewed.
+.claude/privacy-paths.txt
+.claude/agents/privacy-reviewer.md
+scripts/privacy-review.mjs
+scripts/hooks/commit-privacy.mjs
