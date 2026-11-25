@@ -290,18 +290,57 @@ public sealed class StartupTests
     }
 
     // "/support" because on Linux a rooted path parses as an absolute file URI, yet links to
-    // a page of the app itself like any other relative value.
+    // a page of the app itself like any other relative value. Padding is refused rather than
+    // trimmed (0020): Uri.TryCreate trims, but the notices and security.txt show the value as
+    // written. A trailing newline is what a secret file leaves.
     [Theory]
     [Trait("Spec", "CFG-2")]
     [Trait("Spec", "CFG-1")]
     [InlineData("Production", "support")]
     [InlineData("Production", "/support")]
     [InlineData("Development", "support")]
-    public void RelativeSupportUrl_StopsStartupNamingIt(string environment, string supportUrl)
+    [InlineData("Production", " mailto:it@acme.example")]
+    [InlineData("Production", "mailto:x\n")]
+    [InlineData("Production", "\tmailto:x")]
+    [InlineData("Development", " mailto:it@acme.example")]
+    public void RelativeOrPaddedSupportUrl_StopsStartupNamingIt(string environment, string supportUrl)
     {
         using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", supportUrl)])
         {
             Environment = environment,
+        };
+
+        StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be an absolute URL");
+    }
+
+    // Whitespace alone is a value nobody meant to set, so the operator is told to set one.
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    [InlineData(" ")]
+    [InlineData("\n")]
+    public void WhitespaceSupportUrlOutsideDevelopment_StopsStartupAsNotConfigured(string supportUrl)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", supportUrl)])
+        {
+            Environment = "Production",
+        };
+
+        StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be configured");
+    }
+
+    // It would render an empty link where the contact should be (0020).
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    [InlineData("mailto:")]
+    [InlineData("MAILTO:")]
+    [InlineData("https:")]
+    public void SchemeOnlySupportUrl_StopsStartupNamingIt(string supportUrl)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", supportUrl)])
+        {
+            Environment = "Production",
         };
 
         StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be an absolute URL");

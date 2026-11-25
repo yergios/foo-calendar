@@ -54,12 +54,17 @@ services.AddOptions<TeamOptions>()
         "notice and terms name it as the operator's contact.")
     // Any scheme, but absolute: a relative value would link to a page of the app itself.
     // The text must start with the scheme because on Linux a rooted path such as "/contact"
-    // parses as an absolute file URI.
+    // parses as an absolute file URI. Padding is refused rather than trimmed (0020):
+    // Uri.TryCreate trims, but the notices and security.txt show the value as written. A
+    // scheme alone ("mailto:") parses, yet would be an empty link where the contact belongs.
     .Validate(o => string.IsNullOrWhiteSpace(o.SupportUrl)
-            || (Uri.TryCreate(o.SupportUrl, UriKind.Absolute, out var uri)
-                && o.SupportUrl.TrimStart().StartsWith($"{uri.Scheme}:", StringComparison.OrdinalIgnoreCase)),
-        "Team:SupportUrl must be an absolute URL in any scheme, e.g. \"mailto:it@acme.example\" " +
-        "or \"https://help.acme.example\".")
+            || (o.SupportUrl.Trim() == o.SupportUrl
+                && Uri.TryCreate(o.SupportUrl, UriKind.Absolute, out var uri)
+                && o.SupportUrl.StartsWith($"{uri.Scheme}:", StringComparison.OrdinalIgnoreCase)
+                && o.SupportUrl.Length > uri.Scheme.Length + 1),
+        "Team:SupportUrl must be an absolute URL in any scheme, with something after the " +
+        "scheme and no whitespace around it, e.g. \"mailto:it@acme.example\" or " +
+        "\"https://help.acme.example\".")
     .ValidateOnStart();
 
 services.AddOptions<HolidayOptions>()
