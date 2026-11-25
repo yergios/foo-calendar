@@ -272,6 +272,66 @@ public sealed class StartupTests
         StartupFailure(app).Message.ShouldContain("Auth:Authority must be an absolute");
     }
 
+    // Nothing ships for it, so this is a deployment that never set it.
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    public void SupportUrlMissingOutsideDevelopment_StopsStartupNamingIt_WithTheDatabaseUntouched()
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", "")])
+        {
+            Environment = "Production",
+        };
+        File.WriteAllBytes(app.DatabasePath, []);
+
+        StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be configured");
+
+        app.TableNames().ShouldBeEmpty();
+    }
+
+    // "/support" because on Linux a rooted path parses as an absolute file URI, yet links to
+    // a page of the app itself like any other relative value.
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [Trait("Spec", "CFG-1")]
+    [InlineData("Production", "support")]
+    [InlineData("Production", "/support")]
+    [InlineData("Development", "support")]
+    public void RelativeSupportUrl_StopsStartupNamingIt(string environment, string supportUrl)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", supportUrl)])
+        {
+            Environment = environment,
+        };
+
+        StartupFailure(app).Message.ShouldContain("Team:SupportUrl must be an absolute URL");
+    }
+
+    [Theory]
+    [Trait("Spec", "CFG-2")]
+    [InlineData("mailto:it@acme.example")]
+    [InlineData("MAILTO:it@acme.example?subject=Foo%20Calendar")]
+    [InlineData("https://help.acme.example/calendar")]
+    public void AbsoluteSupportUrlInAnyScheme_StartsOutsideDevelopment(string supportUrl)
+    {
+        using var app = new TestApp([.. IdentityProvider, ("Team:SupportUrl", supportUrl)])
+        {
+            Environment = "Production",
+        };
+
+        Should.NotThrow(() => app.Services);
+    }
+
+    // A local run starts with no configuration, as it does without an identity provider.
+    [Fact]
+    [Trait("Spec", "CFG-2")]
+    public void SupportUrlMissingInDevelopment_Starts()
+    {
+        using var app = new TestApp(("Team:SupportUrl", ""));
+
+        Should.NotThrow(() => app.Services);
+    }
+
     [Fact]
     [Trait("Spec", "CFG-4")]
     public void ValidConfiguration_MigratesAnEmptyDatabase()

@@ -25,7 +25,10 @@ public sealed class TeamOptions
     /// meaning to.</summary>
     public string HomeTimeZone { get; init; } = "";
 
-    /// <summary>Where "Contact support" points. Any URL scheme, commonly mailto:. Stays
+    /// <summary>Where "Contact support" points. Any URL scheme, commonly mailto:, but
+    /// absolute. Required outside Development, with nothing shipped in its place: the
+    /// privacy notice and the terms name it as the controller's contact, and a notice
+    /// without one, or with a placeholder nobody reads, is incomplete (0020). Stays
     /// runtime config rather than a compile-time constant: it is deployment-specific and
     /// carries no styling, so changing a helpdesk address shouldn't need a rebuild.</summary>
     public string SupportUrl { get; init; } = "";

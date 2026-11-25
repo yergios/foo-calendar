@@ -118,6 +118,13 @@ public sealed class TestApp : WebApplicationFactory<Program>
         builder.UseEnvironment(Environment);
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
 
+        // A deployment has to name its contact (CFG-2), and nothing ships for it. Given here
+        // so a test about something else starts outside Development; set before the
+        // overrides, so a test about the contact still decides it. Development is left to
+        // appsettings.Development.json, as `dotnet run` would.
+        if (Environment != "Development")
+            builder.UseSetting("Team:SupportUrl", "mailto:support@example.test");
+
         if (Shell is not null)
         {
             var contentRoot = Path.Combine(directory, "content");
