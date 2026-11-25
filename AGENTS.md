@@ -105,6 +105,41 @@ The browser checks need a `chrome-headless-shell` ([tools/perf/README.md](tools/
 - [docs/agentic-development.md](docs/agentic-development.md) tells how this has gone so far,
   with the cases where it caught something.
 
+### The loop, sized to the change
+
+Every change runs the same loop; how much of it a change needs depends on whether it alters
+what the system is meant to do.
+
+1. **Intent before code.** If `SPEC.md` will say something different afterwards, write a
+   change spec first (the `/spec` interview produces one). If there is a choice between real
+   alternatives, write the ADR now, with the rejected options.
+2. **Open questions are answered by the user before the build,** never guessed by the agent
+   building it.
+3. **Build in a fresh session from the spec,** one commit per step of its order of work,
+   until `scripts/check.sh` passes.
+4. **Review by a different fresh agent,** read-only and in a worktree, against the spec,
+   probing by breaking code. An agent never reviews its own work.
+5. **Fix in a fresh agent.** Decisions the review raises are the user's, and become an ADR
+   before the fix starts.
+6. **Commit, push, CI green.**
+
+| Kind | Spec and ADR | Tests | Build | Review |
+| --- | --- | --- | --- | --- |
+| New feature | Change spec with new requirement IDs; ADRs for the choices | Tagged with the new IDs | Fresh agent, from the spec | Full independent review |
+| Change request | Change spec amending the existing IDs; an ADR marking the old one amended if it reverses a decision | Change the test to the new behaviour and see it fail first | Fresh agent | Full if user-facing, security or privacy; otherwise `/code-review` |
+| Bug fix | None, unless the spec is what is wrong (then it is a change request). A case no requirement covered gets one: that was a spec gap | A failing test tagged with the requirement, then the fix | Same session if small | `/code-review`; full for auth, privacy or data |
+| Refactor, cleanup | None; `docs/architecture.md` if the structure changes; an ADR only if a decision changes | None new: the suite is the contract, the trace check stays complete | Same session, fresh if large | `/simplify`, plus a mutation probe that the tests still bite; the `perf` skill if the grid is touched |
+| Chore (dependencies, CI, tooling, release) | An ADR only if it changes a pinned decision (the SDK pin, a dependency choice) | None | Same session; the `release` and `migration` skills | CI |
+
+- A task that takes more than a screenful to explain needs a spec; one that fits in a
+  sentence does not.
+- Use plan mode for anything touching more than a handful of files.
+- Fix the cause, never the check: loosening a budget, a rule or a hook is the user's
+  decision, recorded as an ADR ([0017](docs/decisions/0017-csp-and-budget-adjustments.md),
+  [0018](docs/decisions/0018-agent-tooling-adjustments.md)).
+- When a bug gets through, find why no test or review caught it, add that test, and record
+  notable cases in `docs/agentic-development.md`.
+
 ## Privacy review
 
 An absence note reaches its author only: never anyone else, an audit entry, a log, a trace or
