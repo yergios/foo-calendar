@@ -76,7 +76,8 @@ const PINNED_CONFIG = [
 ].flatMap((setting) => ["-c", setting]);
 
 /** Environment that would change what git prints, removed before every call. */
-const UNSET_ENV = /^(?:GIT_DIFF_OPTS|GIT_EXTERNAL_DIFF|GIT_ATTR_SOURCE|GIT_NOTES_REF|GIT_CONFIG|GIT_CONFIG_PARAMETERS|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_\d+|GIT_CONFIG_VALUE_\d+)$/;
+const UNSET_ENV =
+  /^(?:GIT_DIFF_OPTS|GIT_EXTERNAL_DIFF|GIT_ATTR_SOURCE|GIT_NOTES_REF|GIT_CONFIG|GIT_CONFIG_PARAMETERS|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_\d+|GIT_CONFIG_VALUE_\d+)$/;
 
 /** Where the touch rules live, relative to the repository root. */
 export const RULES_FILE = ".claude/privacy-paths.txt";
@@ -256,6 +257,12 @@ export function commitDiff(repo, commit) {
       commit,
     ]);
   return gitDiff(repo, ["diff", ...DIFF_OPTIONS, parents[0] ?? emptyTree(repo), commit]);
+}
+
+/** The diff between two trees (or commits), `from` null for the empty tree, as commitDiff
+ * prints an ordinary commit's. */
+export function treeDiff(repo, from, to) {
+  return gitDiff(repo, ["diff", ...DIFF_OPTIONS, from ?? emptyTree(repo), to]);
 }
 
 /** Everything a `git commit -a`, or a commit after a `git add -A`, could include: tracked
@@ -617,7 +624,9 @@ export function verify(repo, from, to, { start = REVIEW_START } = {}) {
 
   const startCommit = commitOrNull(repo, start);
   if (!startCommit)
-    notes.push(`the review's first commit's parent ${start.slice(0, 12)} is not here; no commit is exempt`);
+    notes.push(
+      `the review's first commit's parent ${start.slice(0, 12)} is not here; no commit is exempt`,
+    );
   const known = from && !ZERO_SHA.test(from) ? commitOrNull(repo, from) : null;
   if (!known)
     notes.push(

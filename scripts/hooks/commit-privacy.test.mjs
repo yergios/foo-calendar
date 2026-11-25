@@ -265,3 +265,208 @@ test("[AGT-3] the rules are HEAD's: an unstaged edit to them does not change the
   assert.equal(hook(f, commitCommand()).decision, "deny");
   assert.equal(reviews(f), 1);
 });
+
+// Every way of running a commit the review of change spec 0005 tried
+// (965751d8 probe-commit.mjs), and the other commands that create commits. The repository
+// has a committed note change in HEAD, a staged one, and an unstaged one in a file a
+// pathspec names; the stub reviewer fails everything, so a recognised commit is refused.
+
+/** A fixture for the command forms; returns it with a side branch that touches notes. */
+function formsFixture() {
+  const f = fixture({ verdict: failed });
+  write(f.repo, "src/Api/Services/AbsenceService.cs", "class AbsenceService {}\n");
+  f.git("add", "--all");
+  f.git("commit", "--quiet", "--message", "add the service");
+  write(f.repo, "src/Api/Services/AbsenceService.cs", "class AbsenceService { string Note; }\n");
+  f.git("add", "--all");
+  f.git("commit", "--quiet", "--message", "give it a note");
+  f.git("format-patch", "--quiet", "-1", "HEAD", "--output", path.join(f.repo, "patch"));
+  f.git("branch", "side", "HEAD~1");
+  f.git("config", "alias.ci", "commit");
+  f.git("config", "alias.shellci", "!git commit");
+  write(f.repo, "msg.txt", "fix: x\n");
+  // Unstaged, in a file a pathspec names; and staged, in another.
+  write(
+    f.repo,
+    "src/Api/Services/AbsenceService.cs",
+    "class AbsenceService { string Note; } // note\n",
+  );
+  write(f.repo, "src/Api/A.cs", "var x = absence.Note;\n");
+  f.git("add", "src/Api/A.cs");
+  return f;
+}
+
+/** What the hook made of a command: "review" (the reviewer ran and failed it), "stage"
+ * (refused until the change is staged on its own), "refuse" (refused otherwise), or null
+ * (let through). */
+function outcome(f, command) {
+  const { decision, reason } = hook(f, command);
+  if (decision === null) return null;
+  if (/failed the staged diff/.test(reason)) return "review";
+  if (/Stage the change first/.test(reason)) return "stage";
+  return "refuse";
+}
+
+test("[AGT-3] every form of running git commit the review tried is recognised", () => {
+  const f = formsFixture();
+  const forms = [
+    ['git commit -m "x"', "review"],
+    ['cd src && git commit -m "x"', "review"],
+    ['env GIT_AUTHOR_NAME=x git commit -m "x"', "review"],
+    ['GIT_AUTHOR_NAME=x git commit -m "x"', "review"],
+    ['git -C . commit -m "x"', "review"],
+    ["git -C src/.. commit -m x", "review"],
+    ["git --git-dir=.git --work-tree=. commit -m x", "review"],
+    ["git -c user.name=x commit -m x", "review"],
+    ['git -c "user.name=a b" commit -m x', "review"],
+    ['bash -c "git commit -m x"', "review"],
+    ["sh -c 'git commit -m x'", "review"],
+    ["(git commit -m x)", "review"],
+    ["{ git commit -m x; }", "review"],
+    ["true && git commit -m x", "review"],
+    ["echo $(git commit -m x)", "review"],
+    ["git commit --file=msg.txt", "review"],
+    ["git commit -F - <<'EOF'\nsubject\n\n---\n\nCo-authored by AI.\nEOF", "review"],
+    ["git\tcommit -m x", "review"],
+    ["git  commit -m x", "review"],
+    ["/usr/bin/git commit -m x", "review"],
+    ["command git commit -m x", "review"],
+    ["timeout 30 git commit -m x", "review"],
+    ["nice git commit -m x", "review"],
+    ["xargs git commit -m x < /dev/null", "review"],
+    ["git ci -m x", "review"],
+    ["git shellci -m x", "review"],
+    ["git -c alias.c2=commit c2 -m x", "review"],
+    // The tree of HEAD on HEAD: an empty commit, nothing to review.
+    ["git commit-tree HEAD^{tree} -p HEAD -m x", null],
+    ["git commit-tree $(git write-tree) -p HEAD -m x", "refuse"],
+    // A plain merge adds nothing an automatic merge would not; with a strategy option it can.
+    ["git merge --no-ff side", null],
+    ["git merge -X theirs side", "refuse"],
+    ["git cherry-pick HEAD", "refuse"],
+    ["git revert HEAD", "refuse"],
+    ["git rebase -i HEAD~2", "refuse"],
+    ["git am < patch", "refuse"],
+    ["git am patch", "refuse"],
+    ["git stash && git stash apply", null],
+    ["eval 'git commit -m x'", "review"],
+    ["g=git; $g commit -m x", "review"],
+    ["git commit --amend --no-edit", "review"],
+    ["git commit -qm x", "review"],
+    ["git commit -am x", "stage"],
+    ["git commit --all -m x", "stage"],
+    ["git commit --patc -m x", "stage"],
+    ['git commit -m "fix: -a thing"', "review"],
+    ["git commit -m 'note' -- src/Api/Services/AbsenceService.cs", "stage"],
+    ["git commit -m x src/Api/Services/AbsenceService.cs", "stage"],
+    ["git -C . add -A && git commit -m x", "stage"],
+  ];
+  const wrong = forms
+    .map(([command, expected]) => [command, expected, outcome(f, command)])
+    .filter(([, expected, actual]) => expected !== actual);
+  assert.deepEqual(wrong, []);
+});
+
+test("[AGT-3] commands that never commit, or name git only in text, go through", () => {
+  const f = formsFixture();
+  for (const command of [
+    "git status",
+    "git log --grep commit",
+    'echo "git commit -m x"',
+    "grep -r 'git commit' docs",
+    "git commit --dry-run -m x",
+    "git cherry-pick --no-commit HEAD",
+    "git revert -n HEAD",
+    "git merge --no-commit -X theirs side",
+    "git rebase --abort",
+  ])
+    assert.equal(outcome(f, command), null, command);
+  assert.equal(reviews(f), 0);
+});
+
+test("[AGT-3] a commit from another index file is reviewed on that index", () => {
+  const f = fixture({ verdict: failed });
+  write(f.repo, "src/Api/B.cs", "var y = absence.Note;\n");
+  const index = path.join(f.bin, "other-index");
+  execFileSync("git", ["add", "src/Api/B.cs"], {
+    cwd: f.repo,
+    env: { ...process.env, GIT_INDEX_FILE: index },
+  });
+  // The default index holds nothing; the commit takes the other one.
+  assert.equal(hook(f, `GIT_INDEX_FILE=${index} git commit -m x`).decision, "deny");
+  assert.equal(reviews(f), 1);
+});
+
+test("[AGT-3] a merge concluded with git commit is reviewed on its remerge diff", () => {
+  const f = fixture();
+  f.git("switch", "--quiet", "--create", "side");
+  write(f.repo, "README.md", "A repository.\nFrom the side.\n");
+  f.git("commit", "--quiet", "--all", "--message", "side");
+  f.git("switch", "--quiet", "-");
+  f.git("merge", "--quiet", "--no-ff", "--no-commit", "side");
+  // Clean so far: nothing to review.
+  assert.equal(hook(f, commitCommand()).decision, null);
+  assert.equal(reviews(f), 0);
+  // A note line slipped into the merge.
+  write(f.repo, "src/Api/A.cs", "var x = absence.Note;\n");
+  f.git("add", "--all");
+  const { decision, reason } = hook(f, commitCommand());
+  assert.equal(decision, "deny");
+  assert.match(reason, /Privacy-Review: passed sha256:/);
+  assert.match(readFileSync(path.join(f.bin, "stdin"), "utf8"), /\+var x = absence\.Note;/);
+  assert.doesNotMatch(readFileSync(path.join(f.bin, "stdin"), "utf8"), /From the side/);
+  assert.equal(hook(f, "git merge --continue").decision, "deny");
+});
+
+test("[AGT-3] a reviewer answer outside the schema, or passed with findings, blocks", () => {
+  for (const verdict of [
+    { ...passed, findings: failed.findings },
+    { ...passed, approved: true },
+    { verdict: "ok", summary: "", findings: [] },
+  ]) {
+    const f = fixture({ verdict });
+    stageNoteChange(f);
+    const { decision, reason } = hook(f, commitCommand());
+    assert.equal(decision, "deny", JSON.stringify(verdict));
+    assert.match(reason, /failed the staged diff|no valid verdict/);
+    assert.equal(existsSync(path.join(f.repo, ".git", "privacy-reviews")), false);
+  }
+});
+
+test("[AGT-3] git pull --rebase is refused when it would replay local note commits", () => {
+  const f = fixture();
+  const origin = mkdtempSync(path.join(tmpdir(), "commit-privacy-origin-"));
+  repos.push(origin);
+  execFileSync("git", ["clone", "--quiet", "--bare", f.repo, origin]);
+  f.git("remote", "add", "origin", origin);
+  f.git("fetch", "--quiet", "origin");
+  f.git(
+    "branch",
+    "--quiet",
+    "--set-upstream-to",
+    `origin/${f.git("branch", "--show-current").toString().trim()}`,
+  );
+  write(f.repo, "src/Api/A.cs", "var x = absence.Note;\n");
+  f.git("add", "--all");
+  f.git("commit", "--quiet", "--message", "local note change");
+
+  const { decision, reason } = hook(f, "git pull --rebase");
+  assert.equal(decision, "deny");
+  assert.match(reason, /local note change/);
+  assert.match(reason, /git pull --no-rebase/);
+  assert.equal(hook(f, "git pull --no-rebase").decision, null);
+  assert.equal(hook(f, "git pull -X ours").decision, "deny");
+});
+
+test("[AGT-3] the trailer is found in the message forms Claude writes", () => {
+  const f = fixture();
+  const trailer = stageNoteChange(f);
+  const body = `fix: x\n\nThe -a and -o options, and "quotes".\n\n---\n\n${trailer}\nCo-authored by AI.\n`;
+  for (const command of [
+    `git commit -m "$(cat <<'EOF'\n${body}EOF\n)"`,
+    `git commit -F - <<'EOF'\n${body}EOF`,
+    `git commit -m $'${body.replaceAll("\n", "\\n").replaceAll('"', '\\"')}'`,
+  ])
+    assert.equal(hook(f, command).decision, null, command);
+  assert.equal(reviews(f), 1);
+});

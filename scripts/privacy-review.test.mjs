@@ -124,7 +124,11 @@ test("[AGT-4] repository git settings change neither the hash nor what touches n
   write(repo, "src/a.cs", "class A {\n  void F() {\n    var x = 1;\n\n    var y = 2;\n  }\n}\n");
   write(repo, "src/moved.txt", "a file that will move, long enough to be seen as a rename\n");
   commit(repo, "files");
-  write(repo, "src/a.cs", "class A {\n  void F() {\n    var x = 1;\n\n    var y = absence.Note;\n  }\n}\n");
+  write(
+    repo,
+    "src/a.cs",
+    "class A {\n  void F() {\n    var x = 1;\n\n    var y = absence.Note;\n  }\n}\n",
+  );
   git(repo, "mv", "src/moved.txt", "src/renamed.txt");
   write(repo, "src/naïve name.txt", "quoted\n");
   git(repo, "add", "--all");
@@ -415,7 +419,11 @@ function pendingMerge(repo) {
 test("[AGT-5] an evil merge, adding a note change found in neither parent, needs a trailer", () => {
   const { repo, intro } = history();
   pendingMerge(repo);
-  write(repo, "src/Api/Services/AbsenceService.cs", '// logger.LogInformation("{Note}", absence.Note);\n');
+  write(
+    repo,
+    "src/Api/Services/AbsenceService.cs",
+    '// logger.LogInformation("{Note}", absence.Note);\n',
+  );
   const head = commitWith(repo, "Merge branch side");
 
   const { problems } = verify(repo, intro, head);
@@ -472,7 +480,10 @@ test("[AGT-5] a branch started before the review is checked like any other", () 
   git(repo, "switch", "--quiet", "--create", "old", starts.get(repo));
   write(repo, "src/A.cs", "var note = 2;\n");
   const head = commitWith(repo, "feat: log the note");
-  assert.match(verify(repo, base, head).problems.join(), /"feat: log the note".*no Privacy-Review trailer/);
+  assert.match(
+    verify(repo, base, head).problems.join(),
+    /"feat: log the note".*no Privacy-Review trailer/,
+  );
 });
 
 test("[AGT-5] a push checks before..after, and everything since the start when before is unknown", () => {

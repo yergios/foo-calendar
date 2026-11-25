@@ -39,7 +39,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git *)",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/commit-privacy.mjs\"",
             "timeout": 600
           }
