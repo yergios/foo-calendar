@@ -1,6 +1,6 @@
 # 17. Adjust the CSP for real providers, and floor the timing budget at a frame
 
-- Status: Accepted (implementation in the fixes to [change spec 0004](../specs/0004-headers-telemetry-performance-e2e.md))
+- Status: Accepted (implementation in the fixes to [change spec 0004](../specs/0004-headers-telemetry-performance-e2e.md)), amended by [0018](0018-agent-tooling-adjustments.md): a timing breach is retried once
 - Date: 2026-11-23
 - Amends: [0015](0015-strict-content-security-policy.md), [0016](0016-own-devtools-driver-for-browser-checks.md)
 
