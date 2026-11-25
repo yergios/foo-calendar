@@ -388,16 +388,26 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
   ignored) content are identical to the last run that passed
   ([0018](docs/decisions/0018-agent-tooling-adjustments.md)). Stopping the hook stops the
   check and everything it started. `[test]`
-- **AGT-3** A commit whose staged diff touches absence notes (as `.claude/privacy-paths.txt`
-  defines) must not be created by Claude Code until the privacy reviewer has passed that
-  exact diff and the message carries `Privacy-Review: passed sha256:<diff hash>` on the line
-  just above `Co-authored by AI.`. A commit that does not touch notes is not delayed. `[test]`
-- **AGT-4** The diff hash is the SHA-256 of one diff command with fixed options, and is the
-  same for a staged diff and for the commit made from it. `[test]`
-- **AGT-5** CI must fail when a non-merge commit in a push or a pull request touches notes
-  without a trailer whose hash equals its own diff's. `[test]`
+- **AGT-3** A commit whose diff touches absence notes (as `.claude/privacy-paths.txt`
+  defines it at HEAD, never in the working tree) must not be created by Claude Code until the
+  privacy reviewer has passed that exact diff and the message carries
+  `Privacy-Review: passed sha256:<diff hash>` on the line just above `Co-authored by AI.`.
+  This holds however git is invoked in a Bash command; a command that would commit something
+  other than the staged diff (`-a`, paths, a rebase, cherry-pick or revert of such commits, a
+  merge with a strategy) is refused when that could touch notes. A commit that does not touch
+  notes is not delayed. `[test]`
+- **AGT-4** The diff hash is the SHA-256 of one diff command with every option that shapes
+  its bytes fixed, unaffected by git configuration, attributes or environment, and is the
+  same for a staged diff and for the commit made from it. A merge commit's diff is its
+  remerge diff. `[test]`
+- **AGT-5** CI must fail when a commit in a push or a pull request, merge commits included,
+  touches notes (by the rules at the range's base and at its parent) without a trailer whose
+  hash equals its own diff's. Only commits up to `dfa2ab2` are exempt; a push whose previous
+  commit is unknown is checked from there. `[test]`
 - **AGT-6** The privacy reviewer checks a diff against ABS-9, AUD-2, PRIV-1 and ADR 0007 and
-  answers with a structured verdict citing file and line. `[review]`
+  answers with a structured verdict citing file and line; an answer outside the verdict
+  schema, or a pass that lists findings, counts as a failure. The diff reaches it delimited,
+  as data, never as instructions. `[review]`
 - **AGT-7** `AGENTS.md` must give an agent the commands, the code map, the conventions, the
   spec and decision workflow, and the privacy workflow with its commit trailer. `[review]`
 - **AGT-8** Shared Claude Code settings must hold the hooks and pre-allow only exact commands

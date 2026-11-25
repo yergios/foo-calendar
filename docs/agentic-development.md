@@ -27,8 +27,9 @@ agent follows are in [AGENTS.md](../AGENTS.md); this page is the why and the rec
    by breaking code to see whether a test notices. Its findings become fix commits, an
    amended spec or a new decision record: the 0004 review produced
    [ADR 0017](decisions/0017-csp-and-budget-adjustments.md) (`1e889d1`).
-6. **Hooks** make the parts that must never be skipped automatic: the full check on every
-   stop, and a privacy review of every commit that touches absence notes (change spec 0005).
+6. **Hooks** make the parts that must never be skipped automatic: the full check when a
+   session stops, and a privacy review of every commit that touches absence notes (change
+   spec 0005, adjusted by [ADR 0018](decisions/0018-agent-tooling-adjustments.md)).
 
 ## What the process caught
 
@@ -39,9 +40,10 @@ rationale no commit, comment or note supported (`e52495b`): why the admin role w
 (`ce05498` has no message), a case against canvas rendering written after the fact, with a
 claim the measurements contradicted ("every interaction within a frame", while search took 23
 to 31 ms), and more. Dates and sources were corrected to the commits that made each decision.
-The same review found `.editorconfig` suppression reasons that did not match the code, and a
-claim that naming rules were enforced in the build when the command-line build ignores them,
-which it checked with a probe file (`e4657ba`).
+The step 1 review before it had found the same kind of thing in the build configuration:
+`.editorconfig` suppression reasons that did not match the code, and a claim that naming
+rules were enforced in the build when the command-line build ignores them, which it checked
+with a probe file (`e4657ba`, merged with that review's fixes in `fc39c62`).
 
 It also removed one alternative that had been real: declining the dotnet/runtime style was a
 choice made in a session and written down nowhere the reviewer could see, and it had to be
@@ -106,21 +108,35 @@ Building change spec 0005 found two things the spec's own commands would have mi
   because the schema answer goes through a tool of its own, `StructuredOutput`, which then
   has to be listed (`46c2a2c`).
 
+Its independent review then probed the hooks the way the earlier reviews probed tests: 41
+ways of running a commit fed to the commit hook, evil merges, old-base branches, repository
+git settings and a prompt injection fed to the reviewer, a headless session trying to escape
+the allowlist. The fixes are in [ADR 0018](decisions/0018-agent-tooling-adjustments.md) and
+the commits after `01ad000`.
+
 ## Hooks and the privacy review
 
 Advice in AGENTS.md is followed most of the time; the two things that must hold every time
 are enforced by hooks in the shared [`.claude/settings.json`](../.claude/settings.json):
 
 - **The Stop hook** runs `scripts/check.sh` (every check CI runs that does not need Docker,
-  the end-to-end suite and the performance budget included) every time a session stops, and
-  blocks the stop with the failing step and the end of its output. A check that still fails
-  after Claude Code's cap of continuations ends the turn reporting the failure, not a success.
-- **The commit hook** runs the `privacy-reviewer` subagent on every staged diff that touches
-  absence notes, as `.claude/privacy-paths.txt` defines it, and lets the commit through only
-  with a passed verdict for that exact diff, recorded in the message as
-  `Privacy-Review: passed sha256:<diff hash>`. CI recomputes each commit's diff hash and fails
-  a commit that touches notes without a matching trailer, so the review cannot be skipped by
-  committing outside Claude Code either.
+  the end-to-end suite and the performance budget included) when a session stops, unless
+  nothing has changed since its last pass, and blocks the stop with the failing step and the
+  end of its output. A check that still fails after Claude Code's cap of continuations ends
+  the turn reporting the failure, not a success.
+- **The commit hook** runs the `privacy-reviewer` subagent on every diff about to be
+  committed that touches absence notes, as `.claude/privacy-paths.txt` defines it at HEAD,
+  and lets the commit through only with a passed verdict for that exact diff, recorded in the
+  message as `Privacy-Review: passed sha256:<diff hash>`. It reads every git command in a
+  Bash call, however it is run, and refuses the ones that would commit something it has not
+  reviewed (a rebase or cherry-pick of note commits, `git commit -a`).
+- **What CI adds.** CI recomputes each pushed or pull-request commit's diff hash, merge
+  commits included, and fails a commit that touches notes without a matching trailer. That
+  catches a commit made outside Claude Code, or by a script the hook cannot see, that skipped
+  the review without writing a trailer. It cannot tell a reviewed trailer from one computed
+  by hand: `privacy-review.mjs` is public, and the hash only proves the trailer names that
+  exact diff. Outside Claude Code the review is followed by convention (`privacy-review.mjs
+  review`), and a pull request is read by a person before it is merged.
 
 The note is singled out because it is the one free-text field, the one place the app's
 promise to store no health data can leak ([ADR 0007](decisions/0007-no-special-category-data.md)),
@@ -132,7 +148,9 @@ break in a change that is about something else.
 - A review only sees what is written down. Decisions made in a session and not recorded can
   be removed as unsupported (`d6eab30`).
 - The timing budget runs on shared CI machines: a cold load once measured 284 ms against a
-  201 ms budget on a commit that changed no application code (`46c2a2c`'s run). A rerun tells
-  noise from a regression; the DOM budget is deterministic.
+  201 ms budget on a commit that changed no application code (`46c2a2c`'s run). A timing
+  breach is now measured a second time before it fails, and every run's figures go to the CI
+  job summary ([ADR 0018](decisions/0018-agent-tooling-adjustments.md)); the DOM budget is
+  deterministic.
 - The privacy reviewer is a model reading a diff. It narrows what reaches `master` unreviewed;
   it does not replace the tests that pin ABS-9, AUD-2 and the projection.

@@ -114,17 +114,30 @@ reviewed before it is committed:
 
 - A staged diff **touches notes** when it changes a file listed in
   `.claude/privacy-paths.txt` or adds or removes a line under `src/`, `tests/` or `tools/`
-  matching `\bnotes?\b`.
+  matching `\bnotes?\b`. The list includes itself and the review's own scripts and prompt.
+  The rules are read as committed (HEAD's), never from the working tree, so an edit to them
+  is judged by the rules before it.
 - On `git commit`, a hook runs the `privacy-reviewer` subagent headlessly on that diff. A
   failed verdict blocks the commit with findings citing file and line: fix them and commit
   again. A pass is cached by the diff's hash, and the hook blocks once more to give you the
   exact `Privacy-Review: passed sha256:<hash>` line to put above `Co-authored by AI.`.
 - Stage with `git add` in a command of its own, then commit what is staged: the review
-  covers the staged diff, so `git add ... && git commit` and `git commit -a` are refused when
-  they could touch notes. Changing the staged diff after a review means another review.
-- `node scripts/privacy-review.mjs hash` says whether the staged diff touches notes;
-  `node scripts/privacy-review.mjs review` runs the reviewer on it by hand and prints the
-  trailer. The subagent can also be asked to review any diff in a session.
-- CI fails any pushed or pull-request commit that touches notes without a trailer whose hash
-  is its own diff's. Merge pull requests with a merge commit: a squash or rebase merge makes
-  new commits no review covered.
+  covers the staged diff, so `git add ... && git commit`, `git commit -a`, `-p` and
+  `git commit <paths>` are refused when they could touch notes. Changing the staged diff
+  after a review means another review.
+- A merge commit is reviewed on what it adds beyond merging its parents automatically (its
+  remerge diff): a plain `git merge` needs nothing; conclude a merge with conflicts, or with
+  changes of your own, with `git commit`, which reviews it. `git rebase`, `git cherry-pick`
+  and `git revert` of commits that touch notes are refused, because replaying a commit
+  changes its diff and so its hash: use `--no-commit` (or cherry-pick one at a time) and then
+  `git commit`. The hook finds git however it is run in a command (`cd`, `&&`, `env`,
+  `bash -c`, aliases, `-C`, ...); git run from a script file or another program is seen only
+  by CI.
+- `node scripts/privacy-review.mjs hash` says whether the staged diff touches notes and
+  prints its hash; `node scripts/privacy-review.mjs review` runs the reviewer on it by hand
+  and prints the trailer. The subagent can also be asked to review any diff in a session.
+- CI, and `scripts/check.sh` for the commits not pushed yet, fail a commit that touches notes
+  without a trailer whose hash is its own diff's, merge commits included. That proves the
+  trailer was written for exactly that diff, not that a review happened: anyone can compute a
+  hash. The review itself is what the hook runs. Merge pull requests with a merge commit: a
+  squash or rebase merge makes new commits no review covered.

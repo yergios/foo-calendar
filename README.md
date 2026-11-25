@@ -129,11 +129,14 @@ A change is done when this passes. It runs every check CI runs that does not nee
 CI's order, and stops at the first failure, naming it: the .NET restore (with its NuGet
 audit), the Release build with zero warnings and the tests; the version agreement between
 the API and the SPA; the SPA's typecheck, lint, format check, tests and dependency audit;
-the spec trace check and the scripts' own tests; and the browser checks, which build the
+the spec trace check, the scripts' own tests and the privacy review trailers of the commits
+not pushed yet; and the browser checks, which build the
 SPA, start five local instances of the production build and the stub OIDC provider, and run
 the [end-to-end suite](tools/e2e/README.md) and the [performance budget](tools/perf/README.md#budget)
 against them. Every process it starts is stopped when it ends, whether it passed or not.
-`scripts/check.sh --list` prints the steps.
+`scripts/check.sh --list` prints the steps. One check runs at a time per repository; a
+second waits for the first. Without network it works from the package caches and skips the
+two dependency audits, saying so; CI runs them.
 
 The browser checks need a `chrome-headless-shell`; without one, that step fails and says
 how to get the release CI pins. The instances listen on ports 18080 to 18084 and the stub on

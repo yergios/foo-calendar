@@ -16,6 +16,10 @@ that loses data loses it on every deployment the moment it upgrades.
 - A migration that touches the absence note, or the audit log, is a note-touching change:
   the commit goes through the privacy review (see AGENTS.md).
 
+`dotnet ef` is the `dotnet-ef` global tool; the repository has no tool manifest. Without it,
+`dotnet tool install --global dotnet-ef`, at the EF Core version in
+`Directory.Packages.props`, after asking: it installs outside the tree.
+
 ## Steps
 
 1. Change the entity in `src/Api/Data/Models/` and, if needed, `AppDbContext`.

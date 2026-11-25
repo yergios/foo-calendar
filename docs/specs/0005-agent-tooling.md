@@ -6,6 +6,19 @@
   patch; and the reviewer's `tools` list includes `StructuredOutput`, without which a
   headless run answers in prose and gives no verdict. The check measured 57 s; the Stop
   hook stops it after 120 s and has 180 s.
+- Amended after its review by [ADR 0018](../decisions/0018-agent-tooling-adjustments.md)
+  and the fixes that followed (2026-11-25), which supersede parts of B to E below:
+  - B: the Stop hook skips the check when HEAD and the tracked, staged and untracked content
+    are the same as at its last pass (the open question below, answered), forwards signals
+    to the check, and `check.sh` runs one at a time and checks unpushed trailers;
+  - C: the rules are read as committed, never from the working tree, and list the review
+    machinery itself; the diff command pins every option and setting that shapes its bytes;
+    the hook reads every git command in a Bash call, not only one starting with `git commit`;
+  - D: merge commits are checked on their remerge diff, not skipped; the exemption is a
+    fixed commit, `dfa2ab2`, not the one that added the script; an unknown `before` checks
+    everything since it;
+  - E: the allowlist holds exact commands, no wildcards;
+  - the performance budget retries a timing breach once.
 - Date: 2026-11-24
 - Decided by the user on 2026-11-23:
   - the Stop hook runs the full check every time a session stops;
