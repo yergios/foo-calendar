@@ -51,6 +51,10 @@ Offered on 2026-11-25:
 
 - A member who opens Documentation leaves the app for the repository. A fork's footer still
   points upstream unless the fork changes `REPOSITORY_URL`.
+- The footer's Documentation, Install and version links open `master`, not the deployed
+  version. Bundled pages always matched the build they shipped in; these show the latest
+  behaviour, which a deployment running an older release may not have. Linking the
+  `v<version>` tag instead would fix that once every release is reliably tagged.
 - The `marked` dependency stays, since privacy and terms are still Markdown.
 - One file per topic. A change to how the app behaves updates its one page, and the README
   index makes that page easy to find.
