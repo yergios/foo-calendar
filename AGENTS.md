@@ -65,8 +65,9 @@ The browser checks need a `chrome-headless-shell` ([tools/perf/README.md](tools/
   typed options, each validated at startup; `Infrastructure/` the SPA shell, headers and
   exception mapping.
 - `src/Web/`: the Vue 3 SPA, built into `src/Api/wwwroot`. `lib/` holds the logic worth
-  unit testing (absence segments, who's off today, the browser cache); in-app docs, the
-  privacy notice and the changelog are in `src/Web/src/docs/`.
+  unit testing (absence segments, who's off today, the browser cache); the in-app privacy
+  notice and terms are in `src/Web/src/legal/`, and every other document is in `docs/`
+  ([0019](docs/decisions/0019-documentation-in-the-repository.md)).
 - `tests/UnitTests`, `tests/IntegrationTests`: xUnit, tagged with the requirements they
   verify. `tools/e2e`, `tools/perf`: the browser checks. `tools/Seed`: dev data.
 - `scripts/`: the check, the spec trace check, the privacy review and the hooks.

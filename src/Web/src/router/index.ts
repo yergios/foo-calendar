@@ -76,9 +76,12 @@ const router = createRouter({
         return sessionStorage.getItem(AUTH_REDIRECT_KEY) ?? "/";
       },
     },
-    // Public on purpose: documentation, the privacy notice, and the terms of use have to
-    // be readable by someone who isn't signed in yet, same as the error routes below.
-    { path: "/docs", component: () => import("@/views/DocsView.vue") },
+    // Public on purpose: the privacy notice and the terms of use have to be readable by
+    // someone who isn't signed in yet, same as the error routes below.
+    { path: "/legal", component: () => import("@/views/LegalView.vue") },
+    // Where these pages lived before the rest of the documentation moved to the repository
+    // (ADR 0019); kept so links already shared to /docs?tab=privacy still arrive.
+    { path: "/docs", redirect: (to) => ({ path: "/legal", query: to.query }) },
     { path: "/401", component: UnauthorizedView },
     { path: "/403", component: ForbiddenView },
     { path: "/500", component: ErrorView },

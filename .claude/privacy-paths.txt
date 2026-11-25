@@ -35,7 +35,7 @@ src/Web/src/components/AddAbsenceModal.vue
 # note rows the reviewer checks against.
 docs/data-protection.md
 docs/threat-model.md
-src/Web/src/docs/privacy.md
+src/Web/src/legal/privacy.md
 
 # The review itself (ADR 0018): these rules, the reviewer's prompt, the script that hashes,
 # detects and verifies, and the commit hook. Weakening any of them is itself reviewed.

@@ -38,7 +38,7 @@ anything into it, health details included, which the app is designed never to ho
    notes only because the API never sent anyone else's. Nothing in the SPA may fetch,
    reconstruct, log or send a note it was not given.
 5. **The documents say exactly what the code does (PRIV-4).** `docs/data-protection.md`,
-   the in-app `src/Web/src/docs/privacy.md` and `docs/threat-model.md` (its "Absence
+   the in-app `src/Web/src/legal/privacy.md` and `docs/threat-model.md` (its "Absence
    notes" asset row and its "Notes read by colleagues" row) must stay true. A change that
    makes any of them false, or a document change that promises something the code does
    not do, fails.

@@ -12,6 +12,6 @@
 export const PRODUCT_NAME = "Foo Calendar";
 export const PRODUCT_COPYRIGHT_HOLDER = "Sergio Y. Lee";
 
-// TODO: point this at the actual repository before shipping the footer's GitHub link -
-// left blank rather than guessed.
-export const REPOSITORY_URL = "";
+// Where the documentation lives (ADR 0019): the footer links here for the user guide, the
+// deployment guide and the changelog, besides the source itself.
+export const REPOSITORY_URL = "https://github.com/yergios/foo-calendar";

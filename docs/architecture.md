@@ -176,8 +176,8 @@ src/Web/src/
 ├── lib/            framework-free logic, unit tested: segments, geometry, caching, dates
 ├── components/     CalendarGrid is the windowed grid; the rest are views' building blocks
 ├── views/          pages, with admin sections behind their own permissions
-└── docs/           Markdown served in-app at /docs (usage, FAQ, installation, privacy,
-                    terms, changelog)
+└── legal/          the privacy notice and terms, filled in per deployment and served at
+                    /legal; the rest of the documentation is in the repository (0019)
 ```
 
 Two designs carry most of the frontend's performance:

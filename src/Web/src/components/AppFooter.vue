@@ -10,23 +10,24 @@
         {{ PRODUCT_NAME }} · © {{ year }} {{ PRODUCT_COPYRIGHT_HOLDER }}
       </span>
       <div class="flex items-center gap-4 flex-wrap">
-        <RouterLink v-for="link in docLinks" :key="link.label" :class="linkClass" :to="link.to">
-          {{ link.label }}
-        </RouterLink>
-        <a :class="linkClass" :href="licenseUrl" target="_blank">License</a>
         <a
-          v-if="REPOSITORY_URL"
+          v-for="link in repositoryLinks"
+          :key="link.label"
           :class="linkClass"
-          :href="REPOSITORY_URL"
+          :href="link.href"
           target="_blank"
           rel="noopener"
         >
-          GitHub
+          {{ link.label }}
         </a>
-        <a v-if="supportUrl" :class="linkClass" :href="supportUrl" target="_blank">Contact</a>
-        <RouterLink :class="linkClass" :to="{ path: '/docs', query: { tab: 'changelog' } }">
-          v{{ version }}
+        <RouterLink v-for="link in legalLinks" :key="link.label" :class="linkClass" :to="link.to">
+          {{ link.label }}
         </RouterLink>
+        <a :class="linkClass" :href="licenseUrl" target="_blank">License</a>
+        <a v-if="supportUrl" :class="linkClass" :href="supportUrl" target="_blank">Contact</a>
+        <a :class="linkClass" :href="changelogUrl" target="_blank" rel="noopener">
+          v{{ version }}
+        </a>
       </div>
     </div>
   </footer>
@@ -42,11 +43,17 @@ import { PRODUCT_COPYRIGHT_HOLDER, PRODUCT_NAME, REPOSITORY_URL } from "@/lib/pr
 // drift from the rest by a missed class.
 const linkClass = "text-xs text-secondary hover:underline";
 
-const docLinks = [
-  { label: "Documentation", to: "/docs" },
-  { label: "Installation", to: { path: "/docs", query: { tab: "installation" } } },
-  { label: "Privacy", to: { path: "/docs", query: { tab: "privacy" } } },
-  { label: "Terms", to: { path: "/docs", query: { tab: "terms" } } },
+// The documentation lives in the repository (ADR 0019); only the notices this deployment
+// fills in with its own operator are served by the app.
+const repositoryLinks = [
+  { label: "Documentation", href: `${REPOSITORY_URL}/blob/master/docs/user-guide.md` },
+  { label: "Install", href: `${REPOSITORY_URL}/blob/master/docs/deployment.md#quickstart` },
+  { label: "GitHub", href: REPOSITORY_URL },
+];
+const changelogUrl = `${REPOSITORY_URL}/blob/master/CHANGELOG.md`;
+const legalLinks = [
+  { label: "Privacy", to: { path: "/legal", query: { tab: "privacy" } } },
+  { label: "Terms", to: { path: "/legal", query: { tab: "terms" } } },
 ];
 
 const { supportUrl } = bootstrapConfig();

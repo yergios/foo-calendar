@@ -7,7 +7,7 @@
 
       <nav class="flex gap-6 border-b border-border mt-6 flex-wrap">
         <button
-          v-for="page in docPages"
+          v-for="page in legalPages"
           :key="page.key"
           type="button"
           class="py-3 text-sm font-semibold border-b-2 transition-colors"
@@ -35,17 +35,17 @@ import { useRoute, useRouter } from "vue-router";
 
 import AppFooter from "@/components/AppFooter.vue";
 import MarkdownContent from "@/components/MarkdownContent.vue";
-import { docPages } from "@/lib/docs";
+import { legalPages } from "@/lib/legal";
 
 const route = useRoute();
 const router = useRouter();
 
 // The URL is the single source of truth for which tab is open, so a link straight to
-// /docs?tab=privacy (see AppFooter) opens on the right tab and stays shareable.
+// /legal?tab=privacy (see AppFooter) opens on the right tab and stays shareable.
 const activeKey = computed(
-  () => docPages.find((p) => p.key === route.query.tab)?.key ?? docPages[0]?.key,
+  () => legalPages.find((p) => p.key === route.query.tab)?.key ?? legalPages[0]?.key,
 );
-const activePage = computed(() => docPages.find((p) => p.key === activeKey.value));
+const activePage = computed(() => legalPages.find((p) => p.key === activeKey.value));
 
 function selectTab(key: string) {
   router.replace({ query: { ...route.query, tab: key } });
