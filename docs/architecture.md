@@ -177,7 +177,8 @@ src/Web/src/
 ├── components/     CalendarGrid is the windowed grid; the rest are views' building blocks
 ├── views/          pages, with admin sections behind their own permissions
 └── legal/          the privacy notice and terms, filled in per deployment and served at
-                    /legal; the rest of the documentation is in the repository (0019)
+                    /privacy and /terms; the rest of the documentation is in the
+                    repository (0019)
 ```
 
 Two designs carry most of the frontend's performance:

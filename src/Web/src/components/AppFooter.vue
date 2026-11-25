@@ -54,8 +54,8 @@ const repositoryLinks = [
 ];
 const changelogUrl = `${REPOSITORY_URL}/blob/master/CHANGELOG.md`;
 const legalLinks = [
-  { label: "Privacy", to: { path: "/legal", query: { tab: "privacy" } } },
-  { label: "Terms", to: { path: "/legal", query: { tab: "terms" } } },
+  { label: "Privacy", to: "/privacy" },
+  { label: "Terms", to: "/terms" },
 ];
 
 const { supportUrl } = bootstrapConfig();

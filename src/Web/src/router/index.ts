@@ -20,6 +20,9 @@ import HomeView from "@/views/HomeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import UnauthorizedView from "@/views/UnauthorizedView.vue";
 
+// Lazy: almost no visit opens a notice. One loader for both routes, so they share a chunk.
+const LegalView = () => import("@/views/LegalView.vue");
+
 const router = createRouter({
   // Routes below are written as if the app owned the root; the history base is what maps
   // them onto the sub-path a deployment is actually served from.
@@ -78,10 +81,8 @@ const router = createRouter({
     },
     // Public on purpose: the privacy notice and the terms of use have to be readable by
     // someone who isn't signed in yet, same as the error routes below.
-    { path: "/legal", component: () => import("@/views/LegalView.vue") },
-    // Where these pages lived before the rest of the documentation moved to the repository
-    // (ADR 0019); kept so links already shared to /docs?tab=privacy still arrive.
-    { path: "/docs", redirect: (to) => ({ path: "/legal", query: to.query }) },
+    { path: "/privacy", component: LegalView, props: { page: "privacy" } },
+    { path: "/terms", component: LegalView, props: { page: "terms" } },
     { path: "/401", component: UnauthorizedView },
     { path: "/403", component: ForbiddenView },
     { path: "/500", component: ErrorView },

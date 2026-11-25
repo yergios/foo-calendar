@@ -27,8 +27,9 @@ specification.
   installation (merged into `docs/deployment.md`), the developer guide
   (`docs/development.md`) and the changelog (`CHANGELOG.md` at the root) each live in one
   file. The README is the index.
-- **The app serves only the privacy notice and the terms,** at `/legal`, because only the
-  deployment can fill them in. `/docs` redirects there so links already in use keep working.
+- **The app serves only the privacy notice and the terms,** at `/privacy` and `/terms`,
+  because only the deployment can fill them in. `/docs` is gone: links to it, and to its
+  tabs, now reach the not-found page.
 - **The app's footer links to the repository** for the user guide, the deployment guide and
   the changelog. `REPOSITORY_URL` is set to the upstream repository.
 - **Skills point to the developer guide** for a procedure, and keep only what is specific to
@@ -46,6 +47,10 @@ Offered on 2026-11-25:
 - **Keep the user guide and the FAQ in the app.** Declined: they are end-user help that
   changes with the product, not with the deployment, so one copy in the repository is
   enough.
+- **Redirect `/docs` to the notices,** so links already in use keep arriving. Rejected after
+  review: only the privacy and terms tabs had somewhere to go. `/docs` on its own, and the
+  user guide, FAQ, installation and changelog tabs, would have opened the privacy notice,
+  which is a wrong page rather than a missing one.
 
 ## Consequences
 
