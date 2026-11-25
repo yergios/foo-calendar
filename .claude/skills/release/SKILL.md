@@ -21,7 +21,7 @@ description: Cut a release of Foo Calendar - bump the version in Api.csproj and 
 
 1. `git status` must be clean, on `master`, up to date with its remote.
 2. Set the new version in `src/Api/Api.csproj` and `src/Web/package.json`.
-3. In `src/Web/src/docs/changelog.md`, rename `## Unreleased` to
+3. In `CHANGELOG.md`, rename `## Unreleased` to
    `## <version> (<today, YYYY-MM-DD>)` and put a new, empty `## Unreleased` above it. Do
    not rewrite the entries; fix only what is plainly wrong, and say what you changed.
 4. Run `scripts/check.sh`. It must pass; a failure is fixed in its own commit first.

@@ -31,7 +31,7 @@ Running and operating it:
 
 ## Changelog
 
-See [changelog.md](src/Web/src/docs/changelog.md) for version history.
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## License
 
