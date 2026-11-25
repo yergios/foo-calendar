@@ -156,7 +156,7 @@ record when it is.
 3. **Tokens live in `sessionStorage`** (the `oidc-client-ts` default), so script injected
    into the page could read them. The Content-Security-Policy above is what keeps script
    from being injected and what it could reach if it were; Vue escapes all interpolated
-   data, and the one `v-html` renders the bundled in-app docs, whose only dynamic parts are
+   data, and the one `v-html` renders the bundled privacy notice and terms, whose only dynamic parts are
    the operator's `Team:OrgName` and `Team:SupportUrl`.
 4. **No rate limiting.** Apart from the anonymous routes above, every API route needs a
    token, which bounds who can try, but not how often. `/healthchecks` runs the database
