@@ -382,8 +382,12 @@ when, and which public holidays apply to whom. It coordinates; it does not admin
 - **AGT-1** `scripts/check.sh` must run every check CI runs that does not need Docker, the
   end-to-end suite and the performance budget included, stop at the first failure and name
   it. It is the definition of done for a change. `[review]`
-- **AGT-2** A Stop hook must run `scripts/check.sh` every time a Claude Code session stops in
-  this repository, and block the stop with the failing step when it fails. `[test]`
+- **AGT-2** A Stop hook must run `scripts/check.sh` when a Claude Code session stops in this
+  repository, and block the stop with the failing step when it fails. It skips the run, and
+  reports the earlier pass, only when HEAD and the tracked, staged and untracked (not
+  ignored) content are identical to the last run that passed
+  ([0018](docs/decisions/0018-agent-tooling-adjustments.md)). Stopping the hook stops the
+  check and everything it started. `[test]`
 - **AGT-3** A commit whose staged diff touches absence notes (as `.claude/privacy-paths.txt`
   defines) must not be created by Claude Code until the privacy reviewer has passed that
   exact diff and the message carries `Privacy-Review: passed sha256:<diff hash>` on the line

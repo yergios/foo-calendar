@@ -30,8 +30,11 @@ Co-authored by AI.
 
 A change is done when `scripts/check.sh` passes: every check CI runs that does not need
 Docker, the end-to-end suite and the performance budget included. It stops at the first
-failure and names the step. A Stop hook runs it every time a session stops and blocks the
-stop when it fails; fix the cause, never the check.
+failure and names the step. A Stop hook runs it when a session stops and blocks the stop
+when it fails; fix the cause, never the check. When nothing has changed since its last pass
+(HEAD, staged, unstaged and untracked files), the hook reports that pass instead of running
+it again. One check runs at a time per repository: a second waits, and a stop that timed out
+waiting for another session's check is not something to fix.
 
 ## Commands
 
